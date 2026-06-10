@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.env
+venv/
+.venv/
+workspace/*.json
+workspace/*.txt
+!workspace/tasks_config.json
+!workspace/bot.txt
+*.log

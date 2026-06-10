@@ -1,0 +1,9 @@
+{
+  "routes": {
+    "games_page": "https://sunflower-land.com/",
+    "preview_page": "https://sunflower-land.com/",
+    "status_page": "https://sunflower-land.com/",
+    "claim_pattern": ""
+  },
+  "licenses": {}
+}
