@@ -18,6 +18,10 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_KEY
         sync: false
+      - key: D1_STATE_API_URL
+        sync: false
+      - key: D1_STATE_API_TOKEN
+        sync: false
       - key: ALLOWED_ORIGINS
         value: "*"
       - key: ADMIN_ALLOWED_IPS

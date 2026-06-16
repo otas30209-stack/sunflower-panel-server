@@ -1,0 +1,8 @@
+name = "sunflower-d1-state"
+main = "d1-state-worker.js"
+compatibility_date = "2026-06-16"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "sunflower-panel-state"
+database_id = "PUT_D1_DATABASE_ID_HERE"

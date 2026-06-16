@@ -19,7 +19,8 @@ from urllib.parse import quote
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
 from config import (
-    HOST, PORT, ADMIN_TOKEN, SERVER_LICENSE_SECRET, SUPABASE_URL, SUPABASE_SERVICE_KEY, ALLOWED_ORIGINS,
+    HOST, PORT, ADMIN_TOKEN, SERVER_LICENSE_SECRET, SUPABASE_URL, SUPABASE_SERVICE_KEY,
+    D1_STATE_API_URL, D1_STATE_API_TOKEN, ALLOWED_ORIGINS,
     USERS_FILE, LICENSES_FILE, NOTICE_FILE, LOGS_FILE, BOT_FILE,
     REVOKED_LICENSES_FILE, QUICK_LINKS_FILE,
     ADMIN_ALLOWED_IPS, SESSION_TTL_SECONDS, ADMIN_RATE_LIMIT_PER_MIN, AUTH_RATE_LIMIT_PER_MIN,
@@ -179,9 +180,53 @@ def _supabase_set_state(state_key, value):
         return False
 
 
+def _d1_state_enabled():
+    return bool(D1_STATE_API_URL and D1_STATE_API_TOKEN)
+
+
+def _d1_state_headers():
+    return {
+        'Authorization': f'Bearer {D1_STATE_API_TOKEN}',
+        'Content-Type': 'application/json'
+    }
+
+
+def _d1_get_state(state_key, default):
+    if not _d1_state_enabled():
+        return default
+    try:
+        url = f"{D1_STATE_API_URL}/state/{quote(state_key)}"
+        req = urlrequest.Request(url, headers=_d1_state_headers(), method='GET')
+        with urlrequest.urlopen(req, timeout=20) as resp:
+            payload = json.loads(resp.read().decode('utf-8') or '{}')
+        if payload.get('success') and payload.get('found'):
+            return payload.get('value', default)
+    except Exception as e:
+        log_event(f'D1 state load error ({state_key}): {e}')
+    return default
+
+
+def _d1_set_state(state_key, value):
+    if not _d1_state_enabled():
+        return False
+    try:
+        body = json.dumps({'value': value}).encode('utf-8')
+        url = f"{D1_STATE_API_URL}/state/{quote(state_key)}"
+        req = urlrequest.Request(url, data=body, headers=_d1_state_headers(), method='PUT')
+        with urlrequest.urlopen(req, timeout=20) as resp:
+            payload = json.loads(resp.read().decode('utf-8') or '{}')
+        return bool(payload.get('success'))
+    except Exception as e:
+        log_event(f'D1 state save error ({state_key}): {e}')
+        return False
+
+
 def load_json(path, default):
     state_key = REMOTE_STATE_KEYS.get(str(path))
     if state_key:
+        remote = _d1_get_state(state_key, None)
+        if remote is not None:
+            return remote
         remote = _supabase_get_state(state_key, None)
         if remote is not None:
             return remote
@@ -194,6 +239,7 @@ def load_json(path, default):
 def save_json(path, data):
     state_key = REMOTE_STATE_KEYS.get(str(path))
     if state_key:
+        _d1_set_state(state_key, data)
         _supabase_set_state(state_key, data)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
 
@@ -623,7 +669,7 @@ def _looks_like_userscript(content):
 
 def load_bot_content():
     try:
-        content = load_json(BOT_FILE, '') if _supabase_enabled() else BOT_FILE.read_text(encoding='utf-8', errors='ignore')
+        content = load_json(BOT_FILE, '') if (_d1_state_enabled() or _supabase_enabled()) else BOT_FILE.read_text(encoding='utf-8', errors='ignore')
         if isinstance(content, dict):
             content = ''
         content = str(content or '')
