@@ -20,7 +20,7 @@ GENERATED_DIR = BASE_DIR / 'generated_scripts'
 GENERATED_DIR.mkdir(exist_ok=True)
 
 DEFAULT_SETTINGS = {
-    'server_url': 'https://sunflower-panel-server.onrender.com',
+    'server_url': 'https://sunflower-panel-server-ufpg.onrender.com',
     'selected_bot_path': 'C:/Users/User/Desktop/Yeni klasör (7)/bot.txt',
     'selected_bot_name': 'bot.txt'
 }
