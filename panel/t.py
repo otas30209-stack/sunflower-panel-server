@@ -511,6 +511,15 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
         }
         extractedUID = auth.uid;
         sessionToken = auth.token;
+        const current = await gmRequest('POST', SERVER_URL + '/api/bot/current', { uid: auth.uid, token: auth.token });
+        if (current && current.success && current.bot_code) {
+            const freshBot = decodeBotCode(current.bot_code, auth.uid);
+            if (freshBot) {
+                saveBotCache(freshBot);
+                helperStarted = executeBot(freshBot);
+                return helperStarted;
+            }
+        }
         const cachedBot = loadBotCache();
         if (cachedBot) {
             helperStarted = executeBot(cachedBot);

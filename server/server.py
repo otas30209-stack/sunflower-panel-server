@@ -777,7 +777,10 @@ def _looks_like_userscript(content):
 
 def load_bot_content():
     try:
-        content = load_json(BOT_FILE, '') if (_d1_state_enabled() or _supabase_enabled()) else BOT_FILE.read_text(encoding='utf-8', errors='ignore')
+        content = BOT_FILE.read_text(encoding='utf-8', errors='ignore') if BOT_FILE.exists() else ''
+        if _looks_like_userscript(content):
+            return content
+        content = load_json(BOT_FILE, '') if (_d1_state_enabled() or _supabase_enabled()) else content
         if isinstance(content, dict):
             content = ''
         content = str(content or '')

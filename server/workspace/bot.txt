@@ -68,6 +68,18 @@
     const STONE_RECOVERY_MS = 4 * 60 * 60 * 1000;
     const IRON_RECOVERY_MS = 8 * 60 * 60 * 1000;
     const GOLD_RECOVERY_MS = 24 * 60 * 60 * 1000;
+    let BOT_ACTION_CLOCK_MS = 0;
+
+    function nextBotActionTime(previousMs) {
+        const base = Math.max(Date.now(), Number(previousMs || 0), BOT_ACTION_CLOCK_MS || 0);
+        const next = base + randInt(650, 1400);
+        BOT_ACTION_CLOCK_MS = next;
+        return next;
+    }
+
+    function beginBotActionBatch() {
+        return nextBotActionTime(BOT_ACTION_CLOCK_MS);
+    }
 
     function getResourceReadyAt(node, baseMs, resourceKey) {
         const data = node && node[resourceKey] ? node[resourceKey] : {};
@@ -3102,6 +3114,20 @@
             margin-top: 6px;
             line-height: 1.45;
         }
+        .cook-progress {
+            height: 7px;
+            border-radius: 999px;
+            overflow: hidden;
+            background: rgba(15,23,42,0.92);
+            border: 1px solid rgba(96,165,250,0.22);
+            margin: 6px 0 2px 0;
+        }
+        .cook-progress-fill {
+            height: 100%;
+            border-radius: 999px;
+            background: linear-gradient(90deg,#f59e0b,#fde68a);
+            box-shadow: 0 0 12px rgba(245,158,11,0.35);
+        }
         .cook-need {
             font-size: 9px;
             color: #f9a8d4;
@@ -3431,7 +3457,9 @@
     // ==========================================
     // 🏗️ HTML ARAYÜZÜ OLUŞTURMA (GENİŞ FORMAT)
     // ==========================================
-    window.addEventListener('DOMContentLoaded', () => {
+    function initSunflowerNexusUI() {
+        if (window.__NEXUS_SUNFLOWER_UI_READY__) return;
+        window.__NEXUS_SUNFLOWER_UI_READY__ = true;
         const mainMenuHidden = localStorage.getItem('sl_main_menu_hidden') === '1';
         let mainMenuHTML = `
             <div id="sl-main-menu" class="sl-window" style="${mainMenuHidden ? 'display:none;' : ''}">
@@ -4295,7 +4323,13 @@
                 renderCharacterMenu();
             }
         }, 1000);
-    });
+    }
+
+    if (document.readyState === 'loading') {
+        window.addEventListener('DOMContentLoaded', initSunflowerNexusUI, { once: true });
+    } else {
+        initSunflowerNexusUI();
+    }
 
     // ==========================================
     // 🛠️ YARDIMCI FONKSİYONLAR
@@ -4561,6 +4595,20 @@
         Object.keys(FIRE_PIT_RECIPES).forEach(function(name) {
             const recipe = FIRE_PIT_RECIPES[name];
             const selected = !!COOKING_SETTINGS.selected[name];
+            let progressHtml = "";
+            const activeCraft = crafting.find(function(item) {
+                const readyAt = parseTimeValue(item && item.readyAt);
+                return item && item.name === name && readyAt > Date.now();
+            });
+            if (activeCraft) {
+                const readyAt = parseTimeValue(activeCraft.readyAt);
+                const startedAt = parseTimeValue(activeCraft.startedAt || activeCraft.createdAt) || (readyAt - (recipe.cookingSeconds * 1000));
+                const totalMs = Math.max(1, readyAt - startedAt);
+                const doneMs = Math.max(0, Date.now() - startedAt);
+                const pct = Math.max(0, Math.min(100, Math.round((doneMs / totalMs) * 100)));
+                const leftMs = Math.max(0, readyAt - Date.now());
+                progressHtml = `<div class="cook-progress" title="${pct}%"><div class="cook-progress-fill" style="width:${pct}%;"></div></div><div style="font-size:9px;color:#fde68a;font-weight:900;">Cooking: ${formatTimeLeftMs(Date.now() + leftMs)}</div>`;
+            }
             const readyCount = crafting.filter(function(item) {
                 const readyAt = parseTimeValue(item && item.readyAt);
                 return item && item.name === name && readyAt > 0 && readyAt <= Date.now();
@@ -4579,6 +4627,7 @@
                     <div style="display:flex;align-items:center;justify-content:center;height:34px;margin-bottom:6px;">${getItemIconHtml(name, 30)}</div>
                     <div class="cook-name">${name}</div>
                     <div class="cook-meta">${recipe.experience} XP<br>${formatDuration(plan.seconds)}${readyCount ? `<br><span style="color:#86efac">Hazir: ${readyCount}</span>` : ""}</div>
+                    ${progressHtml}
                     <div class="cook-need">${needText || "Malzeme yok"}</div>
                 </div>
             `;
@@ -4919,6 +4968,7 @@
         if (payload.stateHash.buildings) {
             payload.stateHash.buildings = await computeSHA256(SL_BUILDINGS);
         }
+        await refreshVolatileStateHashes(payload);
 
         log(`📦 Fire Pit paketi gönderiliyor... (${reason})`);
 
@@ -7156,6 +7206,335 @@
         await refreshVolatileStateHashes(payload);
     }
 
+    function getReadyResourceTargets(type, source, recoveryMs, resourceKey) {
+        const selectedEntries = getSelectedResourceEntries(type, source || {});
+        const pool = selectedEntries.length > 0 ? selectedEntries : Object.entries(source || {});
+        const ready = [];
+        const now = Date.now();
+
+        for (let i = 0; i < pool.length; i++) {
+            const id = pool[i][0];
+            const node = pool[i][1];
+            if (now >= getResourceReadyAt(node, recoveryMs, resourceKey)) {
+                ready.push([id, node]);
+            }
+        }
+
+        const shuffled = shuffleArray(ready);
+        return selectedEntries.length > 0 ? shuffled : shuffled.slice(0, 1);
+    }
+
+    function getCraftableToolAmount(tool, needed) {
+        const recipe = CRAFTING_RECIPES[tool];
+        if (!recipe || needed <= 0) {
+            return 0;
+        }
+
+        let max = needed;
+        Object.keys(recipe).forEach(function(item) {
+            const cost = recipe[item];
+            if (item === "coins") {
+                max = Math.min(max, Math.floor(SL_COINS / cost));
+            } else {
+                max = Math.min(max, Math.floor(getInventoryAmount(item) / cost));
+            }
+        });
+
+        const stock = Math.floor(parseFloat(SL_STOCK[tool] || 0));
+        if (Number.isFinite(stock)) {
+            max = Math.min(max, stock);
+        }
+        return Math.max(0, max);
+    }
+
+    function applyServerFarmSnapshot(data) {
+        if (!data || !data.farm) {
+            return;
+        }
+        const farm = data.farm;
+        if (farm.inventory) {
+            SL_INVENTORY = farm.inventory;
+            localStorage.setItem('sl_inventory_cache', JSON.stringify(SL_INVENTORY));
+        }
+        if (farm.farmActivity) {
+            SL_FARM_ACTIVITY = farm.farmActivity;
+            localStorage.setItem('sl_activity_cache', JSON.stringify(SL_FARM_ACTIVITY));
+        }
+        if (farm.stock) {
+            SL_STOCK = farm.stock;
+            localStorage.setItem('sl_stock_cache', JSON.stringify(SL_STOCK));
+        }
+        if (farm.coins !== undefined) {
+            SL_COINS = parseFloat(farm.coins);
+            localStorage.setItem('sl_coins_cache', SL_COINS.toString());
+        }
+        if (farm.boostsUsedAt) {
+            SL_BOOSTS_USED_AT = farm.boostsUsedAt;
+            localStorage.setItem('sl_boosts_used_at_cache', JSON.stringify(SL_BOOSTS_USED_AT));
+        }
+        if (farm.aoe) {
+            SL_AOE = farm.aoe;
+            localStorage.setItem('sl_aoe_cache', JSON.stringify(SL_AOE));
+        }
+        if (farm.trees) {
+            SL_TREES = farm.trees;
+            localStorage.setItem('sl_trees_cache', JSON.stringify(SL_TREES));
+        }
+        if (farm.stones) {
+            SL_STONES = farm.stones;
+            localStorage.setItem('sl_stones_cache', JSON.stringify(SL_STONES));
+        }
+        if (farm.iron) {
+            SL_IRON = farm.iron;
+            localStorage.setItem('sl_iron_cache', JSON.stringify(SL_IRON));
+        }
+        if (farm.gold) {
+            SL_GOLD = farm.gold;
+            localStorage.setItem('sl_gold_cache', JSON.stringify(SL_GOLD));
+        }
+        if (farm.crops) {
+            SL_CROPS = farm.crops;
+            localStorage.setItem('sl_crops_cache', JSON.stringify(SL_CROPS));
+        }
+        if (farm.mushrooms) {
+            SL_MUSHROOMS = farm.mushrooms;
+            SL_MUSHROOMS_CACHE_AT = Date.now();
+            localStorage.setItem('sl_mushrooms_cache', JSON.stringify(SL_MUSHROOMS));
+            localStorage.setItem('sl_mushrooms_cache_at', SL_MUSHROOMS_CACHE_AT.toString());
+        }
+    }
+
+    async function sendBotResourcePayload(actions, reason) {
+        if (!actions || actions.length === 0 || !masterPayload || !SL_FARM_ID) {
+            return false;
+        }
+
+        const payload = JSON.parse(JSON.stringify(masterPayload));
+        payload.actions = actions;
+        await refreshCoreAccountingHashes(payload);
+
+        log(`📦 ${reason}: sending package... (${actions.length} action${actions.length > 1 ? "s" : ""})`);
+
+        try {
+            const res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
+                method: "POST",
+                headers: makeBotHeaders(),
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                try {
+                    const data = await res.clone().json();
+                    applyServerFarmSnapshot(data);
+                } catch(e) {
+                    // Response snapshot is best-effort; the fetch hook also learns it.
+                }
+                await refreshCoreAccountingHashes(payload);
+                masterPayload.stateHash = payload.stateHash;
+                log(`✅ ${reason} package accepted.`);
+                return true;
+            }
+
+            triggerKillSwitch(`${reason} rejected by server.`, res.status);
+            return false;
+        } catch(e) {
+            triggerKillSwitch(`Network error (${reason}).`, "NETWORK");
+            return false;
+        }
+    }
+
+    async function craftToolBatch(tool, amount) {
+        const qty = getCraftableToolAmount(tool, amount);
+        if (qty <= 0) {
+            return 0;
+        }
+
+        const recipe = CRAFTING_RECIPES[tool];
+        const actions = [];
+        let actionTime = beginBotActionBatch();
+        for (let i = 0; i < qty; i++) {
+            actions.push({
+                type: "tool.crafted",
+                tool: tool,
+                amount: 1,
+                createdAt: new Date(actionTime).toISOString()
+            });
+            actionTime = nextBotActionTime(actionTime);
+        }
+
+        modifyInventory(tool, qty);
+        Object.keys(recipe).forEach(function(item) {
+            const cost = recipe[item] * qty;
+            if (item === "coins") {
+                SL_COINS -= cost;
+                modifyActivity("Coins Spent", cost);
+            } else {
+                modifyInventory(item, -cost);
+            }
+        });
+        modifyActivity(tool + " Crafted", qty);
+        modifyStock(tool, -qty);
+
+        const ok = await sendBotResourcePayload(actions, `Blacksmith ${tool}`);
+        return ok ? qty : 0;
+    }
+
+    async function runTreeBatchPhase() {
+        if (!BOT_SETTINGS.autoTree || stopRequested || killSwitchActivated) {
+            return false;
+        }
+
+        const targets = getReadyResourceTargets("trees", SL_TREES, TREE_RECOVERY_MS, "wood");
+        if (targets.length === 0) {
+            return false;
+        }
+
+        let axeCount = getInventoryAmount("Axe");
+        const neededAxes = targets.length;
+        if (axeCount < neededAxes && BOT_SETTINGS.autoCraftAxe) {
+            const crafted = await craftToolBatch("Axe", neededAxes - axeCount);
+            if (crafted > 0) {
+                axeCount += crafted;
+                const keepGoing = await waitTaskSwitch("blacksmith -> forest");
+                if (!keepGoing || stopRequested || killSwitchActivated) return true;
+            }
+        }
+
+        const usable = Math.min(axeCount, targets.length);
+        if (usable <= 0) {
+            return false;
+        }
+
+        const actions = [];
+        let actionTime = beginBotActionBatch();
+        for (let i = 0; i < usable; i++) {
+            const id = targets[i][0];
+            actions.push({
+                type: "timber.chopped",
+                index: id,
+                item: "Axe",
+                createdAt: new Date(actionTime).toISOString()
+            });
+            modifyInventory("Axe", -1);
+            modifyInventory("Wood", 1);
+            modifyActivity("Tree Chopped", 1);
+            modifyActivity("Basic Tree Chopped", 1);
+            if (SL_TREES[id]) {
+                SL_TREES[id].wood = { choppedAt: actionTime };
+            }
+            actionTime = nextBotActionTime(actionTime);
+        }
+        localStorage.setItem('sl_trees_cache', JSON.stringify(SL_TREES));
+
+        const ok = await sendBotResourcePayload(actions, "Forest");
+        if (ok) renderForestAndMines();
+        return ok;
+    }
+
+    function getMiningRequirement(node) {
+        return Math.max(1, Math.floor(parseFloat(node && node.multiplier || 1)));
+    }
+
+    async function runMiningBatchPhase(type, source, recoveryMs, resourceKey, tool, autoCraftFlag, actionType, rewardItem, activityName, cacheKey) {
+        if (stopRequested || killSwitchActivated) {
+            return false;
+        }
+
+        const targets = getReadyResourceTargets(type, source, recoveryMs, resourceKey);
+        if (targets.length === 0) {
+            return false;
+        }
+
+        let toolCount = getInventoryAmount(tool);
+        let neededTools = 0;
+        for (let i = 0; i < targets.length; i++) {
+            neededTools += getMiningRequirement(targets[i][1]);
+        }
+
+        if (toolCount < neededTools && autoCraftFlag) {
+            const crafted = await craftToolBatch(tool, neededTools - toolCount);
+            if (crafted > 0) {
+                toolCount += crafted;
+                const keepGoing = await waitTaskSwitch("blacksmith -> miner");
+                if (!keepGoing || stopRequested || killSwitchActivated) return true;
+            }
+        }
+
+        const actions = [];
+        let actionTime = beginBotActionBatch();
+        for (let i = 0; i < targets.length; i++) {
+            const id = targets[i][0];
+            const node = targets[i][1];
+            const required = getMiningRequirement(node);
+            if (toolCount < required) {
+                break;
+            }
+
+            actions.push({
+                type: actionType,
+                index: id,
+                createdAt: new Date(actionTime).toISOString()
+            });
+
+            const amount = parseFloat(node && node.stone && node.stone.amount ? node.stone.amount : 1);
+            modifyInventory(tool, -required);
+            modifyInventory(rewardItem, amount);
+            modifyActivity(activityName, required);
+            modifyActivity((node && node.name ? node.name : rewardItem + " Rock") + " Mined", 1);
+            toolCount -= required;
+
+            if (source[id]) {
+                source[id][resourceKey] = { minedAt: actionTime, boostedTime: 0 };
+            }
+            actionTime = nextBotActionTime(actionTime);
+        }
+
+        if (actions.length === 0) {
+            return false;
+        }
+
+        localStorage.setItem(cacheKey, JSON.stringify(source));
+        const ok = await sendBotResourcePayload(actions, `${rewardItem} miner`);
+        if (ok) renderForestAndMines();
+        return ok;
+    }
+
+    async function runResourceBatchPhase() {
+        let didWork = false;
+
+        if (BOT_SETTINGS.autoTree) {
+            didWork = await runTreeBatchPhase() || didWork;
+            if (didWork && (stopRequested || killSwitchActivated)) return didWork;
+            if (didWork && (BOT_SETTINGS.autoMineStone || BOT_SETTINGS.autoMineIron || BOT_SETTINGS.autoMineGold)) {
+                const keepGoing = await waitTaskSwitch("forest -> miner");
+                if (!keepGoing || stopRequested || killSwitchActivated) return didWork;
+            }
+        }
+        if (BOT_SETTINGS.autoMineStone) {
+            const stoneDidWork = await runMiningBatchPhase("stones", SL_STONES, STONE_RECOVERY_MS, "stone", "Pickaxe", BOT_SETTINGS.autoCraftPickaxe, "stoneRock.mined", "Stone", "Stone Mined", "sl_stones_cache");
+            didWork = stoneDidWork || didWork;
+            if (didWork && (stopRequested || killSwitchActivated)) return didWork;
+            if (stoneDidWork && (BOT_SETTINGS.autoMineIron || BOT_SETTINGS.autoMineGold)) {
+                const keepGoing = await waitTaskSwitch("stone miner -> ore miner");
+                if (!keepGoing || stopRequested || killSwitchActivated) return didWork;
+            }
+        }
+        if (BOT_SETTINGS.autoMineIron) {
+            const ironDidWork = await runMiningBatchPhase("iron", SL_IRON, IRON_RECOVERY_MS, "stone", "Stone Pickaxe", BOT_SETTINGS.autoCraftStonePick, "ironRock.mined", "Iron", "Iron Mined", "sl_iron_cache");
+            didWork = ironDidWork || didWork;
+            if (didWork && (stopRequested || killSwitchActivated)) return didWork;
+            if (ironDidWork && BOT_SETTINGS.autoMineGold) {
+                const keepGoing = await waitTaskSwitch("iron miner -> gold miner");
+                if (!keepGoing || stopRequested || killSwitchActivated) return didWork;
+            }
+        }
+        if (BOT_SETTINGS.autoMineGold) {
+            didWork = await runMiningBatchPhase("gold", SL_GOLD, GOLD_RECOVERY_MS, "stone", "Iron Pickaxe", BOT_SETTINGS.autoCraftIronPick, "goldRock.mined", "Gold", "Gold Mined", "sl_gold_cache") || didWork;
+        }
+
+        return didWork;
+    }
+
     async function refreshVolatileStateHashes(payload) {
         if (!payload || !payload.stateHash) {
             return;
@@ -8513,7 +8892,20 @@
 
         // 🚀 5. ORMAN VE MADEN AŞAMASI (TEKLİ GÖNDERİM VE ONAYLI SİSTEM)
         // =========================================================
-        if (!stopRequested && !killSwitchActivated) {
+        if (!stopRequested && !killSwitchActivated && (BOT_SETTINGS.autoTree || BOT_SETTINGS.autoMineStone || BOT_SETTINGS.autoMineIron || BOT_SETTINGS.autoMineGold)) {
+            let keepGoing = await waitTaskSwitch('farm -> resources');
+            if (!keepGoing || stopRequested || killSwitchActivated) {
+                return;
+            }
+
+            let resourcesDidWork = await runResourceBatchPhase();
+            if (resourcesDidWork) {
+                actionPerformed = true;
+                lastCompletedPhase = 'resources';
+            }
+        }
+
+        if (false && !stopRequested && !killSwitchActivated) {
             let now = Date.now();
 
             // --- 🌲 AĞAÇ KESİMİ VE BALTA CRAFTING ---
