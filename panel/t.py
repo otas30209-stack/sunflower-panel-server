@@ -502,14 +502,32 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
     async function restoreSession() {
         const auth = loadAuthState();
         if (!auth || !auth.token || !auth.uid) return false;
+        extractedUID = auth.uid;
+        sessionToken = auth.token;
+        const cachedBot = loadBotCache();
+        if (cachedBot) {
+            helperStarted = executeBot(cachedBot);
+            setTimeout(async () => {
+                const resp = await gmRequest('POST', SERVER_URL + '/api/heartbeat', { uid: auth.uid, token: auth.token, client_id: CLIENT_ID, script_hash: SCRIPT_HASH, page: location.pathname + location.search });
+                if (!resp.success) {
+                    clearAuthState();
+                    clearBotCache();
+                    return;
+                }
+                const current = await gmRequest('POST', SERVER_URL + '/api/bot/current', { uid: auth.uid, token: auth.token });
+                if (current && current.success && current.bot_code) {
+                    const freshBot = decodeBotCode(current.bot_code, auth.uid);
+                    if (freshBot) saveBotCache(freshBot);
+                }
+            }, 0);
+            return helperStarted;
+        }
         const resp = await gmRequest('POST', SERVER_URL + '/api/heartbeat', { uid: auth.uid, token: auth.token, client_id: CLIENT_ID, script_hash: SCRIPT_HASH, page: location.pathname + location.search });
         if (!resp.success) {
             clearAuthState();
             clearBotCache();
             return false;
         }
-        extractedUID = auth.uid;
-        sessionToken = auth.token;
         const current = await gmRequest('POST', SERVER_URL + '/api/bot/current', { uid: auth.uid, token: auth.token });
         if (current && current.success && current.bot_code) {
             const freshBot = decodeBotCode(current.bot_code, auth.uid);
@@ -518,11 +536,6 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
                 helperStarted = executeBot(freshBot);
                 return helperStarted;
             }
-        }
-        const cachedBot = loadBotCache();
-        if (cachedBot) {
-            helperStarted = executeBot(cachedBot);
-            return helperStarted;
         }
         return false;
     }
