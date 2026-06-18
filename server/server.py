@@ -1019,6 +1019,20 @@ def api_health():
     return jsonify({'success': True, 'service': 'sunflower-server', 'time': datetime.now().isoformat()})
 
 
+@app.get('/api/config-status')
+def api_config_status():
+    token_text = str(ADMIN_TOKEN or '')
+    return jsonify({
+        'success': True,
+        'admin_token_set': bool(token_text),
+        'admin_token_len': len(token_text),
+        'admin_token_hash': hashlib.sha256(token_text.encode('utf-8')).hexdigest()[:12] if token_text else '',
+        'd1_enabled': _d1_state_enabled(),
+        'd1_url_set': bool(D1_STATE_API_URL),
+        'supabase_enabled': _supabase_enabled(),
+    })
+
+
 @app.get('/api/public-links')
 def public_links():
     return jsonify({'success': True, 'quick_links': load_quick_links()})
