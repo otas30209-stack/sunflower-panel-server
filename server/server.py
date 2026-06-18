@@ -20,6 +20,8 @@ from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
 from config import (
     HOST, PORT, ADMIN_TOKEN, SERVER_LICENSE_SECRET, SUPABASE_URL, SUPABASE_SERVICE_KEY,
+    SUPABASE_BACKUP_URL, SUPABASE_BACKUP_SERVICE_KEY,
+    CLOUDFLARE_D1_ACCOUNT_ID, CLOUDFLARE_D1_DATABASE_ID, CLOUDFLARE_D1_API_TOKEN,
     D1_STATE_API_URL, D1_STATE_API_TOKEN, ALLOWED_ORIGINS,
     USERS_FILE, LICENSES_FILE, NOTICE_FILE, LOGS_FILE, BOT_FILE,
     REVOKED_LICENSES_FILE, QUICK_LINKS_FILE,
@@ -37,6 +39,7 @@ MAX_SESSIONS_PER_USER = 20
 pending_client_commands = []
 pending_bot_commands = []
 request_buckets = {}
+cloudflare_d1_table_ready = False
 last_bot_status = {
     'updated_at': '',
     'status_text': 'Ready',
@@ -132,51 +135,152 @@ def log_event(event):
         pass
 
 
+def _supabase_targets():
+    targets = []
+    seen = set()
+    for name, url, key in (
+        ('primary', SUPABASE_URL, SUPABASE_SERVICE_KEY),
+        ('backup', SUPABASE_BACKUP_URL, SUPABASE_BACKUP_SERVICE_KEY),
+    ):
+        url = str(url or '').strip().rstrip('/')
+        key = str(key or '').strip()
+        if not url or not key or url in seen:
+            continue
+        seen.add(url)
+        targets.append({'name': name, 'url': url, 'key': key})
+    return targets
+
+
 def _supabase_enabled():
-    return bool(SUPABASE_URL and SUPABASE_SERVICE_KEY)
+    return bool(_supabase_targets())
 
 
-def _supabase_headers():
+def _supabase_headers(service_key):
     return {
-        'apikey': SUPABASE_SERVICE_KEY,
-        'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
+        'apikey': service_key,
+        'Authorization': f'Bearer {service_key}',
         'Content-Type': 'application/json'
     }
 
 
 def _supabase_get_state(state_key, default):
-    if not _supabase_enabled():
+    targets = _supabase_targets()
+    if not targets:
         return default
-    try:
-        url = f"{SUPABASE_URL}/rest/v1/app_state?key=eq.{quote(state_key)}&select=value"
-        req = urlrequest.Request(url, headers=_supabase_headers(), method='GET')
-        with urlrequest.urlopen(req, timeout=20) as resp:
-            rows = json.loads(resp.read().decode('utf-8'))
-        if rows and isinstance(rows, list):
-            return rows[0].get('value', default)
-    except Exception as e:
-        log_event(f'Supabase load error ({state_key}): {e}')
+    for target in targets:
+        try:
+            url = f"{target['url']}/rest/v1/app_state?key=eq.{quote(state_key)}&select=value"
+            req = urlrequest.Request(url, headers=_supabase_headers(target['key']), method='GET')
+            with urlrequest.urlopen(req, timeout=20) as resp:
+                rows = json.loads(resp.read().decode('utf-8'))
+            if rows and isinstance(rows, list):
+                return rows[0].get('value', default)
+        except Exception as e:
+            log_event(f"Supabase load error [{target['name']}] ({state_key}): {e}")
     return default
 
 
 def _supabase_set_state(state_key, value):
-    if not _supabase_enabled():
+    targets = _supabase_targets()
+    if not targets:
+        return False
+    saved_any = False
+    body = json.dumps({
+        'key': state_key,
+        'value': value,
+        'updated_at': datetime.now().isoformat()
+    }).encode('utf-8')
+    for target in targets:
+        try:
+            headers = _supabase_headers(target['key'])
+            headers['Prefer'] = 'resolution=merge-duplicates'
+            url = f"{target['url']}/rest/v1/app_state?on_conflict=key"
+            req = urlrequest.Request(url, data=body, headers=headers, method='POST')
+            with urlrequest.urlopen(req, timeout=20) as resp:
+                resp.read()
+            saved_any = True
+        except Exception as e:
+            log_event(f"Supabase save error [{target['name']}] ({state_key}): {e}")
+    return saved_any
+
+
+def _cloudflare_d1_enabled():
+    return bool(CLOUDFLARE_D1_ACCOUNT_ID and CLOUDFLARE_D1_DATABASE_ID and CLOUDFLARE_D1_API_TOKEN)
+
+
+def _cloudflare_d1_query(sql, params=None):
+    account_id = quote(CLOUDFLARE_D1_ACCOUNT_ID, safe='')
+    database_id = quote(CLOUDFLARE_D1_DATABASE_ID, safe='')
+    url = f'https://api.cloudflare.com/client/v4/accounts/{account_id}/d1/database/{database_id}/query'
+    body = json.dumps({'sql': sql, 'params': params or []}).encode('utf-8')
+    headers = {
+        'Authorization': f'Bearer {CLOUDFLARE_D1_API_TOKEN}',
+        'Content-Type': 'application/json'
+    }
+    req = urlrequest.Request(url, data=body, headers=headers, method='POST')
+    try:
+        with urlrequest.urlopen(req, timeout=20) as resp:
+            payload = json.loads(resp.read().decode('utf-8'))
+    except HTTPError as e:
+        detail = ''
+        try:
+            detail = e.read().decode('utf-8', errors='ignore')
+        except Exception:
+            detail = str(e)
+        raise RuntimeError(f'Cloudflare D1 HTTP {e.code}: {detail[:1000]}')
+    if not payload.get('success'):
+        raise RuntimeError(json.dumps(payload.get('errors') or payload, ensure_ascii=False))
+    result = payload.get('result') or []
+    if isinstance(result, list):
+        result = result[0] if result else {}
+    if isinstance(result, dict) and not result.get('success', True):
+        raise RuntimeError(json.dumps(result, ensure_ascii=False))
+    return result if isinstance(result, dict) else {}
+
+
+def _cloudflare_d1_ensure_table():
+    global cloudflare_d1_table_ready
+    if cloudflare_d1_table_ready:
+        return
+    _cloudflare_d1_query(
+        'CREATE TABLE IF NOT EXISTS app_state ('
+        '"key" TEXT PRIMARY KEY, '
+        'value TEXT NOT NULL, '
+        'updated_at TEXT NOT NULL'
+        ')'
+    )
+    cloudflare_d1_table_ready = True
+
+
+def _cloudflare_d1_get_state(state_key, default):
+    if not _cloudflare_d1_enabled():
+        return default
+    try:
+        _cloudflare_d1_ensure_table()
+        result = _cloudflare_d1_query('SELECT value FROM app_state WHERE "key" = ? LIMIT 1', [state_key])
+        rows = result.get('results') or []
+        if not rows:
+            return default
+        raw_value = rows[0].get('value') if isinstance(rows[0], dict) else None
+        return json.loads(raw_value) if isinstance(raw_value, str) else default
+    except Exception as e:
+        log_event(f'Cloudflare D1 load error ({state_key}): {e}')
+        return default
+
+
+def _cloudflare_d1_set_state(state_key, value):
+    if not _cloudflare_d1_enabled():
         return False
     try:
-        body = json.dumps({
-            'key': state_key,
-            'value': value,
-            'updated_at': datetime.now().isoformat()
-        }).encode('utf-8')
-        headers = _supabase_headers()
-        headers['Prefer'] = 'resolution=merge-duplicates'
-        url = f"{SUPABASE_URL}/rest/v1/app_state?on_conflict=key"
-        req = urlrequest.Request(url, data=body, headers=headers, method='POST')
-        with urlrequest.urlopen(req, timeout=20) as resp:
-            resp.read()
+        _cloudflare_d1_ensure_table()
+        _cloudflare_d1_query(
+            'INSERT INTO app_state ("key", value, updated_at) VALUES (?, ?, ?) '
+            'ON CONFLICT("key") DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at',
+            [state_key, json.dumps(value, ensure_ascii=False), datetime.now().isoformat()]
+        )
         return True
     except Exception as e:
-        log_event(f'Supabase save error ({state_key}): {e}')
+        log_event(f'Cloudflare D1 save error ({state_key}): {e}')
         return False
 
 
@@ -224,6 +328,9 @@ def _d1_set_state(state_key, value):
 def load_json(path, default):
     state_key = REMOTE_STATE_KEYS.get(str(path))
     if state_key:
+        remote = _cloudflare_d1_get_state(state_key, None)
+        if remote is not None:
+            return remote
         remote = _d1_get_state(state_key, None)
         if remote is not None:
             return remote
@@ -239,6 +346,7 @@ def load_json(path, default):
 def save_json(path, data):
     state_key = REMOTE_STATE_KEYS.get(str(path))
     if state_key:
+        _cloudflare_d1_set_state(state_key, data)
         _d1_set_state(state_key, data)
         _supabase_set_state(state_key, data)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -1027,6 +1135,7 @@ def api_config_status():
         'admin_token_set': bool(token_text),
         'admin_token_len': len(token_text),
         'admin_token_hash': hashlib.sha256(token_text.encode('utf-8')).hexdigest()[:12] if token_text else '',
+        'cloudflare_d1_enabled': _cloudflare_d1_enabled(),
         'd1_enabled': _d1_state_enabled(),
         'd1_url_set': bool(D1_STATE_API_URL),
         'supabase_enabled': _supabase_enabled(),

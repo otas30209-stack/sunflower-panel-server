@@ -18,6 +18,16 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_KEY
         sync: false
+      - key: SUPABASE_BACKUP_URL
+        sync: false
+      - key: SUPABASE_BACKUP_SERVICE_KEY
+        sync: false
+      - key: CLOUDFLARE_D1_ACCOUNT_ID
+        sync: false
+      - key: CLOUDFLARE_D1_DATABASE_ID
+        sync: false
+      - key: CLOUDFLARE_D1_API_TOKEN
+        sync: false
       - key: D1_STATE_API_URL
         sync: false
       - key: D1_STATE_API_TOKEN
