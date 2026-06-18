@@ -39,7 +39,7 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
 // @grant        unsafeWindow
 // @connect      __SERVER_HOST__
 // @require      https://html2canvas.hertzen.com/dist/html2canvas.min.js
-// @run-at       document-idle
+// @run-at       document-start
 // ==/UserScript==
 
 (function() {
@@ -312,20 +312,19 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
 
         try {
             window.__SUNFLOWER_BOT_RUNNING__ = true;
+            eval(preparedCode);
+            return true;
+        } catch (err2) {
+            runError('eval', err2);
+        }
+
+        try {
+            window.__SUNFLOWER_BOT_RUNNING__ = true;
             const runner = new Function(preparedCode);
             runner.call(window, safeGMAddStyle, safeGMXmlhttpRequest, safeGMSetValue, safeGMGetValue);
             return true;
         } catch (err1) {
             runError('prepared', err1);
-        }
-
-        try {
-            window.__SUNFLOWER_BOT_RUNNING__ = true;
-            const unsafeWindow = window;
-            eval(code);
-            return true;
-        } catch (err2) {
-            runError('eval', err2);
             return false;
         }
     }
