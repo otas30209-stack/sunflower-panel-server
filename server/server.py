@@ -1335,6 +1335,43 @@ def api_heartbeat():
     return jsonify({'success': True})
 
 
+@app.post('/api/bot/current')
+def api_bot_current():
+    data = request.get_json(silent=True) or {}
+    uid = str(data.get('uid') or '').strip().lower()
+    token = str(data.get('token') or '').strip()
+    if not token or not uid:
+        return jsonify({'success': False, 'error': 'Eksik oturum'}), 400
+    if is_banned_uid(uid):
+        return jsonify({'success': False, 'error': 'Script gecersiz Hata kodu (4003)'}), 403
+    users = load_users()
+    licenses = load_licenses()
+    user = users.get(uid)
+    if not user or not valid_session(user, token):
+        return jsonify({'success': False, 'error': 'Oturum yok'}), 403
+    license_id, session = resolve_session_license(user, token)
+    row = dict(licenses.get(license_id, {}))
+    if not row or not row.get('active', True) or str(row.get('status') or 'active').lower() != 'active':
+        return jsonify({'success': False, 'error': 'off'}), 403
+    if str(row.get('uid') or '').strip().lower() != uid:
+        return jsonify({'success': False, 'error': 'invalid uid'}), 403
+
+    patched_bot = patch_bot_content(load_bot_content())
+    if not str(patched_bot or '').strip():
+        return jsonify({'success': False, 'error': 'Bot bulunamadi'}), 503
+    patched_bot = patched_bot.replace('__VIP_SCRIPT_CLIENT_ID__', str((session or {}).get('client_id') or row.get('client_id') or ''))
+    patched_bot = patched_bot.replace('__VIP_SCRIPT_HASH__', str((session or {}).get('script_hash') or row.get('script_hash') or ''))
+    patched_bot = patched_bot.replace('__VIP_SCRIPT_SESSION__', token)
+    patched_bot = patched_bot.replace('__VIP_SCRIPT_UID__', uid)
+
+    return jsonify({
+        'success': True,
+        'license_id': license_id,
+        'uid': uid,
+        'bot_code': encrypt_bot_for_uid(patched_bot, uid)
+    })
+
+
 @app.post('/api/client/command')
 def api_client_command():
     data = request.get_json(silent=True) or {}
