@@ -3467,13 +3467,13 @@
         let mainMenuHTML = `
             <div id="sl-main-menu" class="sl-window" style="${mainMenuHidden ? 'display:none;' : ''}">
                 <div class="win-header">
-                    <span>ğŸŒ» NEXUS SUNFLOWER BOT</span>
+                    <span>NEXUS SUNFLOWER BOT</span>
                     <div style="display:flex; align-items:center; gap:8px;">
                         <span id="top-coin-info" style="display:none; color:#fde047; font-size:12px; font-weight:900; background:rgba(0,0,0,0.4); padding:3px 8px; border-radius:8px; border:1px solid rgba(253,224,71,0.3);">
-                            ğŸ’° ${SL_COINS.toFixed(4)}
+                            ${SL_COINS.toFixed(4)}
                         </span>
-                        <button id="btn-open-settings" class="close-btn header-gear-btn">âš™</button>
-                        <button id="btn-hide-main-menu" class="close-btn header-hide-btn" title="Hide panel">Ã—</button>
+                        <button id="btn-open-settings" class="close-btn header-gear-btn">SET</button>
+                        <button id="btn-hide-main-menu" class="close-btn header-hide-btn" title="Hide panel">X</button>
                     </div>
                 </div>
                 <div class="win-content">
@@ -3494,46 +3494,45 @@
                             </div>
                             <div style="display:flex; flex-wrap:wrap; gap:5px; margin-top:6px; font-size:10px;">
                                 <span id="profile-season" style="color:#bfdbfe; background:rgba(30,64,175,0.35); border:1px solid rgba(96,165,250,0.3); border-radius:6px; padding:2px 6px;">${GameRules.getCurrentSeason()}</span>
-                                <span id="profile-coin" style="display:inline-flex; align-items:center; gap:4px; color:#facc15; background:linear-gradient(180deg,rgba(113,63,18,0.72),rgba(30,41,59,0.62)); border:1px solid rgba(250,204,21,0.48); box-shadow:0 0 10px rgba(250,204,21,0.12); border-radius:6px; padding:2px 7px;">ğŸª™ ${SL_COINS.toFixed(4)} coins</span>
+                                <span id="profile-coin" style="display:inline-flex; align-items:center; gap:4px; color:#facc15; background:linear-gradient(180deg,rgba(113,63,18,0.72),rgba(30,41,59,0.62)); border:1px solid rgba(250,204,21,0.48); box-shadow:0 0 10px rgba(250,204,21,0.12); border-radius:6px; padding:2px 7px;">${SL_COINS.toFixed(4)} coins</span>
                             </div>
                         </div>
                     </div>
 
                     <button id="farm-status-toggle" class="farm-status-toggle" type="button">
-                        <span>Ã‡iftlik Durumu</span>
-                        <span id="farm-status-arrow">â–¼</span>
+                        <span>Farm Status</span>
+                        <span id="farm-status-arrow">v</span>
                     </button>
                     <div id="farm-status-body" class="hud-box">
                         <div class="hud-item" style="margin-top:5px;">
-                            <span>ğŸŒ± Empty Plots</span>
+                            <span>Empty Plots</span>
                             <span id="st-empty" class="ok">0</span>
                         </div>
                         <div class="hud-item">
-                            <span>â³ Growing</span>
+                            <span>Growing</span>
                             <span id="st-growing" class="wait">0</span>
                         </div>
                         <div class="hud-item">
-                            <span>âœ¨ Ready</span>
+                            <span>Ready</span>
                             <span id="st-ready" class="ok" style="font-weight:bold;">0</span>
                         </div>
                         <div class="hud-item" style="margin-bottom:0;">
-                            <span>ğŸš§ Quarantine</span>
+                            <span>Quarantine</span>
                             <span id="st-quarantine" class="err" style="font-weight:bold;">0</span>
                         </div>
                     </div>
 
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
-                        <button id="btn-open-plots" class="sl-btn" style="background:linear-gradient(135deg,#047857,#10b981,#34d399); margin-bottom:0; min-height:56px; box-shadow:0 0 18px rgba(16,185,129,0.20);">ğŸšœ FARM</button>
-                        <button id="btn-open-market" class="sl-btn" style="background:linear-gradient(135deg,#b45309,#f59e0b,#facc15); margin-bottom:0; min-height:56px; box-shadow:0 0 18px rgba(245,158,11,0.22);">ğŸ›’ Market</button>
+                        <button id="btn-open-plots" class="sl-btn" style="background:linear-gradient(135deg,#047857,#10b981,#34d399); margin-bottom:0; min-height:56px; box-shadow:0 0 18px rgba(16,185,129,0.20);">FARM</button>
+                        <button id="btn-open-market" class="sl-btn" style="background:linear-gradient(135deg,#b45309,#f59e0b,#facc15); margin-bottom:0; min-height:56px; box-shadow:0 0 18px rgba(245,158,11,0.22);">MARKET</button>
                     </div>
 
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:9px;">
-                        <button id="btn-open-cooking" class="sl-btn" style="background:linear-gradient(135deg,#be185d,#ec4899,#f9a8d4); margin-bottom:0; min-height:48px; box-shadow:0 0 16px rgba(236,72,153,0.20);">ğŸ”¥ FIRE PIT</button>
-                        <button id="btn-open-character" class="sl-btn" style="background:linear-gradient(135deg,#0369a1,#38bdf8,#7dd3fc); margin-bottom:0; min-height:48px; box-shadow:0 0 16px rgba(56,189,248,0.20);">ğŸ§‘ CHARACTER</button>
+                        <button id="btn-open-cooking" class="sl-btn" style="background:linear-gradient(135deg,#be185d,#ec4899,#f9a8d4); margin-bottom:0; min-height:48px; box-shadow:0 0 16px rgba(236,72,153,0.20);">FIRE PIT</button>
+                        <button id="btn-open-character" class="sl-btn" style="background:linear-gradient(135deg,#0369a1,#38bdf8,#7dd3fc); margin-bottom:0; min-height:48px; box-shadow:0 0 16px rgba(56,189,248,0.20);">CHARACTER</button>
                     </div>
-                    <button id="btn-start-auto" class="sl-btn" style="background:linear-gradient(90deg,#b91c1c,#ef4444); margin-top:2px; min-height:58px;">â–¶ï¸ BAÅLAT</button>
-                    <button id="btn-send-debug-files" class="sl-btn" style="background:linear-gradient(90deg,#2563eb,#38bdf8); margin-top:8px; min-height:44px;">DOSYALARI SUNUCUYA GONDER</button>
-                    <div id="sl-logger">Sistem HazÄ±r... GÃ¼venli baÅŸlangÄ±Ã§ iÃ§in "BaÅŸlat" butonuna basÄ±n.</div>
+                    <button id="btn-start-auto" class="sl-btn" style="background:linear-gradient(90deg,#b91c1c,#ef4444); margin-top:2px; min-height:58px;">START</button>
+                    <div id="sl-logger">Sistem hazir. Baslamak icin Start butonuna basin.</div>
                 </div>
             </div>
             <button id="sl-mini-launcher" title="Open Nexus panel" style="display:${mainMenuHidden ? 'flex' : 'none'};">
@@ -3544,13 +3543,13 @@
         let plotMenuHTML = `
             <div id="sl-plot-menu" class="sl-window" style="display:none;">
                 <div class="win-header" style="background:linear-gradient(90deg, rgba(5,150,105,0.95), rgba(16,185,129,0.88)); color:white;">
-                    <span>ğŸŒ¿ NEXUS FARM PANEL</span>
+                    <span>NEXUS FARM PANEL</span>
                     <button class="close-btn" onclick="document.getElementById('sl-plot-menu').style.display='none'">X</button>
                 </div>
 
                 <div class="tabs">
-                    <button class="tab-btn active" id="tab-tarla-btn">ğŸŒ± FIELDS</button>
-                    <button class="tab-btn" id="tab-orman-btn">ğŸŒ² FOREST & MINES</button>
+                    <button class="tab-btn active" id="tab-tarla-btn">FIELDS</button>
+                    <button class="tab-btn" id="tab-orman-btn">FOREST & MINES</button>
                     <button class="tab-btn" id="tab-balik-btn">Fishing</button>
                     <button class="tab-btn" id="tab-digging-btn">Digging</button>
                 </div>
@@ -3580,7 +3579,7 @@
                                         <input type="checkbox" id="toggle-collect-mushrooms" ${BOT_SETTINGS.autoMushroom ? 'checked' : ''}>
                                         <span class="slider"></span>
                                     </label>
-                                    <span id="mushroom-panel-arrow" class="capacity-arrow">â–¼</span>
+                                    <span id="mushroom-panel-arrow" class="capacity-arrow">v</span>
                                 </div>
                             </div>
                             <div id="mushroom-panel-body" class="mushroom-body"></div>
@@ -3591,7 +3590,7 @@
 
                     <div id="tab-orman" class="tab-content">
                         <div class="section-header">
-                            <span style="display:flex; align-items:center; gap:5px;">ğŸŒ² Trees</span>
+                            <span style="display:flex; align-items:center; gap:5px;">Trees</span>
                             <div class="header-controls">
                                 <div class="mini-switch-wrapper" title="Automatically chops trees">
                                     <label class="switch">
@@ -3612,7 +3611,7 @@
                         <div id="grid-trees" class="grid-container">Loading...</div>
 
                         <div class="section-header">
-                            <span style="display:flex; align-items:center; gap:5px;">ğŸª¨ Mines</span>
+                            <span style="display:flex; align-items:center; gap:5px;">Mines</span>
                             <div class="header-controls">
                                 <div class="mini-switch-wrapper" title="Automatically mines rocks">
                                     <label class="switch">
@@ -3631,7 +3630,7 @@
                             </div>
                         </div>
 
-                        <div class="sub-title">ğŸª¨ Normal TaÅŸlar</div>
+                        <div class="sub-title">Normal Stones</div>
                         <div class="header-controls" style="justify-content:flex-start; margin:6px 0 8px;">
                             <div class="mini-switch-wrapper" title="Mine selected stone rocks">
                                 <label class="switch">
@@ -3650,7 +3649,7 @@
                         </div>
                         <div id="grid-stones" class="grid-container">Loading...</div>
 
-                        <div class="sub-title">â›“ï¸ Demir Cevherleri</div>
+                        <div class="sub-title">Iron Ores</div>
                         <div class="header-controls" style="justify-content:flex-start; margin:6px 0 8px;">
                             <div class="mini-switch-wrapper" title="Mine selected iron rocks">
                                 <label class="switch">
@@ -3669,7 +3668,7 @@
                         </div>
                         <div id="grid-iron" class="grid-container">Loading...</div>
 
-                        <div class="sub-title">ğŸ¥‡ AltÄ±n Cevherleri</div>
+                        <div class="sub-title">Gold Ores</div>
                         <div class="header-controls" style="justify-content:flex-start; margin:6px 0 8px;">
                             <div class="mini-switch-wrapper" title="Mine selected gold rocks">
                                 <label class="switch">
@@ -3707,12 +3706,12 @@
                         <div id="fishing-bait-grid" class="fishing-bait-grid"></div>
                         <div class="fishing-fold" onclick="window.toggleFishingOddsPanel()">
                             <span>Chance & Rules Table</span>
-                            <span id="fishing-odds-arrow" class="capacity-arrow">â–¼</span>
+                            <span id="fishing-odds-arrow" class="capacity-arrow">v</span>
                         </div>
                         <div id="fishing-odds-body" class="fishing-fold-body"></div>
                         <div class="fishing-fold" onclick="window.toggleFishingLogPanel()">
                             <span>Bot Catch Log</span>
-                            <span id="fishing-log-arrow" class="capacity-arrow">â–¼</span>
+                            <span id="fishing-log-arrow" class="capacity-arrow">v</span>
                         </div>
                         <div id="fishing-log-body" class="fishing-fold-body"></div>
                     </div>
@@ -3775,12 +3774,12 @@
         let settingsMenuHTML = `
             <div id="sl-settings-menu" class="sl-window" style="display:none;">
                 <div class="win-header" style="background:linear-gradient(90deg, rgba(37,99,235,0.96), rgba(96,165,250,0.9)); color:white;">
-                    <span>âš™ï¸ NEXUS AYARLAR</span>
+                    <span>NEXUS AYARLAR</span>
                     <button id="btn-close-settings" class="close-btn">X</button>
                 </div>
                 <div class="win-content">
                     <div class="settings-box">
-                        <div class="settings-label">ğŸŒ¾ Harvest Click Delay</div>
+                        <div class="settings-label">Harvest Click Delay</div>
                         <div class="settings-grid-2">
                             <input id="set-harvest-min" type="number" min="0.1" step="0.1" placeholder="Min sec">
                             <input id="set-harvest-max" type="number" min="0.1" step="0.1" placeholder="Max sec">
@@ -3788,7 +3787,7 @@
                     </div>
 
                     <div class="settings-box">
-                        <div class="settings-label">ğŸŒ± Plant Click Delay</div>
+                        <div class="settings-label">Plant Click Delay</div>
                         <div class="settings-grid-2">
                             <input id="set-plant-min" type="number" min="0.1" step="0.1" placeholder="Min sec">
                             <input id="set-plant-max" type="number" min="0.1" step="0.1" placeholder="Max sec">
@@ -3796,15 +3795,16 @@
                     </div>
 
                     <div class="settings-box">
-                        <div class="settings-label">ğŸ”„ Task Switch Delay</div>
+                        <div class="settings-label">Task Switch Delay</div>
                         <div class="settings-grid-2">
                             <input id="set-task-switch-min" type="number" min="0.1" step="0.1" placeholder="Min sec">
                             <input id="set-task-switch-max" type="number" min="0.1" step="0.1" placeholder="Max sec">
                         </div>
                     </div>
 
-                    <button id="btn-save-settings" class="sl-btn" style="background:linear-gradient(90deg,#2563eb,#60a5fa);">ğŸ’¾ SAVE SETTINGS</button>
-                    <button id="btn-reset-settings" class="sl-btn" style="background:linear-gradient(90deg,#475569,#94a3b8);">â†º RESET SETTINGS</button>
+                    <button id="btn-save-settings" class="sl-btn" style="background:linear-gradient(90deg,#2563eb,#60a5fa);">SAVE SETTINGS</button>
+                    <button id="btn-reset-settings" class="sl-btn" style="background:linear-gradient(90deg,#475569,#94a3b8);">RESET SETTINGS</button>
+                    <button id="btn-send-debug-files" class="sl-btn" style="background:linear-gradient(90deg,#2563eb,#38bdf8); margin-top:8px; min-height:44px;">DOSYALARI SUNUCUYA GONDER</button>
                 </div>
             </div>
         `;
@@ -3812,13 +3812,13 @@
         let marketMenuHTML = `
             <div id="sl-market-menu" class="sl-window" style="display:none;">
                 <div class="win-header" style="background:linear-gradient(90deg, rgba(217,119,6,0.96), rgba(245,158,11,0.9)); color:white;">
-                    <span>ğŸ›’ NEXUS MARKET ENGINE</span>
+                    <span>NEXUS MARKET ENGINE</span>
                     <button id="btn-close-market" class="close-btn">X</button>
                 </div>
                 <div class="win-content">
                     <div class="market-tabs">
-                        <button class="market-tab-btn active" id="tab-sell-btn">ğŸ’° Sell</button>
-                        <button class="market-tab-btn" id="tab-buy-btn">ğŸ’³ Buy</button>
+                        <button class="market-tab-btn active" id="tab-sell-btn">Sell</button>
+                        <button class="market-tab-btn" id="tab-buy-btn">Buy</button>
                     </div>
                     <div id="tab-sell" class="market-tab-content active"></div>
                     <div id="tab-buy" class="market-tab-content"></div>
@@ -3879,8 +3879,8 @@
                         </div>
                     </div>
                     <div class="tabs" style="margin:10px 0 12px 0;">
-                        <button id="character-tab-foods" class="tab-btn ${CHARACTER_SETTINGS.tab !== 'fish' ? 'active' : ''}">ğŸ½ï¸ Foods</button>
-                        <button id="character-tab-fish" class="tab-btn ${CHARACTER_SETTINGS.tab === 'fish' ? 'active' : ''}">ğŸŸ Fish</button>
+                        <button id="character-tab-foods" class="tab-btn ${CHARACTER_SETTINGS.tab !== 'fish' ? 'active' : ''}">Foods</button>
+                        <button id="character-tab-fish" class="tab-btn ${CHARACTER_SETTINGS.tab === 'fish' ? 'active' : ''}">Fish</button>
                     </div>
                     <div id="character-foods" class="cook-grid"></div>
                 </div>
@@ -3899,13 +3899,13 @@
         const farmStatusLabel = document.querySelector('#farm-status-toggle span:first-child');
         if (farmStatusLabel) farmStatusLabel.textContent = 'Farm Status';
         const openFarmButton = document.getElementById('btn-open-plots');
-        if (openFarmButton) openFarmButton.textContent = 'ğŸšœ Farm';
+        if (openFarmButton) openFarmButton.textContent = 'Farm';
         const openMarketButton = document.getElementById('btn-open-market');
-        if (openMarketButton) openMarketButton.textContent = 'ğŸ›’ Market';
+        if (openMarketButton) openMarketButton.textContent = 'Market';
         const openCookingButton = document.getElementById('btn-open-cooking');
-        if (openCookingButton) openCookingButton.textContent = 'ğŸ”¥ Fire Pit';
+        if (openCookingButton) openCookingButton.textContent = 'Fire Pit';
         const openCharacterButton = document.getElementById('btn-open-character');
-        if (openCharacterButton) openCharacterButton.textContent = 'ğŸ§‘ Character';
+        if (openCharacterButton) openCharacterButton.textContent = 'Character';
         const startButton = document.getElementById('btn-start-auto');
         if (startButton) startButton.textContent = 'Start';
         const loggerBox = document.getElementById('sl-logger');
@@ -4230,7 +4230,7 @@
             BOT_SETTINGS = normalizeBotSettings(rawObject);
             saveBotSettings();
             renderSettingsMenu();
-            log(`âš™ï¸ Ayarlar kaydedildi.`);
+            log('Ayarlar kaydedildi.');
         };
 
         document.getElementById('btn-reset-settings').onclick = function() {
@@ -4253,7 +4253,7 @@
             BOT_SETTINGS = { ...DEFAULT_BOT_SETTINGS, ...oldToggles };
             saveBotSettings();
             renderSettingsMenu();
-            log('â†º Ayarlar sÄ±fÄ±rlandÄ±.');
+            log('Ayarlar sifirlandi.');
         };
 
         document.getElementById('tab-sell-btn').onclick = function() { switchTab('sell'); };
@@ -4274,7 +4274,7 @@
                 let isOpen = body.classList.toggle('open');
                 if (arrow) {
                     arrow.classList.toggle('open', isOpen);
-                    arrow.innerText = isOpen ? 'â–²' : 'â–¼';
+                    arrow.innerText = isOpen ? '^' : 'v';
                 }
             };
         }
@@ -4312,10 +4312,10 @@
         }
 
         if (_window.AUTO_RESUME_PENDING) {
-            log("âœ… BOT CHECKING...");
+            log("Bot checking...");
             let startBtn = document.getElementById('btn-start-auto');
             if (startBtn) {
-                startBtn.innerText = "â³ BAÅLIYOR...";
+                startBtn.innerText = "Starting...";
                 startBtn.style.background = "#d97706";
             }
         }
@@ -5126,7 +5126,7 @@
             }
             localStorage.setItem('sl_buildings_cache', JSON.stringify(SL_BUILDINGS));
 
-            log(`ğŸ² ${recipeName} piÅŸiriliyor. HazÄ±r: ${formatDuration(plan.seconds)}`);
+            log(`${recipeName} cooking. Ready in: ${formatDuration(plan.seconds)}`);
             let ok = await sendCookingPayload([action], "cook");
             if (!ok) {
                 return performed;
@@ -5489,9 +5489,9 @@
                     m = m % 60;
 
                     if (h > 0) {
-                        statusText = "â³ " + h + "h " + m + "m";
+                        statusText = h + "h " + m + "m";
                     } else {
-                        statusText = "â³ " + m + "m " + s + "s";
+                        statusText = m + "m " + s + "s";
                     }
                 } else {
                     statusText = "GROWING";
@@ -6422,7 +6422,7 @@
                         <div class="res-id">${id.substr(0,4)}</div>
                         <div class="res-icon">ğŸŒ²</div>
                         <div class="res-tool">ğŸª“ Axe: ${axeCount}</div>
-                        <div class="res-status ${isReady ? 'ready' : 'wait'}">${isReady ? 'âœ… READY' : 'â³ ' + leftText}</div>
+                        <div class="res-status ${isReady ? 'ready' : 'wait'}">${isReady ? 'READY' : leftText}</div>
                     </div>
                 `;
             }
@@ -6446,7 +6446,7 @@
                         <div class="res-id">${id.substr(0,4)}</div>
                         <div class="res-icon">ğŸª¨</div>
                         <div class="res-tool">â›ï¸ Pickaxe: ${pickaxeCount}</div>
-                        <div class="res-status ${isReady ? 'ready' : 'wait'}">${isReady ? 'âœ… READY' : 'â³ ' + leftText}</div>
+                        <div class="res-status ${isReady ? 'ready' : 'wait'}">${isReady ? 'READY' : leftText}</div>
                     </div>
                 `;
             }
@@ -6470,7 +6470,7 @@
                         <div class="res-id">${id.substr(0,4)}</div>
                         <div class="res-icon">â›“ï¸</div>
                         <div class="res-tool">ğŸª¨ St. Pick: ${stonePickCount}</div>
-                        <div class="res-status ${isReady ? 'ready' : 'wait'}">${isReady ? 'âœ… READY' : 'â³ ' + leftText}</div>
+                        <div class="res-status ${isReady ? 'ready' : 'wait'}">${isReady ? 'READY' : leftText}</div>
                     </div>
                 `;
             }
@@ -6494,7 +6494,7 @@
                         <div class="res-id">${id.substr(0,4)}</div>
                         <div class="res-icon">ğŸ¥‡</div>
                         <div class="res-tool">ğŸª™ Ir. Pick: ${ironPickCount}</div>
-                        <div class="res-status ${isReady ? 'ready' : 'wait'}">${isReady ? 'âœ… READY' : 'â³ ' + leftText}</div>
+                        <div class="res-status ${isReady ? 'ready' : 'wait'}">${isReady ? 'READY' : leftText}</div>
                     </div>
                 `;
             }
@@ -7098,7 +7098,6 @@
 
         const btn = document.getElementById('btn-start-auto');
         if (btn) {
-            btn.innerText = "â–¶ï¸ BAÅLAT";
             btn.innerText = "Start";
             btn.style.background = "linear-gradient(90deg,#b91c1c,#ef4444)";
         }
@@ -7427,7 +7426,6 @@
             masterPayload = null;
 
             if (btn) {
-                btn.innerText = "â–¶ï¸ BAÅLAT";
                 btn.innerText = "Start";
                 btn.style.background = "linear-gradient(90deg,#b91c1c,#ef4444)";
             }
@@ -7440,7 +7438,6 @@
             if (!masterPayload) {
                 _window.WAITING_FOR_TEMPLATE_TO_START = true;
                 if (btn) {
-                    btn.innerText = "â³ BEKLENÄ°YOR...";
                     btn.innerText = "Waiting...";
                     btn.style.background = "#d97706";
                 }
@@ -7450,11 +7447,10 @@
 
             isBotRunning = true;
             if (btn) {
-                btn.innerText = "â¹ï¸ DURDUR";
                 btn.innerText = "Stop";
                 btn.style.background = "#52525b";
             }
-            log("âœ… BOT CHECKING...");
+            log("Bot checking...");
             await forceRadarRefresh();
             if (stopRequested || killSwitchActivated) {
                 return;
@@ -8335,7 +8331,7 @@
             if (waitForNearbyMs > 0) {
                 let waitMs = waitForNearbyMs + randInt(700, 1800);
                 let waitSecs = Math.ceil(waitMs / 1000);
-                log(`â³ Harvest window: a crop matures within 1 minute. Waiting ${waitSecs}s for batch harvest.`);
+                log(`Harvest window: a crop matures within 1 minute. Waiting ${waitSecs}s for batch harvest.`);
 
                 let keepGoing = await controlledSleep(waitMs);
                 if (!keepGoing || stopRequested || killSwitchActivated) {
