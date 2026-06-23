@@ -7407,7 +7407,34 @@
     }
 
     async function fetchGameMotorFile() {
-        return "// motor source export disabled\n// captured_at: " + new Date().toISOString() + "\n// note: use session.txt and sablon.txt for farm state/template diagnosis";
+        const motorUrl = findGameMotorScriptUrl();
+        const header = [
+            "// captured_at: " + new Date().toISOString(),
+            "// motor_url: " + (motorUrl || "not-found"),
+            ""
+        ].join("\n");
+
+        if (!motorUrl) {
+            return header + "// Nexus could not find the live game motor script on this page.";
+        }
+
+        try {
+            const response = await _window.fetch(motorUrl, {
+                method: "GET",
+                cache: "no-store",
+                credentials: "omit"
+            });
+            if (!response || !response.ok) {
+                return header + "// Motor fetch failed. HTTP status: " + (response ? response.status : "NO_RESPONSE");
+            }
+            const text = await response.text();
+            if (!text || text.length < 100000) {
+                return header + "// Motor fetch returned suspiciously small content. Length: " + (text ? text.length : 0) + "\n" + (text || "");
+            }
+            return header + text;
+        } catch(e) {
+            return header + "// Motor fetch error: " + (e && e.message ? e.message : e);
+        }
     }
 
     function getMasterPayloadCapturedAt() {
@@ -7578,7 +7605,7 @@
         }
 
         return {
-            "motor.txt": stableDebugJson(botDebug),
+            "motor.txt": await fetchGameMotorFile(),
             "session.txt": stableDebugJson(session),
             "sablon.txt": stableDebugJson(sablon || {})
         };
