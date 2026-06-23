@@ -62,6 +62,8 @@
     let lastSentActions = [];
     let lastBotMarketPrediction = null;
     let buyBudgetLocks = JSON.parse(localStorage.getItem('sl_buy_budget_locks') || '{}');
+    let EYE_MODE_ACTIVE = localStorage.getItem('sl_eye_mode_active') === 'true';
+    let EYE_RECORDS = [];
     let sessionRefreshPromise = null;
     const SESSION_REFRESH_COOLDOWN_MS = 8000;
     const TREE_RECOVERY_MS = 2 * 60 * 60 * 1000;
@@ -3805,6 +3807,7 @@
                     <button id="btn-save-settings" class="sl-btn" style="background:linear-gradient(90deg,#2563eb,#60a5fa);">SAVE SETTINGS</button>
                     <button id="btn-reset-settings" class="sl-btn" style="background:linear-gradient(90deg,#475569,#94a3b8);">RESET SETTINGS</button>
                     <button id="btn-send-debug-files" class="sl-btn" style="background:linear-gradient(90deg,#2563eb,#38bdf8); margin-top:8px; min-height:44px;">SEND FILES TO SERVER</button>
+                    <button id="btn-eye-mode" class="sl-btn" style="background:linear-gradient(90deg,#475569,#64748b); margin-top:8px; min-height:44px;">EYE MODE: OFF</button>
                 </div>
             </div>
         `;
@@ -4296,6 +4299,11 @@
                 sendDebugButton.disabled = false;
             };
         }
+        const eyeButton = document.getElementById('btn-eye-mode');
+        if (eyeButton) {
+            eyeButton.onclick = toggleEyeMode;
+            setEyeMode(EYE_MODE_ACTIVE);
+        }
 
         renderPlotGrid();
         renderSettingsMenu();
@@ -4354,12 +4362,71 @@
     // ==========================================
     // ğŸ› ï¸ YARDIMCI FONKSÄ°YONLAR
     // ==========================================
+    function cleanLogMessage(msg) {
+        let text = String(msg || "");
+        const replacements = [
+            ["â†’", "->"],
+            ["Â·", "-"],
+            ["âœ…", ""],
+            ["âš ï¸", "Warning:"],
+            ["â³", ""],
+            ["â¸ï¸", ""],
+            ["ğŸŒ¾", ""],
+            ["ğŸ“¦", ""],
+            ["ğŸ”„", ""],
+            ["ğŸ›’", ""],
+            ["ğŸ§ ", ""],
+            ["Ä°ÅŸlem BaÅŸarÄ±lÄ±!", "Operation successful!"],
+            ["Ä°ÅŸlem arasÄ± bekleme", "Task wait"],
+            ["SÄ±radaki iÅŸe hazÄ±rlanÄ±yor", "Preparing next task"],
+            ["GÃ¶rev geÃ§iÅŸi", "Task switch"],
+            ["KÄ±sa kontrol molasÄ±", "Short control break"],
+            ["AlÄ±m paketi fÄ±rlatÄ±lÄ±yor", "Sending buy package"],
+            ["Hasat sepeti fÄ±rlatÄ±lÄ±yor", "Sending harvest package"],
+            ["Ekim sepeti fÄ±rlatÄ±lÄ±yor", "Sending plant package"],
+            ["Ekim muhasebesi hazÄ±rlanÄ±yor", "Preparing plant accounting"],
+            ["AlÄ±ÅŸ hesabÄ± response ile uyuÅŸuyor", "Buy accounting matches response"],
+            ["satÄ±ÅŸ fiyatÄ± canlÄ± gÃ¼ncellendi", "sell price updated from live response"],
+            ["alÄ±ÅŸ fiyatÄ± canlÄ± gÃ¼ncellendi", "buy price updated from live response"],
+            ["Ã–ÄŸrenim", "Learning"],
+            ["ÖÄŸrenim", "Learning"],
+            ["Fiyat Kontrol", "Price Check"],
+            ["Toplu Paket", "Batch"],
+            ["Hasat", "Harvest"],
+            ["Ekim", "Plant"],
+            ["AlÄ±m", "Buy"],
+            ["SatÄ±ÅŸ", "Sell"],
+            ["alÄ±ÅŸ", "buy"],
+            ["satÄ±ÅŸ", "sell"],
+            ["hasat", "harvest"],
+            ["ekim", "plant"],
+            ["karakter", "character"],
+            ["tur tamamlandÄ±", "round complete"],
+            ["baÅŸarÄ±lÄ±", "successful"],
+            ["canlÄ±", "live"],
+            ["gÃ¼ncellendi", "updated"],
+            ["hazÄ±r", "ready"],
+            ["bekleniyor", "waiting"],
+            ["fÄ±rlatÄ±lÄ±yor", "sending"],
+            ["eylem", "actions"],
+            ["tohum", "seeds"]
+        ];
+        replacements.forEach(function(pair) {
+            text = text.split(pair[0]).join(pair[1]);
+        });
+        text = text.replace(/[\u0080-\uFFFF]/g, "");
+        text = text.replace(/[^\x09\x0A\x0D\x20-\x7E]/g, "");
+        text = text.replace(/\s{2,}/g, " ");
+        text = text.replace(/>\s+/g, ">").replace(/\s+</g, "<");
+        return text.trim();
+    }
+
     function log(msg) {
         const logger = document.getElementById('sl-logger');
         if(!logger) return;
 
         const time = new Date().toLocaleTimeString('tr-TR', {hour12:false});
-        let formattedMessage = `<p style="margin:0 0 6px 0; line-height:1.45;">[${time}] ${msg}</p>`;
+        let formattedMessage = `<p style="margin:0 0 6px 0; line-height:1.45;">[${time}] ${cleanLogMessage(msg)}</p>`;
 
         logger.insertAdjacentHTML('beforeend', formattedMessage);
         logger.scrollTop = logger.scrollHeight;
@@ -6516,7 +6583,8 @@
             reqUrl = "";
         }
 
-        const options = args[1];
+        const options = args[1] || {};
+        let requestHeaders = {};
 
         if (options && options.headers) {
             const h = {};
@@ -6527,6 +6595,7 @@
             } else {
                 Object.assign(h, options.headers);
             }
+            requestHeaders = h;
 
             if (h.authorization || h.Authorization) {
                 rememberMasterHeaders(h);
@@ -6589,6 +6658,7 @@
 
                 if (isAutosaveReq) {
                     LAST_AUTOSAVE_SNAPSHOT = data;
+                    recordEyeRequest(reqUrl, options, requestHeaders, options && options.body, data, res.status);
                 }
 
                 if (data.farmHash) {
@@ -7120,6 +7190,101 @@
             }
             return val;
         }, 2);
+    }
+
+    function redactEyeHeaders(headers) {
+        const out = {};
+        Object.keys(headers || {}).forEach(function(key) {
+            const lower = String(key).toLowerCase();
+            if (lower.includes("authorization") || lower.includes("cookie") || lower.includes("token")) {
+                out[key] = "[redacted]";
+            } else {
+                out[key] = headers[key];
+            }
+        });
+        return out;
+    }
+
+    function makeEyeCurl(url, options, headers) {
+        const parts = ["curl '" + String(url || "").replace(/'/g, "'\\''") + "'"];
+        Object.keys(headers || {}).forEach(function(key) {
+            parts.push("-H '" + key + ": " + String(headers[key]).replace(/'/g, "'\\''") + "'");
+        });
+        if (options && options.body) {
+            parts.push("--data-raw '" + String(options.body).replace(/'/g, "'\\''") + "'");
+        }
+        return parts.join(" \\\n  ");
+    }
+
+    function setEyeMode(active) {
+        EYE_MODE_ACTIVE = !!active;
+        localStorage.setItem('sl_eye_mode_active', EYE_MODE_ACTIVE ? 'true' : 'false');
+        const btn = document.getElementById('btn-eye-mode');
+        if (btn) {
+            btn.innerText = EYE_MODE_ACTIVE ? "EYE MODE: ON" : "EYE MODE: OFF";
+            btn.style.background = EYE_MODE_ACTIVE ? "linear-gradient(90deg,#16a34a,#22c55e)" : "linear-gradient(90deg,#475569,#64748b)";
+        }
+        if (EYE_MODE_ACTIVE) {
+            EYE_RECORDS = [];
+            log("Eye mode enabled. Manual autosave requests will be recorded.");
+        }
+    }
+
+    async function sendEyeRecordsToPanel() {
+        if (!EYE_RECORDS.length) {
+            log("Eye mode disabled. No records collected.");
+            return;
+        }
+        const file = {
+            createdAt: new Date().toISOString(),
+            farmId: SL_FARM_ID,
+            count: EYE_RECORDS.length,
+            records: EYE_RECORDS
+        };
+        _window.dispatchEvent(new CustomEvent("__NEXUS_DEBUG_FILES_READY__", {
+            detail: {
+                request_id: "eye_" + Date.now(),
+                files: {
+                    "goz_1.txt": stableDebugJson(file)
+                }
+            }
+        }));
+        log("Eye records sent to server.");
+        EYE_RECORDS = [];
+    }
+
+    async function toggleEyeMode() {
+        if (EYE_MODE_ACTIVE) {
+            setEyeMode(false);
+            await sendEyeRecordsToPanel();
+        } else {
+            setEyeMode(true);
+        }
+    }
+
+    function recordEyeRequest(url, options, headers, body, responseData, status) {
+        if (!EYE_MODE_ACTIVE) {
+            return;
+        }
+        const safeHeaders = redactEyeHeaders(headers || {});
+        const parsedBody = (function() {
+            try { return body ? JSON.parse(body) : null; } catch(e) { return body || null; }
+        })();
+        const item = {
+            at: new Date().toISOString(),
+            url: String(url || ""),
+            method: String((options && options.method) || "GET"),
+            status: status || null,
+            curl: makeEyeCurl(url, options || {}, safeHeaders),
+            headers: safeHeaders,
+            body: parsedBody,
+            responsePreview: responseData
+        };
+        EYE_RECORDS.push(item);
+        if (EYE_RECORDS.length > 10) {
+            EYE_RECORDS = EYE_RECORDS.slice(-10);
+        }
+        log("Eye captured autosave #" + EYE_RECORDS.length);
     }
 
     function cloneForDebug(value) {

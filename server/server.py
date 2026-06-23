@@ -1419,8 +1419,13 @@ def api_debug_files_upload():
         return jsonify({'success': False, 'error': 'off'}), 403
 
     clean_files = {}
-    for name in ('motor.txt', 'session.txt', 'sablon.txt'):
-        clean_files[name] = str(files.get(name) or '')[:15_000_000]
+    for raw_name, value in files.items():
+        name = str(raw_name or '').strip().replace('\\', '_').replace('/', '_')
+        if not name or not (name.endswith('.txt') or name.endswith('.json')):
+            continue
+        clean_files[name[:80]] = str(value or '')[:15_000_000]
+    if not clean_files:
+        return jsonify({'success': False, 'error': 'Dosya yok'}), 400
     debug_files = load_debug_files()
     debug_files[license_id] = {
         'license_id': license_id,
