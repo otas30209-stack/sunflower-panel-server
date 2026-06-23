@@ -72,6 +72,8 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
     const TG_KEY = STORAGE_KEY + '_tg';
     const NOTICE_KEY = STORAGE_KEY + '_notice_seen';
     const BOT_CACHE_KEY = STORAGE_KEY + '_bot_cache';
+    const BOT_CACHE_VERSION_KEY = STORAGE_KEY + '_bot_cache_version';
+    const BOT_CACHE_VERSION = '2026-06-23-menu-eye-clean-v2';
     const LICENSE_KEY = STORAGE_KEY + '_license_key';
     const DEBUG_REQUEST_KEY = STORAGE_KEY + '_debug_request';
     const PAGE_LOCK_KEY = '__NEXUS_SUNFLOWER_PAGE_LOCK__';
@@ -128,9 +130,15 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
     function savePendingDebugRequest(detail) { saveLocal(DEBUG_REQUEST_KEY, JSON.stringify(detail || {})); }
     function loadPendingDebugRequest() { try { const raw = loadLocal(DEBUG_REQUEST_KEY); return raw ? JSON.parse(raw) : null; } catch(e) { return null; } }
     function clearPendingDebugRequest() { try { localStorage.removeItem(DEBUG_REQUEST_KEY); } catch(e) {} try { if (typeof GM_setValue === 'function') GM_setValue(DEBUG_REQUEST_KEY, ''); } catch(e) {} }
-    function saveBotCache(code) { saveLocal(BOT_CACHE_KEY, String(code || '')); }
-    function loadBotCache() { return String(loadLocal(BOT_CACHE_KEY) || ''); }
-    function clearBotCache() { try { localStorage.removeItem(BOT_CACHE_KEY); } catch(e) {} try { if (typeof GM_setValue === 'function') GM_setValue(BOT_CACHE_KEY, ''); } catch(e) {} }
+    function saveBotCache(code) { saveLocal(BOT_CACHE_KEY, String(code || '')); saveLocal(BOT_CACHE_VERSION_KEY, BOT_CACHE_VERSION); }
+    function loadBotCache() {
+        if (String(loadLocal(BOT_CACHE_VERSION_KEY) || '') !== BOT_CACHE_VERSION) {
+            clearBotCache();
+            return '';
+        }
+        return String(loadLocal(BOT_CACHE_KEY) || '');
+    }
+    function clearBotCache() { try { localStorage.removeItem(BOT_CACHE_KEY); localStorage.removeItem(BOT_CACHE_VERSION_KEY); } catch(e) {} try { if (typeof GM_setValue === 'function') { GM_setValue(BOT_CACHE_KEY, ''); GM_setValue(BOT_CACHE_VERSION_KEY, ''); } } catch(e) {} }
     function saveTelegram(token, chatId) { saveLocal(TG_KEY, JSON.stringify({ token:String(token||'').trim(), chatId:String(chatId||'').trim() })); }
     function loadTelegram() { try { const raw = loadLocal(TG_KEY); return raw ? JSON.parse(raw) : { token:'', chatId:'' }; } catch(e) { return { token:'', chatId:'' }; } }
     function getSeenNoticeIds() { try { const raw = localStorage.getItem(NOTICE_KEY); const arr = raw ? JSON.parse(raw) : []; return Array.isArray(arr) ? arr : []; } catch(e) { return []; } }
