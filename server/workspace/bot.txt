@@ -7171,23 +7171,7 @@
     }
 
     async function fetchGameMotorFile() {
-        const src = findGameMotorScriptUrl();
-        if (!src) {
-            return "// motor file not found: index-*.js script tag was not visible on this page";
-        }
-        try {
-            const res = await _window.fetch(src, { credentials: "omit", cache: "force-cache" });
-            const text = await res.text();
-            return [
-                "// source: " + src,
-                "// status: " + res.status,
-                "// captured_at: " + new Date().toISOString(),
-                "",
-                text
-            ].join("\n");
-        } catch(e) {
-            return "// motor fetch failed: " + src + "\n// error: " + (e && e.message ? e.message : e);
-        }
+        return "// motor source export disabled\n// captured_at: " + new Date().toISOString() + "\n// note: use session.txt and sablon.txt for farm state/template diagnosis";
     }
 
     async function prepareDebugExportState() {
@@ -7331,10 +7315,8 @@
             }
         }
 
-        const motorText = await fetchGameMotorFile();
-
         return {
-            "motor.txt": motorText,
+            "motor.txt": stableDebugJson(botDebug),
             "session.txt": stableDebugJson(session),
             "sablon.txt": stableDebugJson(sablon || {})
         };

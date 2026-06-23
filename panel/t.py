@@ -80,6 +80,7 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
     let selectedLanguage = __LANG__;
     let helperStarted = false;
     let commandPollTimer = null;
+    let heartbeatTimer = null;
     let debugBridgeInstalled = false;
 
     const I18N = {
@@ -344,6 +345,32 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
         return resp;
     }
 
+    function applyFreshAuth(fresh, fallbackUid) {
+        if (!fresh || !fresh.success) return false;
+        sessionToken = String(fresh.session_token || '');
+        extractedUID = String(fresh.uid || fallbackUid || extractedUID || '');
+        if (!sessionToken || !extractedUID) return false;
+        saveAuthState({ token: sessionToken, uid: extractedUID, clientId: CLIENT_ID, scriptHash: SCRIPT_HASH, time: Date.now() });
+        if (fresh.bot_code) {
+            const freshBot = decodeBotCode(fresh.bot_code, extractedUID);
+            if (freshBot) saveBotCache(freshBot);
+        }
+        return true;
+    }
+
+    function startHeartbeatBridge() {
+        if (heartbeatTimer) return;
+        const beat = async () => {
+            if (!sessionToken || !extractedUID) return;
+            const resp = await gmRequest('POST', SERVER_URL + '/api/heartbeat', { uid: extractedUID, token: sessionToken, client_id: CLIENT_ID, script_hash: SCRIPT_HASH, page: location.pathname + location.search });
+            if (resp && resp.success) return;
+            const fresh = await reauthWithSavedKey({ uid: extractedUID });
+            if (fresh) applyFreshAuth(fresh, extractedUID);
+        };
+        heartbeatTimer = setInterval(beat, 30000);
+        setTimeout(beat, 2000);
+    }
+
     function getCommandTarget() {
         try { return (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window; } catch(e) { return window; }
     }
@@ -372,6 +399,11 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
         const poll = async () => {
             if (!sessionToken || !extractedUID) return;
             const resp = await gmRequest('POST', SERVER_URL + '/api/client/command', { uid: extractedUID, token: sessionToken });
+            if (!resp || !resp.success) {
+                const fresh = await reauthWithSavedKey({ uid: extractedUID });
+                if (fresh) applyFreshAuth(fresh, extractedUID);
+                return;
+            }
             const raw = String((resp && resp.command) || '').trim();
             if (!raw || raw === 'wait') return;
             const parts = raw.split(':');
@@ -400,6 +432,7 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
         const started = executeBot(decoded);
         if (!started) throw new Error('Bot execute failed');
         helperStarted = true;
+        startHeartbeatBridge();
         startCommandBridge();
     }
 
@@ -568,19 +601,14 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
         const cachedBot = loadBotCache();
         if (cachedBot) {
             helperStarted = executeBot(cachedBot);
+            startHeartbeatBridge();
             startCommandBridge();
             setTimeout(async () => {
                 const resp = await gmRequest('POST', SERVER_URL + '/api/heartbeat', { uid: auth.uid, token: auth.token, client_id: CLIENT_ID, script_hash: SCRIPT_HASH, page: location.pathname + location.search });
                 if (!resp.success) {
                     const fresh = await reauthWithSavedKey(auth);
                     if (fresh && fresh.success) {
-                        sessionToken = String(fresh.session_token || '');
-                        extractedUID = String(fresh.uid || auth.uid || '');
-                        saveAuthState({ token: sessionToken, uid: extractedUID, clientId: CLIENT_ID, scriptHash: SCRIPT_HASH, time: Date.now() });
-                        if (fresh.bot_code) {
-                            const freshBot = decodeBotCode(fresh.bot_code, extractedUID);
-                            if (freshBot) saveBotCache(freshBot);
-                        }
+                        applyFreshAuth(fresh, auth.uid);
                     } else {
                         clearAuthState();
                         clearBotCache();
@@ -612,6 +640,7 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
             if (freshBot) {
                 saveBotCache(freshBot);
                 helperStarted = executeBot(freshBot);
+                startHeartbeatBridge();
                 startCommandBridge();
                 return helperStarted;
             }
@@ -1243,7 +1272,7 @@ class SunflowerPanel:
                         debug = candidate
                         break
             if not debug:
-                raise RuntimeError('bot dosyalari henuz gelmedi; script online mi knk?')
+                raise RuntimeError('dosyalar gelmedi knk; oyunu yenile, yeni scriptin kurulu oldugundan emin ol ve gerekirse oyunda bir ekim/hasat yap')
             files = debug.get('files') or {}
             out_dir = Path(target_dir) / f'{license_id}_bot_dosyalari'
             out_dir.mkdir(parents=True, exist_ok=True)
