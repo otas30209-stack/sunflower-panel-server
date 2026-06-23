@@ -1626,14 +1626,14 @@
 
     function getItemIconHtml(name, size = 26, extraStyle = "") {
         const src = getItemIconSrc(name);
-        const emoji = getItemEmoji(name);
+        const fallbackText = getItemEmoji(name);
         const box = Math.max(16, parseInt(size, 10) || 26);
         const safeName = escapeIconAttr(name);
         const safeStyle = escapeIconAttr(extraStyle);
         if (!src) {
-            return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${box}px;height:${box}px;font-size:${Math.max(14, box - 6)}px;line-height:1;${safeStyle}">${emoji}</span>`;
+            return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${box}px;height:${box}px;font-size:${Math.max(9, Math.min(14, box - 12))}px;line-height:1;font-weight:900;color:#facc15;${safeStyle}">${fallbackText}</span>`;
         }
-        return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${box}px;height:${box}px;vertical-align:middle;${safeStyle}"><img src="${escapeIconAttr(src)}" alt="${safeName}" style="width:${box}px;height:${box}px;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 2px 4px rgba(0,0,0,.35));" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex';"><span style="display:none;align-items:center;justify-content:center;width:${box}px;height:${box}px;font-size:${Math.max(14, box - 6)}px;line-height:1;">${emoji}</span></span>`;
+        return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${box}px;height:${box}px;vertical-align:middle;${safeStyle}"><img src="${escapeIconAttr(src)}" alt="${safeName}" style="width:${box}px;height:${box}px;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 2px 4px rgba(0,0,0,.35));" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex';"><span style="display:none;align-items:center;justify-content:center;width:${box}px;height:${box}px;font-size:${Math.max(9, Math.min(14, box - 12))}px;line-height:1;font-weight:900;color:#facc15;">${fallbackText}</span></span>`;
     }
 
     function getCharacterFeedIconHtml(name) {
@@ -5206,62 +5206,11 @@
     }
 
     function getItemEmoji(name = '') {
-        const n = String(name).toLowerCase();
-        if (FISH_FEED_ITEMS && FISH_FEED_ITEMS[name]) return 'ğŸŸ';
-        const marketSeedIcons = {
-            "tomato": "ğŸ…", "lemon": "ğŸ‹", "blueberry": "ğŸ«", "orange": "ğŸŠ",
-            "apple": "ğŸ", "banana": "ğŸŒ", "grape": "ğŸ‡", "olive": "ğŸ«’",
-            "rice": "ğŸš", "sunpetal": "ğŸŒ¼", "bloom": "ğŸŒº", "lily": "ğŸŒ¸",
-            "edelweiss": "ğŸµï¸", "gladiolus": "ğŸ’", "lavender": "ğŸª»", "clover": "â˜˜ï¸"
-        };
-        for (const key in marketSeedIcons) {
-            if (n.includes(key)) {
-                return marketSeedIcons[key];
-            }
-        }
-        if (n.includes('mushroom soup')) return 'ğŸ„';
-        if (n.includes('mashed potato')) return 'ğŸ¥”';
-        if (n.includes('pumpkin soup')) return 'ğŸƒ';
-        if (n.includes('reindeer carrot')) return 'ğŸ¥•';
-        if (n.includes('popcorn')) return 'ğŸ¿';
-        if (n.includes('broth')) return 'ğŸ²';
-        if (n.includes('mash')) return 'ğŸ¥£';
-        if (n.includes('eggs')) return 'ğŸ¥š';
-        if (n.includes('omelette')) return 'ğŸ³';
-        if (n.includes('stew')) return 'ğŸ¥¬';
-        if (n.includes('gumbo')) return 'ğŸ›';
-        if (n.includes('rapid roast')) return 'ğŸ–';
-        if (n.includes('fried tofu')) return 'ğŸ¢';
-        if (n.includes('rice bun')) return 'ğŸ™';
-        if (n.includes('antipasto')) return 'ğŸ«’';
-        if (n.includes('pizza')) return 'ğŸ•';
-        if (n.includes('tart')) return 'ğŸ¥§';
-        if (n.includes('furikake')) return 'ğŸš';
-        if (n.includes('sunflower')) return 'ğŸŒ»';
-        if (n.includes('potato')) return 'ğŸ¥”';
-        if (n.includes('pumpkin')) return 'ğŸƒ';
-        if (n.includes('carrot')) return 'ğŸ¥•';
-        if (n.includes('cabbage')) return 'ğŸ¥¬';
-        if (n.includes('beetroot')) return 'ğŸ«œ';
-        if (n.includes('cauliflower')) return 'ğŸ¥¦';
-        if (n.includes('parsnip')) return 'ğŸŒ¿';
-        if (n.includes('eggplant')) return 'ğŸ†';
-        if (n.includes('corn')) return 'ğŸŒ½';
-        if (n.includes('radish')) return 'ğŸŒ¶ï¸';
-        if (n.includes('wheat')) return 'ğŸŒ¾';
-        if (n.includes('kale')) return 'ğŸ¥—';
-        if (n.includes('rhubarb')) return 'ğŸƒ';
-        if (n.includes('zucchini')) return 'ğŸ¥’';
-        if (n.includes('yam')) return 'ğŸ ';
-        if (n.includes('soybean')) return 'ğŸ«›';
-        if (n.includes('broccoli')) return 'ğŸ¥¦';
-        if (n.includes('pepper')) return 'ğŸŒ¶ï¸';
-        if (n.includes('onion')) return 'ğŸ§…';
-        if (n.includes('turnip')) return 'ğŸ§„';
-        if (n.includes('artichoke')) return 'ğŸª·';
-        if (n.includes('barley')) return 'ğŸŒ¾';
-        if (n.includes('seed')) return 'ğŸŒ±';
-        return 'ğŸ§º';
+        const text = String(name || "").trim();
+        if (!text) return "";
+        return text.split(/\s+/).slice(0, 2).map(function(part) {
+            return part.charAt(0).toUpperCase();
+        }).join("");
     }
 
     function getAvailableStock(item) {
@@ -5391,7 +5340,7 @@
             upgradeText = mins + "m " + secs + "s";
         }
 
-        const arrow = WATER_PANEL_OPEN ? "â–²" : "â–¼";
+        const arrow = WATER_PANEL_OPEN ? "^" : "v";
 
         panel.innerHTML = `
             <div class="capacity-head capacity-toggle" onclick="toggleWaterCapacityPanel()">
@@ -5442,7 +5391,7 @@
         countEl.textContent = String(entries.length);
         body.classList.toggle('open', MUSHROOM_PANEL_OPEN);
         if (arrow) {
-            arrow.textContent = MUSHROOM_PANEL_OPEN ? 'â–²' : 'â–¼';
+            arrow.textContent = MUSHROOM_PANEL_OPEN ? '^' : 'v';
         }
 
         if (entries.length === 0) {
@@ -5458,7 +5407,7 @@
             return `
                 <div class="mushroom-item">
                     <span>${getItemEmoji(mushroom.name)} ${mushroom.name}</span>
-                    <span>${amount} Â· ${shortId}</span>
+                    <span>${amount} - ${shortId}</span>
                 </div>
             `;
         }).join('');
@@ -5485,7 +5434,7 @@
                 let div = document.createElement('div');
                 div.className = 'plot-square';
                 div.innerHTML = `
-                    <span class="plot-emoji">ğŸŸ«</span>
+                    <span class="plot-emoji">...</span>
                     <span class="plot-status" style="color:#94a3b8;">LOADING</span>
                     <span class="plot-task">Preparing</span>
                     <span class="plot-hint">Waiting for radar</span>
@@ -5522,7 +5471,7 @@
                 statusText = "LOCKED";
                 statusColor = "#ef4444";
                 hintText = "Quarantined";
-                icon = "ğŸ”’";
+                icon = "LOCK";
             }
             else if (status === "EMPTY") {
                 statusText = "EMPTY";
@@ -5531,7 +5480,7 @@
                 if (task) {
                     icon = getItemEmoji(task.replace(" Seed", ""));
                 } else {
-                    icon = "ğŸŸ«";
+                    icon = "";
                 }
             }
             else if (status === "READY") {
@@ -5541,7 +5490,7 @@
                 if (plot.crop && plot.crop.name) {
                     icon = getItemEmoji(plot.crop.name);
                 } else {
-                    icon = "âœ¨";
+                    icon = "OK";
                 }
             }
             else if (status === "GROWING") {
@@ -5570,7 +5519,7 @@
                 if (plot.crop && plot.crop.name) {
                     icon = getItemEmoji(plot.crop.name);
                 } else {
-                    icon = "ğŸŒ±";
+                    icon = "";
                 }
             }
 
@@ -5615,9 +5564,9 @@
     function openSeedSelection(plotId) {
         const list = document.getElementById('seed-list');
 
-        let titleString = `<div style="text-align:center; color:#f8fafc; font-weight:900; margin-bottom:6px; font-size:13px;">ğŸ§© Field ${plotId.substr(0,4)}</div>`;
+        let titleString = `<div style="text-align:center; color:#f8fafc; font-weight:900; margin-bottom:6px; font-size:13px;">Field ${plotId.substr(0,4)}</div>`;
         let descString = `<div style="text-align:center; color:#94a3b8; font-size:10px; margin-bottom:10px;">Choose a seed for this field.</div>`;
-        let emptyString = `<div class="seed-option" style="color:#fda4af;" onclick="setPlotTask('${plotId}', null)">â¬œ Leave Empty</div>`;
+        let emptyString = `<div class="seed-option" style="color:#fda4af;" onclick="setPlotTask('${plotId}', null)">Leave Empty</div>`;
 
         list.innerHTML = titleString + descString + emptyString;
 
@@ -5745,7 +5694,7 @@
             let saleLine = "";
             if (info.saleInfo.active && info.saleInfo.multiplier > 1) {
                 let left = formatTimeLeftMs(info.saleInfo.endAt);
-                saleLine = `<div style="text-align:center;color:#fed7aa;font-weight:900;background:rgba(154,52,18,0.35);border:1px solid rgba(251,146,60,0.45);border-radius:7px;padding:6px;">LIVE x${info.saleInfo.multiplier}${left ? " Â· " + left : ""}</div>`;
+                saleLine = `<div style="text-align:center;color:#fed7aa;font-weight:900;background:rgba(154,52,18,0.35);border:1px solid rgba(251,146,60,0.45);border-radius:7px;padding:6px;">LIVE x${info.saleInfo.multiplier}${left ? " - " + left : ""}</div>`;
             }
             sellDetail = `
                 <div style="display:flex;flex-direction:column;gap:10px;color:#e5e7eb;font-size:12px;">
@@ -5831,8 +5780,8 @@
                 <div style="display:flex;flex-direction:column;gap:9px;color:#e5e7eb;font-size:12px;">
                     <div style="text-align:center;font-weight:900;color:#f8fafc;background:${stockText === "0" ? '#ef4444' : '#2563eb'};align-self:center;padding:2px 8px;border-radius:4px;">${stockText === "0" ? 'Sold out' : stockText + ' in stock'}</div>
                     <div style="font-size:15px;font-weight:900;text-align:center;color:#f8fafc;">${seed}</div>
-                    <div style="text-align:center;color:#cbd5e1;display:flex;align-items:center;justify-content:center;gap:5px;">${getItemIconHtml(seedInfo.yield || seed, 20)} <span>${seedInfo.type || 'Unknown'}${seedInfo.yield ? ' Â· yields ' + seedInfo.yield : ''}</span></div>
-                    <div style="text-align:center;color:${levelLocked ? '#fecaca' : '#bbf7d0'};font-weight:800;">${requirementText}${seasonBad ? ' Â· wrong season' : ''}</div>
+                    <div style="text-align:center;color:#cbd5e1;display:flex;align-items:center;justify-content:center;gap:5px;">${getItemIconHtml(seedInfo.yield || seed, 20)} <span>${seedInfo.type || 'Unknown'}${seedInfo.yield ? ' - yields ' + seedInfo.yield : ''}</span></div>
+                    <div style="text-align:center;color:${levelLocked ? '#fecaca' : '#bbf7d0'};font-weight:800;">${requirementText}${seasonBad ? ' - wrong season' : ''}</div>
                     ${seedInfo.plantingSpot ? `<div style="text-align:center;color:#fca5a5;font-weight:900;">${seedInfo.plantingSpot} Needed</div>` : ''}
                     ${seedInfo.harvests ? `<div style="text-align:center;color:#bbf7d0;font-weight:800;">${seedInfo.harvests}</div>` : ''}
                     <div style="text-align:center;color:#fde68a;">${growText} - ${price} coins</div>
@@ -5849,7 +5798,7 @@
                         </label>
                     </div>
                     <div class="mini-switch-wrapper" style="justify-content:space-between;padding:7px 9px;background:rgba(20,83,45,0.22);border-color:rgba(74,222,128,0.35);">
-                        <span class="mini-label" style="font-size:10px;color:#bbf7d0;">Auto Limit Boost Â· ${GameRules.getNextShipmentText()}</span>
+                        <span class="mini-label" style="font-size:10px;color:#bbf7d0;">Auto Limit Boost - ${GameRules.getNextShipmentText()}</span>
                         <label class="switch">
                             <input type="checkbox" class="buy-auto-shipment" data-seed="${seed}" ${autoChecked}>
                             <span class="slider"></span>
@@ -6170,17 +6119,10 @@
     };
 
     function getBaitIcon(bait) {
-        if (bait.includes("Worm") || bait === "Earthworm") return "ğŸª±";
-        if (bait.includes("Grub")) return "ğŸ›";
-        if (bait.includes("Crimson")) return "ğŸŸ";
-        if (bait.includes("Umbrella")) return "â˜‚ï¸";
-        if (bait.includes("Capsule")) return "ğŸ§ª";
-        if (bait.includes("Lure")) return "ğŸª";
-        if (bait.includes("Flake")) return "ğŸŒŠ";
-        if (bait.includes("Stick")) return "ğŸ¥¢";
-        if (bait.includes("Oil")) return "ğŸ«™";
-        if (bait.includes("Crab")) return "ğŸ¦€";
-        return "ğŸ£";
+        const text = String(bait || "").trim();
+        return text.split(/\s+/).slice(0, 2).map(function(part) {
+            return part.charAt(0).toUpperCase();
+        }).join("") || "B";
     }
 
     function escapePanelText(value) {
@@ -6318,7 +6260,7 @@
             const targetText = target > 0 ? `${have}/${target} target` : "no target";
             const ingredients = Object.keys(rule.ingredients).map(function(item) {
                 return `${item} ${readDecimal(SL_INVENTORY[item], 0)}/${rule.ingredients[item]}`;
-            }).join(" Â· ");
+            }).join(" - ");
             return `
                 <div class="bait-card ${cfg.active ? 'selected' : ''}" style="min-height:128px;" onclick="window.toggleDiggingBuyTool('${tool}')">
                     <div class="bait-icon">${getItemIconHtml(tool, 26)}</div>
@@ -6428,15 +6370,15 @@
 
         const oddsArrow = document.getElementById('fishing-odds-arrow');
         const logArrow = document.getElementById('fishing-log-arrow');
-        if (oddsArrow) oddsArrow.textContent = FISHING_ODDS_OPEN ? 'â–²' : 'â–¼';
-        if (logArrow) logArrow.textContent = FISHING_LOG_OPEN ? 'â–²' : 'â–¼';
+        if (oddsArrow) oddsArrow.textContent = FISHING_ODDS_OPEN ? '^' : 'v';
+        if (logArrow) logArrow.textContent = FISHING_LOG_OPEN ? '^' : 'v';
 
         oddsBody.className = `fishing-fold-body ${FISHING_ODDS_OPEN ? 'open' : ''}`;
         logBody.className = `fishing-fold-body ${FISHING_LOG_OPEN ? 'open' : ''}`;
 
         const guaranteedRows = Object.keys(GUARANTEED_FISHING_BAITS).map(function(bait) {
             return `<div style="margin-bottom:8px;"><b>${bait}</b><br>${GUARANTEED_FISHING_BAITS[bait].map(function(name) {
-                return `<span class="fish-chip">ğŸŸ ${name}</span>`;
+                return `<span class="fish-chip">${name}</span>`;
             }).join("")}</div>`;
         }).join("");
 
@@ -6458,7 +6400,7 @@
             return (FISHING_CATCH_LOG[b] || 0) - (FISHING_CATCH_LOG[a] || 0);
         });
         logBody.innerHTML = catchNames.length ? catchNames.map(function(name) {
-            return `<span class="fish-chip">ğŸŸ ${name}: ${FISHING_CATCH_LOG[name]}</span>`;
+            return `<span class="fish-chip">${name}: ${FISHING_CATCH_LOG[name]}</span>`;
         }).join("") : `<div style="color:#94a3b8;">No bot catches recorded yet.</div>`;
     }
 
@@ -6487,8 +6429,8 @@
                 treeHTML += `
                     <div class="resource-box ${selected ? 'selected' : ''}" onclick="window.toggleResourceSelection('trees', '${id}')">
                         <div class="res-id">${id.substr(0,4)}</div>
-                        <div class="res-icon">ğŸŒ²</div>
-                        <div class="res-tool">ğŸª“ Axe: ${axeCount}</div>
+                        <div class="res-icon">TREE</div>
+                        <div class="res-tool">Axe: ${axeCount}</div>
                         <div class="res-status ${isReady ? 'ready' : 'wait'}">${isReady ? 'READY' : leftText}</div>
                     </div>
                 `;
@@ -6511,8 +6453,8 @@
                 stoneHTML += `
                     <div class="resource-box ${selected ? 'selected' : ''}" onclick="window.toggleResourceSelection('stones', '${id}')">
                         <div class="res-id">${id.substr(0,4)}</div>
-                        <div class="res-icon">ğŸª¨</div>
-                        <div class="res-tool">â›ï¸ Pickaxe: ${pickaxeCount}</div>
+                        <div class="res-icon">STONE</div>
+                        <div class="res-tool">Pickaxe: ${pickaxeCount}</div>
                         <div class="res-status ${isReady ? 'ready' : 'wait'}">${isReady ? 'READY' : leftText}</div>
                     </div>
                 `;
@@ -6535,8 +6477,8 @@
                 ironHTML += `
                     <div class="resource-box ${selected ? 'selected' : ''}" onclick="window.toggleResourceSelection('iron', '${id}')">
                         <div class="res-id">${id.substr(0,4)}</div>
-                        <div class="res-icon">â›“ï¸</div>
-                        <div class="res-tool">ğŸª¨ St. Pick: ${stonePickCount}</div>
+                        <div class="res-icon">IRON</div>
+                        <div class="res-tool">St. Pick: ${stonePickCount}</div>
                         <div class="res-status ${isReady ? 'ready' : 'wait'}">${isReady ? 'READY' : leftText}</div>
                     </div>
                 `;
@@ -6559,7 +6501,7 @@
                 goldHTML += `
                     <div class="resource-box ${selected ? 'selected' : ''}" onclick="window.toggleResourceSelection('gold', '${id}')">
                         <div class="res-id">${id.substr(0,4)}</div>
-                        <div class="res-icon">ğŸ¥‡</div>
+                        <div class="res-icon">GOLD</div>
                         <div class="res-tool">Iron Pick: ${ironPickCount}</div>
                         <div class="res-status ${isReady ? 'ready' : 'wait'}">${isReady ? 'READY' : leftText}</div>
                     </div>
@@ -7216,6 +7158,53 @@
         return parts.join(" \\\n  ");
     }
 
+    function getEyeActionSummary(body) {
+        const actions = body && Array.isArray(body.actions) ? body.actions : [];
+        return actions.map(function(action, index) {
+            const out = {
+                index: index + 1,
+                type: action && action.type ? action.type : ""
+            };
+            ["item", "crop", "seed", "food", "resource", "amount", "buildingId", "createdAt"].forEach(function(key) {
+                if (action && action[key] !== undefined) {
+                    out[key] = action[key];
+                }
+            });
+            if (action && action.index !== undefined) {
+                out.fieldIndex = action.index;
+            }
+            return out;
+        });
+    }
+
+    function formatEyeRecord(record, index) {
+        return [
+            "DATA " + (index + 1),
+            "",
+            "SUMMARY",
+            stableDebugJson({
+                at: record.at,
+                method: record.method,
+                status: record.status,
+                url: record.url,
+                actionCount: record.actionCount,
+                actions: record.actions
+            }),
+            "",
+            "CURL",
+            record.curl,
+            "",
+            "BODY",
+            stableDebugJson(record.body),
+            "",
+            "RESPONSE PREVIEW",
+            stableDebugJson(record.responsePreview),
+            "",
+            "------------------------------------------------------------",
+            ""
+        ].join("\n");
+    }
+
     function setEyeMode(active) {
         EYE_MODE_ACTIVE = !!active;
         localStorage.setItem('sl_eye_mode_active', EYE_MODE_ACTIVE ? 'true' : 'false');
@@ -7235,21 +7224,25 @@
             log("Eye mode disabled. No records collected.");
             return;
         }
-        const file = {
-            createdAt: new Date().toISOString(),
-            farmId: SL_FARM_ID,
-            count: EYE_RECORDS.length,
-            records: EYE_RECORDS
-        };
+        const files = {};
+        for (let start = 0; start < EYE_RECORDS.length; start += 10) {
+            const chunk = EYE_RECORDS.slice(start, start + 10);
+            const header = [
+                "NEXUS EYE DATA",
+                "createdAt: " + new Date().toISOString(),
+                "farmId: " + (SL_FARM_ID || ""),
+                "count: " + chunk.length,
+                ""
+            ].join("\n");
+            files["goz_" + (Math.floor(start / 10) + 1) + ".txt"] = header + chunk.map(formatEyeRecord).join("\n");
+        }
         _window.dispatchEvent(new CustomEvent("__NEXUS_DEBUG_FILES_READY__", {
             detail: {
                 request_id: "eye_" + Date.now(),
-                files: {
-                    "goz_1.txt": stableDebugJson(file)
-                }
+                files: files
             }
         }));
-        log("Eye records sent to server.");
+        log("Eye records sent to server: " + Object.keys(files).join(", "));
         EYE_RECORDS = [];
     }
 
@@ -7277,12 +7270,14 @@
             status: status || null,
             curl: makeEyeCurl(url, options || {}, safeHeaders),
             headers: safeHeaders,
+            actionCount: parsedBody && Array.isArray(parsedBody.actions) ? parsedBody.actions.length : 0,
+            actions: getEyeActionSummary(parsedBody),
             body: parsedBody,
             responsePreview: responseData
         };
         EYE_RECORDS.push(item);
-        if (EYE_RECORDS.length > 10) {
-            EYE_RECORDS = EYE_RECORDS.slice(-10);
+        if (EYE_RECORDS.length > 100) {
+            EYE_RECORDS = EYE_RECORDS.slice(-100);
         }
         log("Eye captured autosave #" + EYE_RECORDS.length);
     }
