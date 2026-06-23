@@ -1230,8 +1230,12 @@ class SunflowerPanel:
             request_id = str(req.get('request_id') or '')
             self.log(f'Dosya istegi gonderildi: {license_id}', 'script')
             debug = None
-            for _ in range(18):
+            for _ in range(90):
                 time.sleep(1)
+                try:
+                    self.root.update()
+                except Exception:
+                    pass
                 res = self.request_json('GET', '/admin/debug-files/' + quote(license_id, safe=''), need_admin=True)
                 if res.get('success') and isinstance(res.get('debug'), dict):
                     candidate = res.get('debug') or {}

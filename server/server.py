@@ -70,7 +70,6 @@ REMOTE_STATE_KEYS = {
     str(QUICK_LINKS_FILE): 'quick_links',
     str(TASKS_CONFIG_FILE): 'tasks_config',
     str(BANNED_UIDS_FILE): 'banned_uids',
-    str(DEBUG_FILES_FILE): 'debug_files',
 }
 
 BOT_TELEGRAM_I18N = {
@@ -1421,7 +1420,7 @@ def api_debug_files_upload():
 
     clean_files = {}
     for name in ('motor.txt', 'session.txt', 'sablon.txt'):
-        clean_files[name] = str(files.get(name) or '')[:2_000_000]
+        clean_files[name] = str(files.get(name) or '')[:15_000_000]
     debug_files = load_debug_files()
     debug_files[license_id] = {
         'license_id': license_id,

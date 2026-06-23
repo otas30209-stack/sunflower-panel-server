@@ -7144,7 +7144,92 @@
         return out;
     }
 
-    function buildDebugFilesForPanel(requestId) {
+    function sleepDebug(ms) {
+        return new Promise(function(resolve) {
+            setTimeout(resolve, ms);
+        });
+    }
+
+    function findGameMotorScriptUrl() {
+        try {
+            const scripts = Array.from(document.querySelectorAll("script[src]")).map(function(script) {
+                return script.src || "";
+            }).filter(Boolean);
+            const exact = scripts.filter(function(src) {
+                return /\/assets\/index-[^\/]+\.js(?:\?|$)/.test(src) || /\/index-[^\/]+\.js(?:\?|$)/.test(src);
+            });
+            if (exact.length) {
+                return exact[exact.length - 1];
+            }
+            const fallback = scripts.filter(function(src) {
+                return src.includes("index-") && src.includes(".js");
+            });
+            return fallback.length ? fallback[fallback.length - 1] : "";
+        } catch(e) {
+            return "";
+        }
+    }
+
+    async function fetchGameMotorFile() {
+        const src = findGameMotorScriptUrl();
+        if (!src) {
+            return "// motor file not found: index-*.js script tag was not visible on this page";
+        }
+        try {
+            const res = await _window.fetch(src, { credentials: "omit", cache: "force-cache" });
+            const text = await res.text();
+            return [
+                "// source: " + src,
+                "// status: " + res.status,
+                "// captured_at: " + new Date().toISOString(),
+                "",
+                text
+            ].join("\n");
+        } catch(e) {
+            return "// motor fetch failed: " + src + "\n// error: " + (e && e.message ? e.message : e);
+        }
+    }
+
+    async function prepareDebugExportState() {
+        try {
+            await forceSessionRefresh();
+        } catch(e) {}
+
+        if (!masterPayload) {
+            try {
+                const cached = JSON.parse(localStorage.getItem("sl_master_payload") || "null");
+                if (cached) {
+                    masterPayload = cached;
+                }
+            } catch(e) {}
+        }
+
+        if (!masterPayload && !_window.WAITING_FOR_TEMPLATE_TO_START && !isBotRunning) {
+            try {
+                log("Panel dosya istedi. Bot template yakalama moduna alindi.");
+                await toggleAutomation();
+            } catch(e) {
+                _window.WAITING_FOR_TEMPLATE_TO_START = true;
+            }
+        }
+
+        const startedAt = Date.now();
+        while ((!LAST_SESSION_SNAPSHOT || !masterPayload) && Date.now() - startedAt < 25000) {
+            await sleepDebug(500);
+            if (!masterPayload) {
+                try {
+                    const cached = JSON.parse(localStorage.getItem("sl_master_payload") || "null");
+                    if (cached) {
+                        masterPayload = cached;
+                    }
+                } catch(e) {}
+            }
+        }
+    }
+
+    async function buildDebugFilesForPanel(requestId) {
+        await prepareDebugExportState();
+
         const farmCaches = {
             farmId: SL_FARM_ID,
             inventory: cloneForDebug(SL_INVENTORY),
@@ -7173,10 +7258,14 @@
             waterWell: cloneForDebug(SL_WATER_WELL)
         };
 
-        const motor = {
+        const botDebug = {
             createdAt: new Date().toISOString(),
             requestId: requestId || "",
             farmId: SL_FARM_ID,
+            waitingForTemplate: !!_window.WAITING_FOR_TEMPLATE_TO_START,
+            botRunning: !!isBotRunning,
+            hasMasterPayload: !!masterPayload,
+            motorScriptUrl: findGameMotorScriptUrl(),
             coins: SL_COINS,
             bumpkinLevel: (typeof GameRules !== "undefined" && GameRules.getCurrentBumpkinLevel) ? GameRules.getCurrentBumpkinLevel() : null,
             bumpkinExperience: SL_BUMPKIN && SL_BUMPKIN.experience,
@@ -7221,11 +7310,16 @@
             ])
         };
 
-        const session = LAST_SESSION_SNAPSHOT || {
-            note: "No live /session response captured yet. Using current bot caches.",
+        const session = {
             createdAt: new Date().toISOString(),
-            farmId: SL_FARM_ID,
-            farm: farmCaches
+            requestId: requestId || "",
+            session: LAST_SESSION_SNAPSHOT || {
+                note: "No live /session response captured yet. Using current bot caches.",
+                farmId: SL_FARM_ID,
+                farm: farmCaches
+            },
+            lastAutosave: cloneForDebug(LAST_AUTOSAVE_SNAPSHOT),
+            botDebug: botDebug
         };
 
         let sablon = masterPayload;
@@ -7237,8 +7331,10 @@
             }
         }
 
+        const motorText = await fetchGameMotorFile();
+
         return {
-            "motor.txt": stableDebugJson(motor),
+            "motor.txt": motorText,
             "session.txt": stableDebugJson(session),
             "sablon.txt": stableDebugJson(sablon || {})
         };
@@ -7246,11 +7342,11 @@
 
     if (!_window.__NEXUS_DEBUG_FILE_EXPORT_READY__) {
         _window.__NEXUS_DEBUG_FILE_EXPORT_READY__ = true;
-        _window.addEventListener("__NEXUS_COLLECT_DEBUG_FILES__", function(event) {
+        _window.addEventListener("__NEXUS_COLLECT_DEBUG_FILES__", async function(event) {
             const detail = event && event.detail ? event.detail : {};
             const requestId = detail.request_id || detail.requestId || "";
             try {
-                const files = buildDebugFilesForPanel(requestId);
+                const files = await buildDebugFilesForPanel(requestId);
                 _window.dispatchEvent(new CustomEvent("__NEXUS_DEBUG_FILES_READY__", {
                     detail: {
                         request_id: requestId,
