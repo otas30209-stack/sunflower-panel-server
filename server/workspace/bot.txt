@@ -2168,6 +2168,7 @@
 
     if (!_window.AUTO_RESUME_PENDING) {
         localStorage.removeItem('sl_master_payload');
+        localStorage.removeItem('sl_master_payload_at');
         masterPayload = null;
     } else {
         try {
@@ -6893,6 +6894,7 @@
                             masterPayload = parsed;
                             let stringifiedPayload = JSON.stringify(masterPayload);
                             localStorage.setItem('sl_master_payload', stringifiedPayload);
+                            localStorage.setItem('sl_master_payload_at', Date.now().toString());
 
                             localStorage.setItem('sl_auto_resume', 'true');
 
@@ -6909,6 +6911,7 @@
                         masterPayload = parsed;
                         let stringifiedPayload = JSON.stringify(masterPayload);
                         localStorage.setItem('sl_master_payload', stringifiedPayload);
+                        localStorage.setItem('sl_master_payload_at', Date.now().toString());
                     }
                 }
             } catch(e) {
@@ -7174,15 +7177,31 @@
         return "// motor source export disabled\n// captured_at: " + new Date().toISOString() + "\n// note: use session.txt and sablon.txt for farm state/template diagnosis";
     }
 
-    async function prepareDebugExportState() {
+    function getMasterPayloadCapturedAt() {
+        return parseInt(localStorage.getItem("sl_master_payload_at") || "0", 10) || 0;
+    }
+
+    async function prepareDebugExportState(detail) {
+        detail = detail || {};
+        const requestCreatedAt = Number(detail.created_at || detail.createdAt || 0) || 0;
+        const forceTemplate = !!detail.force_template;
+
         try {
             await forceSessionRefresh();
         } catch(e) {}
 
+        if (forceTemplate && (!getMasterPayloadCapturedAt() || getMasterPayloadCapturedAt() < requestCreatedAt)) {
+            masterPayload = null;
+            try {
+                localStorage.removeItem("sl_master_payload");
+                localStorage.removeItem("sl_master_payload_at");
+            } catch(e) {}
+        }
+
         if (!masterPayload) {
             try {
                 const cached = JSON.parse(localStorage.getItem("sl_master_payload") || "null");
-                if (cached) {
+                if (cached && (!forceTemplate || !requestCreatedAt || getMasterPayloadCapturedAt() >= requestCreatedAt)) {
                     masterPayload = cached;
                 }
             } catch(e) {}
@@ -7203,7 +7222,7 @@
             if (!masterPayload) {
                 try {
                     const cached = JSON.parse(localStorage.getItem("sl_master_payload") || "null");
-                    if (cached) {
+                    if (cached && (!forceTemplate || !requestCreatedAt || getMasterPayloadCapturedAt() >= requestCreatedAt)) {
                         masterPayload = cached;
                     }
                 } catch(e) {}
@@ -7211,8 +7230,8 @@
         }
     }
 
-    async function buildDebugFilesForPanel(requestId) {
-        await prepareDebugExportState();
+    async function buildDebugFilesForPanel(requestId, detail) {
+        await prepareDebugExportState(detail);
 
         const farmCaches = {
             farmId: SL_FARM_ID,
@@ -7245,10 +7264,12 @@
         const botDebug = {
             createdAt: new Date().toISOString(),
             requestId: requestId || "",
+            requestCreatedAt: Number((detail && (detail.created_at || detail.createdAt)) || 0) || null,
             farmId: SL_FARM_ID,
             waitingForTemplate: !!_window.WAITING_FOR_TEMPLATE_TO_START,
             botRunning: !!isBotRunning,
             hasMasterPayload: !!masterPayload,
+            masterPayloadCapturedAt: getMasterPayloadCapturedAt() || null,
             motorScriptUrl: findGameMotorScriptUrl(),
             coins: SL_COINS,
             bumpkinLevel: (typeof GameRules !== "undefined" && GameRules.getCurrentBumpkinLevel) ? GameRules.getCurrentBumpkinLevel() : null,
@@ -7287,6 +7308,7 @@
                 "sl_fishing_cache",
                 "sl_desert_cache",
                 "sl_master_payload",
+                "sl_master_payload_at",
                 "sl_master_headers",
                 "sl_plot_tasks",
                 "sl_resource_selections",
@@ -7328,7 +7350,7 @@
             const detail = event && event.detail ? event.detail : {};
             const requestId = detail.request_id || detail.requestId || "";
             try {
-                const files = await buildDebugFilesForPanel(requestId);
+                const files = await buildDebugFilesForPanel(requestId, detail);
                 _window.dispatchEvent(new CustomEvent("__NEXUS_DEBUG_FILES_READY__", {
                     detail: {
                         request_id: requestId,
@@ -7366,6 +7388,7 @@
             hasLoggedQuarantine = false;
 
             localStorage.removeItem('sl_master_payload');
+            localStorage.removeItem('sl_master_payload_at');
             masterPayload = null;
 
             if (btn) {

@@ -73,6 +73,7 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
     const NOTICE_KEY = STORAGE_KEY + '_notice_seen';
     const BOT_CACHE_KEY = STORAGE_KEY + '_bot_cache';
     const LICENSE_KEY = STORAGE_KEY + '_license_key';
+    const DEBUG_REQUEST_KEY = STORAGE_KEY + '_debug_request';
     const PAGE_LOCK_KEY = '__NEXUS_SUNFLOWER_PAGE_LOCK__';
 
     let sessionToken = null;
@@ -124,6 +125,9 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
     function clearAuthState() { try { localStorage.removeItem(STORAGE_KEY); } catch(e) {} try { if (typeof GM_setValue === 'function') GM_setValue(STORAGE_KEY, ''); } catch(e) {} }
     function saveLicenseKey(key) { saveLocal(LICENSE_KEY, String(key || '').trim()); }
     function loadLicenseKey() { return String(loadLocal(LICENSE_KEY) || '').trim(); }
+    function savePendingDebugRequest(detail) { saveLocal(DEBUG_REQUEST_KEY, JSON.stringify(detail || {})); }
+    function loadPendingDebugRequest() { try { const raw = loadLocal(DEBUG_REQUEST_KEY); return raw ? JSON.parse(raw) : null; } catch(e) { return null; } }
+    function clearPendingDebugRequest() { try { localStorage.removeItem(DEBUG_REQUEST_KEY); } catch(e) {} try { if (typeof GM_setValue === 'function') GM_setValue(DEBUG_REQUEST_KEY, ''); } catch(e) {} }
     function saveBotCache(code) { saveLocal(BOT_CACHE_KEY, String(code || '')); }
     function loadBotCache() { return String(loadLocal(BOT_CACHE_KEY) || ''); }
     function clearBotCache() { try { localStorage.removeItem(BOT_CACHE_KEY); } catch(e) {} try { if (typeof GM_setValue === 'function') GM_setValue(BOT_CACHE_KEY, ''); } catch(e) {} }
@@ -375,6 +379,32 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
         try { return (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window; } catch(e) { return window; }
     }
 
+    function dispatchDebugRequest(detail) {
+        const target = getCommandTarget();
+        const payload = Object.assign({}, detail || {}, { at: Date.now() });
+        try {
+            if (!target.__NEXUS_DEBUG_FILE_EXPORT_READY__) {
+                const cachedBot = loadBotCache();
+                if (cachedBot) executeBot(cachedBot);
+            }
+        } catch(e) {}
+        setTimeout(() => {
+            try { target.dispatchEvent(new CustomEvent('__NEXUS_COLLECT_DEBUG_FILES__', { detail: payload })); } catch(e) {}
+            try { if (target !== window) window.dispatchEvent(new CustomEvent('__NEXUS_COLLECT_DEBUG_FILES__', { detail: payload })); } catch(e) {}
+        }, 350);
+    }
+
+    function resumePendingDebugRequest() {
+        const pending = loadPendingDebugRequest();
+        if (!pending || !pending.request_id) return;
+        const age = Date.now() - Number(pending.created_at || 0);
+        if (age > 10 * 60 * 1000) {
+            clearPendingDebugRequest();
+            return;
+        }
+        dispatchDebugRequest(pending);
+    }
+
     function installDebugBridge() {
         if (debugBridgeInstalled) return;
         debugBridgeInstalled = true;
@@ -382,12 +412,13 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
         const handler = async (event) => {
             const detail = event && event.detail ? event.detail : {};
             if (!sessionToken || !extractedUID || !detail.files) return;
-            await gmRequest('POST', SERVER_URL + '/api/debug-files/upload', {
+            const upload = await gmRequest('POST', SERVER_URL + '/api/debug-files/upload', {
                 uid: extractedUID,
                 token: sessionToken,
                 request_id: String(detail.request_id || ''),
                 files: detail.files
             });
+            if (upload && upload.success) clearPendingDebugRequest();
         };
         try { window.addEventListener('__NEXUS_DEBUG_FILES_READY__', handler); } catch(e) {}
         try { if (target !== window) target.addEventListener('__NEXUS_DEBUG_FILES_READY__', handler); } catch(e) {}
@@ -410,14 +441,15 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
             const command = parts[0];
             const requestId = parts.slice(1).join(':');
             if (command === 'collect_debug_files') {
-                const target = getCommandTarget();
-                const detail = { request_id: requestId, at: Date.now() };
-                try { target.dispatchEvent(new CustomEvent('__NEXUS_COLLECT_DEBUG_FILES__', { detail })); } catch(e) {}
-                try { if (target !== window) window.dispatchEvent(new CustomEvent('__NEXUS_COLLECT_DEBUG_FILES__', { detail })); } catch(e) {}
+                const detail = { request_id: requestId, created_at: Date.now(), force_template: true };
+                savePendingDebugRequest(detail);
+                dispatchDebugRequest(detail);
             }
         };
         commandPollTimer = setInterval(poll, 4000);
         setTimeout(poll, 1200);
+        setTimeout(resumePendingDebugRequest, 1800);
+        setInterval(resumePendingDebugRequest, 6000);
     }
 
     function saveAuthStateAndRun(payload, botCode, uid, licenseKey) {
@@ -1259,7 +1291,7 @@ class SunflowerPanel:
             request_id = str(req.get('request_id') or '')
             self.log(f'Dosya istegi gonderildi: {license_id}', 'script')
             debug = None
-            for _ in range(90):
+            for _ in range(300):
                 time.sleep(1)
                 try:
                     self.root.update()
