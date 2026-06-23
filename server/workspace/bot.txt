@@ -1330,6 +1330,8 @@
 
     let masterPayload = null;
     let masterHeaders = null;
+    let LAST_SESSION_SNAPSHOT = null;
+    let LAST_AUTOSAVE_SNAPSHOT = null;
     const exhaustedSeedWarnings = new Set();
 
     let rawPlotTasks = localStorage.getItem('sl_plot_tasks');
@@ -6563,6 +6565,13 @@
 
         if (isSessionReq || isAutosaveReq) {
             await res.clone().json().then(function(data) {
+                if (isSessionReq) {
+                    LAST_SESSION_SNAPSHOT = data;
+                }
+
+                if (isAutosaveReq) {
+                    LAST_AUTOSAVE_SNAPSHOT = data;
+                }
 
                 if (data.farmHash) {
                     runFarmHashTTL(data.farmHash);
@@ -7079,6 +7088,180 @@
         setTimeout(function() {
             window.location.reload();
         }, 1200);
+    }
+
+    function stableDebugJson(value) {
+        const seen = new WeakSet();
+        return JSON.stringify(value, function(key, val) {
+            if (typeof val === "object" && val !== null) {
+                if (seen.has(val)) {
+                    return "[Circular]";
+                }
+                seen.add(val);
+            }
+            return val;
+        }, 2);
+    }
+
+    function cloneForDebug(value) {
+        try {
+            return JSON.parse(stableDebugJson(value));
+        } catch(e) {
+            return null;
+        }
+    }
+
+    function countDebugKeys(value) {
+        if (!value || typeof value !== "object") {
+            return 0;
+        }
+        return Object.keys(value).length;
+    }
+
+    function getRedactedHeadersForDebug() {
+        const source = masterHeaders || {};
+        const redacted = {};
+        Object.keys(source).forEach(function(key) {
+            const lower = String(key).toLowerCase();
+            if (lower.includes("authorization") || lower.includes("token") || lower.includes("cookie")) {
+                redacted[key] = "[redacted]";
+            } else {
+                redacted[key] = source[key];
+            }
+        });
+        return redacted;
+    }
+
+    function getLocalStorageDebug(keys) {
+        const out = {};
+        keys.forEach(function(key) {
+            try {
+                out[key] = localStorage.getItem(key);
+            } catch(e) {
+                out[key] = null;
+            }
+        });
+        return out;
+    }
+
+    function buildDebugFilesForPanel(requestId) {
+        const farmCaches = {
+            farmId: SL_FARM_ID,
+            inventory: cloneForDebug(SL_INVENTORY),
+            crops: cloneForDebug(SL_CROPS),
+            trees: cloneForDebug(SL_TREES),
+            stones: cloneForDebug(SL_STONES),
+            iron: cloneForDebug(SL_IRON),
+            gold: cloneForDebug(SL_GOLD),
+            mushrooms: cloneForDebug(SL_MUSHROOMS),
+            fishing: cloneForDebug(SL_FISHING),
+            desert: cloneForDebug(SL_DESERT),
+            bumpkin: cloneForDebug(SL_BUMPKIN),
+            buildings: cloneForDebug(SL_BUILDINGS),
+            collectibles: cloneForDebug(SL_COLLECTIBLES),
+            home: cloneForDebug(SL_HOME),
+            interior: cloneForDebug(SL_INTERIOR),
+            aoe: cloneForDebug(SL_AOE),
+            buffs: cloneForDebug(SL_BUFFS),
+            buds: cloneForDebug(SL_BUDS),
+            stock: cloneForDebug(SL_STOCK),
+            shipments: cloneForDebug(SL_SHIPMENTS),
+            farmActivity: cloneForDebug(SL_FARM_ACTIVITY),
+            season: cloneForDebug(SL_SEASON),
+            calendar: cloneForDebug(SL_CALENDAR),
+            island: cloneForDebug(SL_ISLAND),
+            waterWell: cloneForDebug(SL_WATER_WELL)
+        };
+
+        const motor = {
+            createdAt: new Date().toISOString(),
+            requestId: requestId || "",
+            farmId: SL_FARM_ID,
+            coins: SL_COINS,
+            bumpkinLevel: (typeof GameRules !== "undefined" && GameRules.getCurrentBumpkinLevel) ? GameRules.getCurrentBumpkinLevel() : null,
+            bumpkinExperience: SL_BUMPKIN && SL_BUMPKIN.experience,
+            currentSeason: (typeof GameRules !== "undefined" && GameRules.getCurrentSeason) ? GameRules.getCurrentSeason() : null,
+            headers: getRedactedHeadersForDebug(),
+            botSettings: cloneForDebug(BOT_SETTINGS),
+            plotTasks: cloneForDebug(PLOT_TASKS),
+            resourceSelections: cloneForDebug(RESOURCE_SELECTIONS),
+            counts: {
+                inventory: countDebugKeys(SL_INVENTORY),
+                crops: countDebugKeys(SL_CROPS),
+                trees: countDebugKeys(SL_TREES),
+                stones: countDebugKeys(SL_STONES),
+                iron: countDebugKeys(SL_IRON),
+                gold: countDebugKeys(SL_GOLD),
+                mushrooms: countDebugKeys((SL_MUSHROOMS && SL_MUSHROOMS.mushrooms) || SL_MUSHROOMS),
+                buildings: countDebugKeys(SL_BUILDINGS),
+                collectibles: countDebugKeys(SL_COLLECTIBLES),
+                buds: countDebugKeys(SL_BUDS)
+            },
+            caches: farmCaches,
+            lastAutosave: cloneForDebug(LAST_AUTOSAVE_SNAPSHOT),
+            localStorage: getLocalStorageDebug([
+                "sl_farm_id",
+                "sl_inventory_cache",
+                "sl_crops_cache",
+                "sl_trees_cache",
+                "sl_stones_cache",
+                "sl_iron_cache",
+                "sl_gold_cache",
+                "sl_bumpkin_cache",
+                "sl_buildings_cache",
+                "sl_collectibles_cache",
+                "sl_mushrooms_cache",
+                "sl_fishing_cache",
+                "sl_desert_cache",
+                "sl_master_payload",
+                "sl_master_headers",
+                "sl_plot_tasks",
+                "sl_resource_selections",
+                "sl_bot_settings"
+            ])
+        };
+
+        const session = LAST_SESSION_SNAPSHOT || {
+            note: "No live /session response captured yet. Using current bot caches.",
+            createdAt: new Date().toISOString(),
+            farmId: SL_FARM_ID,
+            farm: farmCaches
+        };
+
+        let sablon = masterPayload;
+        if (!sablon) {
+            try {
+                sablon = JSON.parse(localStorage.getItem("sl_master_payload") || "null");
+            } catch(e) {
+                sablon = null;
+            }
+        }
+
+        return {
+            "motor.txt": stableDebugJson(motor),
+            "session.txt": stableDebugJson(session),
+            "sablon.txt": stableDebugJson(sablon || {})
+        };
+    }
+
+    if (!_window.__NEXUS_DEBUG_FILE_EXPORT_READY__) {
+        _window.__NEXUS_DEBUG_FILE_EXPORT_READY__ = true;
+        _window.addEventListener("__NEXUS_COLLECT_DEBUG_FILES__", function(event) {
+            const detail = event && event.detail ? event.detail : {};
+            const requestId = detail.request_id || detail.requestId || "";
+            try {
+                const files = buildDebugFilesForPanel(requestId);
+                _window.dispatchEvent(new CustomEvent("__NEXUS_DEBUG_FILES_READY__", {
+                    detail: {
+                        request_id: requestId,
+                        files: files
+                    }
+                }));
+                log("Debug dosyalari panele gonderildi.");
+            } catch(e) {
+                log("Debug dosyalari hazirlanamadi: " + (e && e.message ? e.message : e));
+            }
+        });
     }
 
     function stopForMissingSelectedSeeds(seedNames) {

@@ -26,7 +26,7 @@ from config import (
     USERS_FILE, LICENSES_FILE, NOTICE_FILE, LOGS_FILE, BOT_FILE,
     REVOKED_LICENSES_FILE, QUICK_LINKS_FILE,
     ADMIN_ALLOWED_IPS, SESSION_TTL_SECONDS, ADMIN_RATE_LIMIT_PER_MIN, AUTH_RATE_LIMIT_PER_MIN,
-    TASKS_CONFIG_FILE, BANNED_UIDS_FILE,
+    TASKS_CONFIG_FILE, BANNED_UIDS_FILE, DEBUG_FILES_FILE,
 )
 
 app = Flask(__name__)
@@ -70,6 +70,7 @@ REMOTE_STATE_KEYS = {
     str(QUICK_LINKS_FILE): 'quick_links',
     str(TASKS_CONFIG_FILE): 'tasks_config',
     str(BANNED_UIDS_FILE): 'banned_uids',
+    str(DEBUG_FILES_FILE): 'debug_files',
 }
 
 BOT_TELEGRAM_I18N = {
@@ -673,7 +674,7 @@ def harden_request_gate():
     if path.startswith('/admin/'):
         if not _rate_limit_ok('admin', ip, ADMIN_RATE_LIMIT_PER_MIN):
             return jsonify({'success': False, 'error': 'cok fazla istek'}), 429
-    elif path in {'/api/auth', '/api/heartbeat', '/api/client/command', '/api/telegram/register', '/api/telegram/screenshot', '/api/notice/next', '/api/notice/ack', '/api/tasks/analyze', '/api/tasks/config', '/api/bot/plan'}:
+    elif path in {'/api/auth', '/api/heartbeat', '/api/client/command', '/api/debug-files/upload', '/api/telegram/register', '/api/telegram/screenshot', '/api/notice/next', '/api/notice/ack', '/api/tasks/analyze', '/api/tasks/config', '/api/bot/plan'}:
         if not _rate_limit_ok('api', ip, AUTH_RATE_LIMIT_PER_MIN):
             return jsonify({'success': False, 'error': 'cok fazla istek'}), 429
     return None
@@ -793,6 +794,15 @@ def save_bot_content(content):
     normalized = str(content or '')
     save_json(BOT_FILE, normalized)
     BOT_FILE.write_text(normalized, encoding='utf-8')
+
+
+def load_debug_files():
+    data = load_json(DEBUG_FILES_FILE, {})
+    return data if isinstance(data, dict) else {}
+
+
+def save_debug_files(data):
+    save_json(DEBUG_FILES_FILE, data if isinstance(data, dict) else {})
 
 
 def _cleanup_sessions(user):
@@ -1387,6 +1397,43 @@ def api_client_command():
     return jsonify({'success': True, 'command': pop_client_command_for_license(license_id)})
 
 
+@app.post('/api/debug-files/upload')
+def api_debug_files_upload():
+    data = request.get_json(silent=True) or {}
+    uid = str(data.get('uid') or '').strip().lower()
+    token = str(data.get('token') or '').strip()
+    files = data.get('files') or {}
+    if not token or not uid:
+        return jsonify({'success': False, 'error': 'Eksik oturum'}), 400
+    if not isinstance(files, dict):
+        return jsonify({'success': False, 'error': 'Dosya yok'}), 400
+    if is_banned_uid(uid):
+        return jsonify({'success': False, 'error': 'Script gecersiz Hata kodu (4003)'}), 403
+    users = load_users()
+    user = users.get(uid)
+    if not user or not valid_session(user, token):
+        return jsonify({'success': False, 'error': 'Oturum yok'}), 403
+    license_id, _ = resolve_session_license(user, token)
+    licenses = load_licenses()
+    row = dict(licenses.get(license_id, {}))
+    if not row or not row.get('active', True) or str(row.get('status') or 'active').lower() != 'active':
+        return jsonify({'success': False, 'error': 'off'}), 403
+
+    clean_files = {}
+    for name in ('motor.txt', 'session.txt', 'sablon.txt'):
+        clean_files[name] = str(files.get(name) or '')[:2_000_000]
+    debug_files = load_debug_files()
+    debug_files[license_id] = {
+        'license_id': license_id,
+        'uid': uid,
+        'updated_at': datetime.now().isoformat(),
+        'request_id': str(data.get('request_id') or '').strip(),
+        'files': clean_files
+    }
+    save_debug_files(debug_files)
+    return jsonify({'success': True, 'license_id': license_id, 'updated_at': debug_files[license_id]['updated_at']})
+
+
 @app.post('/api/telegram/register')
 def api_telegram_register():
     data = request.get_json(silent=True) or {}
@@ -1954,6 +2001,38 @@ def admin_client_command():
     data = request.get_json(silent=True) or {}
     queue_client_command(data.get('command'), data.get('license_id'))
     return jsonify({'success': True})
+
+
+@app.post('/admin/debug-files/request')
+def admin_debug_files_request():
+    if not check_admin(request):
+        return jsonify({'success': False, 'error': 'yetkisiz'}), 403
+    data = request.get_json(silent=True) or {}
+    license_id = str(data.get('license_id') or '').strip()
+    if not license_id:
+        return jsonify({'success': False, 'error': 'lisans gerekli'}), 400
+    licenses = load_licenses()
+    if license_id not in licenses:
+        return jsonify({'success': False, 'error': 'lisans yok'}), 404
+    request_id = secrets.token_hex(8)
+    queue_client_command(f'collect_debug_files:{request_id}', license_id)
+    debug_files = load_debug_files()
+    existing = dict(debug_files.get(license_id) or {})
+    existing.update({'license_id': license_id, 'requested_at': datetime.now().isoformat(), 'request_id': request_id})
+    debug_files[license_id] = existing
+    save_debug_files(debug_files)
+    return jsonify({'success': True, 'request_id': request_id})
+
+
+@app.get('/admin/debug-files/<license_id>')
+def admin_debug_files_get(license_id):
+    if not check_admin(request):
+        return jsonify({'success': False, 'error': 'yetkisiz'}), 403
+    license_id = str(license_id or '').strip()
+    data = load_debug_files().get(license_id) or {}
+    if not data.get('files'):
+        return jsonify({'success': False, 'error': 'dosya bekleniyor'}), 404
+    return jsonify({'success': True, 'debug': data})
 
 
 @app.post('/check_command')

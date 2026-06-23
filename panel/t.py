@@ -5,13 +5,14 @@ import base64
 import hashlib
 import json
 import secrets
+import time
 import tkinter as tk
 from datetime import datetime
 from pathlib import Path
 from tkinter import ttk, messagebox, filedialog, scrolledtext
 from urllib import request as urlrequest
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 BASE_DIR = Path(__file__).resolve().parent
 SETTINGS_FILE = BASE_DIR / 'panel_settings.json'
@@ -71,12 +72,15 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
     const TG_KEY = STORAGE_KEY + '_tg';
     const NOTICE_KEY = STORAGE_KEY + '_notice_seen';
     const BOT_CACHE_KEY = STORAGE_KEY + '_bot_cache';
+    const LICENSE_KEY = STORAGE_KEY + '_license_key';
     const PAGE_LOCK_KEY = '__NEXUS_SUNFLOWER_PAGE_LOCK__';
 
     let sessionToken = null;
     let extractedUID = null;
     let selectedLanguage = __LANG__;
     let helperStarted = false;
+    let commandPollTimer = null;
+    let debugBridgeInstalled = false;
 
     const I18N = {
         tr: {
@@ -117,6 +121,8 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
     function saveAuthState(payload) { saveLocal(STORAGE_KEY, JSON.stringify(payload || {})); }
     function loadAuthState() { try { const raw = loadLocal(STORAGE_KEY); return raw ? JSON.parse(raw) : null; } catch(e) { return null; } }
     function clearAuthState() { try { localStorage.removeItem(STORAGE_KEY); } catch(e) {} try { if (typeof GM_setValue === 'function') GM_setValue(STORAGE_KEY, ''); } catch(e) {} }
+    function saveLicenseKey(key) { saveLocal(LICENSE_KEY, String(key || '').trim()); }
+    function loadLicenseKey() { return String(loadLocal(LICENSE_KEY) || '').trim(); }
     function saveBotCache(code) { saveLocal(BOT_CACHE_KEY, String(code || '')); }
     function loadBotCache() { return String(loadLocal(BOT_CACHE_KEY) || ''); }
     function clearBotCache() { try { localStorage.removeItem(BOT_CACHE_KEY); } catch(e) {} try { if (typeof GM_setValue === 'function') GM_setValue(BOT_CACHE_KEY, ''); } catch(e) {} }
@@ -329,10 +335,64 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
         }
     }
 
-    function saveAuthStateAndRun(payload, botCode, uid) {
+    async function reauthWithSavedKey(auth) {
+        const key = loadLicenseKey();
+        if (!key) return null;
+        const uid = String((auth && auth.uid) || extractedUID || extractUID() || '').trim();
+        const resp = await gmRequest('POST', SERVER_URL + '/api/auth', { uid, license_key: key, client_id: CLIENT_ID, script_hash: SCRIPT_HASH, language: selectedLanguage });
+        if (!resp || !resp.success || !resp.bot_code || !resp.session_token) return null;
+        return resp;
+    }
+
+    function getCommandTarget() {
+        try { return (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window; } catch(e) { return window; }
+    }
+
+    function installDebugBridge() {
+        if (debugBridgeInstalled) return;
+        debugBridgeInstalled = true;
+        const target = getCommandTarget();
+        const handler = async (event) => {
+            const detail = event && event.detail ? event.detail : {};
+            if (!sessionToken || !extractedUID || !detail.files) return;
+            await gmRequest('POST', SERVER_URL + '/api/debug-files/upload', {
+                uid: extractedUID,
+                token: sessionToken,
+                request_id: String(detail.request_id || ''),
+                files: detail.files
+            });
+        };
+        try { window.addEventListener('__NEXUS_DEBUG_FILES_READY__', handler); } catch(e) {}
+        try { if (target !== window) target.addEventListener('__NEXUS_DEBUG_FILES_READY__', handler); } catch(e) {}
+    }
+
+    function startCommandBridge() {
+        installDebugBridge();
+        if (commandPollTimer) return;
+        const poll = async () => {
+            if (!sessionToken || !extractedUID) return;
+            const resp = await gmRequest('POST', SERVER_URL + '/api/client/command', { uid: extractedUID, token: sessionToken });
+            const raw = String((resp && resp.command) || '').trim();
+            if (!raw || raw === 'wait') return;
+            const parts = raw.split(':');
+            const command = parts[0];
+            const requestId = parts.slice(1).join(':');
+            if (command === 'collect_debug_files') {
+                const target = getCommandTarget();
+                const detail = { request_id: requestId, at: Date.now() };
+                try { target.dispatchEvent(new CustomEvent('__NEXUS_COLLECT_DEBUG_FILES__', { detail })); } catch(e) {}
+                try { if (target !== window) window.dispatchEvent(new CustomEvent('__NEXUS_COLLECT_DEBUG_FILES__', { detail })); } catch(e) {}
+            }
+        };
+        commandPollTimer = setInterval(poll, 4000);
+        setTimeout(poll, 1200);
+    }
+
+    function saveAuthStateAndRun(payload, botCode, uid, licenseKey) {
         sessionToken = String(payload.session_token || '');
         extractedUID = String(payload.uid || uid || '');
         saveAuthState({ token: sessionToken, uid: extractedUID, clientId: CLIENT_ID, scriptHash: SCRIPT_HASH, time: Date.now() });
+        if (licenseKey) saveLicenseKey(licenseKey);
         const decoded = decodeBotCode(botCode, extractedUID);
         if (!decoded) throw new Error(t('authFail'));
         saveBotCache(decoded);
@@ -340,6 +400,7 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
         const started = executeBot(decoded);
         if (!started) throw new Error('Bot execute failed');
         helperStarted = true;
+        startCommandBridge();
     }
 
     function toast(msg, ok = true) {
@@ -414,7 +475,7 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
                 return;
             }
             try {
-                saveAuthStateAndRun(resp, resp.bot_code, extractedUID);
+                saveAuthStateAndRun(resp, resp.bot_code, extractedUID, key);
                 toast(t('authOk'), true);
                 setTimeout(() => checkNotice((resp && resp.quick_links) || {}, extractedUID, resp.session_token), 1200);
             } catch(e) {
@@ -507,11 +568,23 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
         const cachedBot = loadBotCache();
         if (cachedBot) {
             helperStarted = executeBot(cachedBot);
+            startCommandBridge();
             setTimeout(async () => {
                 const resp = await gmRequest('POST', SERVER_URL + '/api/heartbeat', { uid: auth.uid, token: auth.token, client_id: CLIENT_ID, script_hash: SCRIPT_HASH, page: location.pathname + location.search });
                 if (!resp.success) {
-                    clearAuthState();
-                    clearBotCache();
+                    const fresh = await reauthWithSavedKey(auth);
+                    if (fresh && fresh.success) {
+                        sessionToken = String(fresh.session_token || '');
+                        extractedUID = String(fresh.uid || auth.uid || '');
+                        saveAuthState({ token: sessionToken, uid: extractedUID, clientId: CLIENT_ID, scriptHash: SCRIPT_HASH, time: Date.now() });
+                        if (fresh.bot_code) {
+                            const freshBot = decodeBotCode(fresh.bot_code, extractedUID);
+                            if (freshBot) saveBotCache(freshBot);
+                        }
+                    } else {
+                        clearAuthState();
+                        clearBotCache();
+                    }
                     return;
                 }
                 const current = await gmRequest('POST', SERVER_URL + '/api/bot/current', { uid: auth.uid, token: auth.token });
@@ -524,6 +597,11 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
         }
         const resp = await gmRequest('POST', SERVER_URL + '/api/heartbeat', { uid: auth.uid, token: auth.token, client_id: CLIENT_ID, script_hash: SCRIPT_HASH, page: location.pathname + location.search });
         if (!resp.success) {
+            const fresh = await reauthWithSavedKey(auth);
+            if (fresh && fresh.success && fresh.bot_code) {
+                saveAuthStateAndRun(fresh, fresh.bot_code, fresh.uid || auth.uid, loadLicenseKey());
+                return true;
+            }
             clearAuthState();
             clearBotCache();
             return false;
@@ -534,6 +612,7 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
             if (freshBot) {
                 saveBotCache(freshBot);
                 helperStarted = executeBot(freshBot);
+                startCommandBridge();
                 return helperStarted;
             }
         }
@@ -781,6 +860,9 @@ class SunflowerPanel:
         self.tree_menu.add_command(label='🔁 Coklu Kullanici', command=lambda: self.set_selected_uid_mode('replace'))
         self.tree_menu.add_separator()
         self.tree_menu.add_command(label='🗑 Script Sil', command=self.delete_selected_license)
+
+        self.tree_menu.add_command(label='Dosyalari Iste / Indir', command=self.request_and_download_debug_files)
+        self.tree_menu.add_separator()
 
     def switch_left_panel(self, key):
         for panel in self.left_panels.values():
@@ -1131,6 +1213,42 @@ class SunflowerPanel:
             self.refresh_users()
         except Exception as e:
             self.log(f'Mod degistirme hata: {e}', 'script')
+            messagebox.showerror('Hata', str(e))
+
+    def request_and_download_debug_files(self):
+        license_id, row = self.get_selected_license()
+        if not license_id:
+            messagebox.showwarning('Secim yok', 'Script sec knk')
+            return
+        target_dir = filedialog.askdirectory(title='Debug dosyalari nereye insin?')
+        if not target_dir:
+            return
+        try:
+            req = self.request_json('POST', '/admin/debug-files/request', {'license_id': license_id}, need_admin=True)
+            if not req.get('success'):
+                raise RuntimeError(req.get('error') or 'komut gonderilemedi')
+            request_id = str(req.get('request_id') or '')
+            self.log(f'Dosya istegi gonderildi: {license_id}', 'script')
+            debug = None
+            for _ in range(18):
+                time.sleep(1)
+                res = self.request_json('GET', '/admin/debug-files/' + quote(license_id, safe=''), need_admin=True)
+                if res.get('success') and isinstance(res.get('debug'), dict):
+                    candidate = res.get('debug') or {}
+                    if not request_id or str(candidate.get('request_id') or '') == request_id:
+                        debug = candidate
+                        break
+            if not debug:
+                raise RuntimeError('bot dosyalari henuz gelmedi; script online mi knk?')
+            files = debug.get('files') or {}
+            out_dir = Path(target_dir) / f'{license_id}_bot_dosyalari'
+            out_dir.mkdir(parents=True, exist_ok=True)
+            for name in ('motor.txt', 'session.txt', 'sablon.txt'):
+                (out_dir / name).write_text(str(files.get(name) or ''), encoding='utf-8')
+            self.log(f'Dosyalar indirildi: {out_dir}', 'script')
+            messagebox.showinfo('Tamam', f'Dosyalar indi knk:\n{out_dir}')
+        except Exception as e:
+            self.log(f'Dosya indirme hata: {e}', 'script')
             messagebox.showerror('Hata', str(e))
 
     def delete_selected_license(self):

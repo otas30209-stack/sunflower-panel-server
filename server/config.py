@@ -33,6 +33,7 @@ REVOKED_LICENSES_FILE = WORKSPACE_DIR / 'revoked_licenses.json'
 QUICK_LINKS_FILE = WORKSPACE_DIR / 'quick_links.json'
 TASKS_CONFIG_FILE = WORKSPACE_DIR / 'tasks_config.json'
 BANNED_UIDS_FILE = WORKSPACE_DIR / 'banned_uids.json'
+DEBUG_FILES_FILE = WORKSPACE_DIR / 'debug_files.json'
 
 for path, default in (
     (USERS_FILE, '{}'),
@@ -43,7 +44,8 @@ for path, default in (
     (REVOKED_LICENSES_FILE, '[]'),
     (QUICK_LINKS_FILE, '{"active": false, "telegram": "", "youtube": "", "login": "", "normal": "", "show_key_telegram": false}'),
     (TASKS_CONFIG_FILE, '{}'),
-    (BANNED_UIDS_FILE, '[]')
+    (BANNED_UIDS_FILE, '[]'),
+    (DEBUG_FILES_FILE, '{}')
 ):
     if not path.exists():
         path.write_text(default, encoding='utf-8')
