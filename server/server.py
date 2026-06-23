@@ -2034,6 +2034,30 @@ def admin_debug_files_get(license_id):
     return jsonify({'success': True, 'debug': data})
 
 
+@app.get('/admin/debug-files')
+def admin_debug_files_list():
+    if not check_admin(request):
+        return jsonify({'success': False, 'error': 'yetkisiz'}), 403
+    licenses = load_licenses()
+    items = []
+    for license_id, data in load_debug_files().items():
+        if not isinstance(data, dict) or not data.get('files'):
+            continue
+        row = dict(licenses.get(license_id, {}))
+        files = data.get('files') or {}
+        items.append({
+            'license_id': license_id,
+            'client_name': row.get('client_name') or license_id,
+            'uid': data.get('uid') or row.get('uid') or '',
+            'updated_at': data.get('updated_at') or '',
+            'request_id': data.get('request_id') or '',
+            'file_names': list(files.keys()),
+            'sizes': {name: len(str(value or '')) for name, value in files.items()}
+        })
+    items.sort(key=lambda item: str(item.get('updated_at') or ''), reverse=True)
+    return jsonify({'success': True, 'items': items})
+
+
 @app.post('/check_command')
 def compat_check_command_post():
     return api_check_command()

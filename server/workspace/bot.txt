@@ -1,8 +1,8 @@
-// ==UserScript==
+﻿// ==UserScript==
 // @name         Sunflower Land God Mode V51.0.37(ULTRA TITAN - UNCUT & EXPANDED)
 // @namespace    http://tampermonkey.net/
 // @version      50.0.0
-// @description  Sabit Şablon Yenileyici + Tekli Orman/Maden + Karantina + Sansürsüz Tam Kod
+// @description  Sabit Åablon Yenileyici + Tekli Orman/Maden + Karantina + SansÃ¼rsÃ¼z Tam Kod
 // @author       Nexus
 // @match        https://sunflower-land.com/*
 // @grant        unsafeWindow
@@ -16,7 +16,7 @@
     const _window = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
 
     // ==========================================
-    // 📓 BÜYÜK MUHASEBE DEFTERİ (THE GRAND LEDGER)
+    // ğŸ““ BÃœYÃœK MUHASEBE DEFTERÄ° (THE GRAND LEDGER)
     // ==========================================
     let SL_FARM_ID = localStorage.getItem('sl_farm_id') || "";
     let SL_INVENTORY = JSON.parse(localStorage.getItem('sl_inventory_cache') || '{}');
@@ -89,7 +89,7 @@
     }
 
     // ==========================================
-    // 🔮 ORACLE (KAHİN) İSTİHBARAT VE DEMİRCİ KURALLARI
+    // ğŸ”® ORACLE (KAHÄ°N) Ä°STÄ°HBARAT VE DEMÄ°RCÄ° KURALLARI
     // ==========================================
     const ORACLE_WHITELIST = {
         skills: [
@@ -161,7 +161,7 @@
             let required = parseFloat(entries[i][1] || 0);
             if (required > 0 && SL_COINS >= required) {
                 clearBuyBudgetLock(seed);
-                log(`✅ ${seed} alımı için bütçe limiti tamamlandı (${formatCoinAmount(required)} coin). Görev tekrar aktif.`);
+                log(`âœ… ${seed} alÄ±mÄ± iÃ§in bÃ¼tÃ§e limiti tamamlandÄ± (${formatCoinAmount(required)} coin). GÃ¶rev tekrar aktif.`);
             }
         }
     }
@@ -265,7 +265,7 @@
 
     function checkKillSwitchStatus() {
         if (killSwitchActivated) {
-            return "SİSTEM ZATEN KİLİTLİ!";
+            return "SÄ°STEM ZATEN KÄ°LÄ°TLÄ°!";
         }
 
         if (SL_EVENTS) {
@@ -1158,7 +1158,7 @@
                 if (!fingerprint) {
                     stopForClientUpdate("Client autosave/header signature could not be verified.");
                     return false;
-                    log("⚠️ [GameRules] Client kural imzası okunamadı; mevcut yerel kurallarla devam ediliyor.");
+                    log("âš ï¸ [GameRules] Client kural imzasÄ± okunamadÄ±; mevcut yerel kurallarla devam ediliyor.");
                     lastAuditOk = true;
                     return true;
                 }
@@ -1166,7 +1166,7 @@
                 const saved = localStorage.getItem(RULE_STORAGE_KEY);
                 if (!saved) {
                     localStorage.setItem(RULE_STORAGE_KEY, fingerprint);
-                    log("🧠 [GameRules] Client kural imzası öğrenildi. Bundan sonra değişirse bot güvenlik için duracak.");
+                    log("ğŸ§  [GameRules] Client kural imzasÄ± Ã¶ÄŸrenildi. Bundan sonra deÄŸiÅŸirse bot gÃ¼venlik iÃ§in duracak.");
                     lastAuditOk = true;
                     return true;
                 }
@@ -1174,7 +1174,7 @@
                 if (saved !== fingerprint) {
                     stopForClientUpdate("Autosave/header/action signature changed.");
                     return false;
-                    triggerKillSwitch("Oyun Güncellenmiş. Güvenlik için durduruldu.", "CLIENT_RULES_CHANGED");
+                    triggerKillSwitch("Oyun GÃ¼ncellenmiÅŸ. GÃ¼venlik iÃ§in durduruldu.", "CLIENT_RULES_CHANGED");
                     return false;
                 }
 
@@ -2048,18 +2048,18 @@
     _window.toggleResourceSelection = toggleResourceSelection;
 
     // ==========================================
-    // 🚧 ANINDA ÖLÜM (INSTA-KILL) FONKSİYONU
+    // ğŸš§ ANINDA Ã–LÃœM (INSTA-KILL) FONKSÄ°YONU
     // ==========================================
     function triggerKillSwitch(reason, status) {
         killSwitchActivated = true;
         isBotRunning = false;
-        log(`<span style="color:#ef4444; font-weight:900; font-size:14px;">🛑 ANINDA ÖLÜM PROTOKOLÜ ÇALIŞTI!</span>`);
-        log(`<span style="color:#fca5a5; font-weight:bold;">Açıklama: ${reason} (Sunucu Kodu: ${status})</span>`);
-        log(`<span style="color:#fca5a5;">Bot güvenliğiniz için anında durduruldu ve tüm işlemler kesildi!</span>`);
+        log(`<span style="color:#ef4444; font-weight:900; font-size:14px;">ğŸ›‘ ANINDA Ã–LÃœM PROTOKOLÃœ Ã‡ALIÅTI!</span>`);
+        log(`<span style="color:#fca5a5; font-weight:bold;">AÃ§Ä±klama: ${reason} (Sunucu Kodu: ${status})</span>`);
+        log(`<span style="color:#fca5a5;">Bot gÃ¼venliÄŸiniz iÃ§in anÄ±nda durduruldu ve tÃ¼m iÅŸlemler kesildi!</span>`);
 
         let btn = document.getElementById('btn-start-auto');
         if (btn) {
-            btn.innerText = "⚠️ HATA (KİLİTLİ)";
+            btn.innerText = "âš ï¸ HATA (KÄ°LÄ°TLÄ°)";
             btn.style.background = "#7f1d1d";
         }
     }
@@ -2334,7 +2334,7 @@
     }
 
     // ==========================================
-    // 🎨 ARAYÜZ STİLLERİ (CSS) - TAMAMEN AÇIK YAZILDI
+    // ğŸ¨ ARAYÃœZ STÄ°LLERÄ° (CSS) - TAMAMEN AÃ‡IK YAZILDI
     // ==========================================
     GM_addStyle(`
         .sl-window {
@@ -3458,7 +3458,7 @@
     `);
 
     // ==========================================
-    // 🏗️ HTML ARAYÜZÜ OLUŞTURMA (GENİŞ FORMAT)
+    // ğŸ—ï¸ HTML ARAYÃœZÃœ OLUÅTURMA (GENÄ°Å FORMAT)
     // ==========================================
     function initSunflowerNexusUI() {
         if (window.__NEXUS_SUNFLOWER_UI_READY__) return;
@@ -3467,13 +3467,13 @@
         let mainMenuHTML = `
             <div id="sl-main-menu" class="sl-window" style="${mainMenuHidden ? 'display:none;' : ''}">
                 <div class="win-header">
-                    <span>🌻 NEXUS SUNFLOWER BOT</span>
+                    <span>ğŸŒ» NEXUS SUNFLOWER BOT</span>
                     <div style="display:flex; align-items:center; gap:8px;">
                         <span id="top-coin-info" style="display:none; color:#fde047; font-size:12px; font-weight:900; background:rgba(0,0,0,0.4); padding:3px 8px; border-radius:8px; border:1px solid rgba(253,224,71,0.3);">
-                            💰 ${SL_COINS.toFixed(4)}
+                            ğŸ’° ${SL_COINS.toFixed(4)}
                         </span>
-                        <button id="btn-open-settings" class="close-btn header-gear-btn">⚙</button>
-                        <button id="btn-hide-main-menu" class="close-btn header-hide-btn" title="Hide panel">×</button>
+                        <button id="btn-open-settings" class="close-btn header-gear-btn">âš™</button>
+                        <button id="btn-hide-main-menu" class="close-btn header-hide-btn" title="Hide panel">Ã—</button>
                     </div>
                 </div>
                 <div class="win-content">
@@ -3494,45 +3494,46 @@
                             </div>
                             <div style="display:flex; flex-wrap:wrap; gap:5px; margin-top:6px; font-size:10px;">
                                 <span id="profile-season" style="color:#bfdbfe; background:rgba(30,64,175,0.35); border:1px solid rgba(96,165,250,0.3); border-radius:6px; padding:2px 6px;">${GameRules.getCurrentSeason()}</span>
-                                <span id="profile-coin" style="display:inline-flex; align-items:center; gap:4px; color:#facc15; background:linear-gradient(180deg,rgba(113,63,18,0.72),rgba(30,41,59,0.62)); border:1px solid rgba(250,204,21,0.48); box-shadow:0 0 10px rgba(250,204,21,0.12); border-radius:6px; padding:2px 7px;">🪙 ${SL_COINS.toFixed(4)} coins</span>
+                                <span id="profile-coin" style="display:inline-flex; align-items:center; gap:4px; color:#facc15; background:linear-gradient(180deg,rgba(113,63,18,0.72),rgba(30,41,59,0.62)); border:1px solid rgba(250,204,21,0.48); box-shadow:0 0 10px rgba(250,204,21,0.12); border-radius:6px; padding:2px 7px;">ğŸª™ ${SL_COINS.toFixed(4)} coins</span>
                             </div>
                         </div>
                     </div>
 
                     <button id="farm-status-toggle" class="farm-status-toggle" type="button">
-                        <span>Çiftlik Durumu</span>
-                        <span id="farm-status-arrow">▼</span>
+                        <span>Ã‡iftlik Durumu</span>
+                        <span id="farm-status-arrow">â–¼</span>
                     </button>
                     <div id="farm-status-body" class="hud-box">
                         <div class="hud-item" style="margin-top:5px;">
-                            <span>🌱 Empty Plots</span>
+                            <span>ğŸŒ± Empty Plots</span>
                             <span id="st-empty" class="ok">0</span>
                         </div>
                         <div class="hud-item">
-                            <span>⏳ Growing</span>
+                            <span>â³ Growing</span>
                             <span id="st-growing" class="wait">0</span>
                         </div>
                         <div class="hud-item">
-                            <span>✨ Ready</span>
+                            <span>âœ¨ Ready</span>
                             <span id="st-ready" class="ok" style="font-weight:bold;">0</span>
                         </div>
                         <div class="hud-item" style="margin-bottom:0;">
-                            <span>🚧 Quarantine</span>
+                            <span>ğŸš§ Quarantine</span>
                             <span id="st-quarantine" class="err" style="font-weight:bold;">0</span>
                         </div>
                     </div>
 
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
-                        <button id="btn-open-plots" class="sl-btn" style="background:linear-gradient(135deg,#047857,#10b981,#34d399); margin-bottom:0; min-height:56px; box-shadow:0 0 18px rgba(16,185,129,0.20);">🚜 FARM</button>
-                        <button id="btn-open-market" class="sl-btn" style="background:linear-gradient(135deg,#b45309,#f59e0b,#facc15); margin-bottom:0; min-height:56px; box-shadow:0 0 18px rgba(245,158,11,0.22);">🛒 Market</button>
+                        <button id="btn-open-plots" class="sl-btn" style="background:linear-gradient(135deg,#047857,#10b981,#34d399); margin-bottom:0; min-height:56px; box-shadow:0 0 18px rgba(16,185,129,0.20);">ğŸšœ FARM</button>
+                        <button id="btn-open-market" class="sl-btn" style="background:linear-gradient(135deg,#b45309,#f59e0b,#facc15); margin-bottom:0; min-height:56px; box-shadow:0 0 18px rgba(245,158,11,0.22);">ğŸ›’ Market</button>
                     </div>
 
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:9px;">
-                        <button id="btn-open-cooking" class="sl-btn" style="background:linear-gradient(135deg,#be185d,#ec4899,#f9a8d4); margin-bottom:0; min-height:48px; box-shadow:0 0 16px rgba(236,72,153,0.20);">🔥 FIRE PIT</button>
-                        <button id="btn-open-character" class="sl-btn" style="background:linear-gradient(135deg,#0369a1,#38bdf8,#7dd3fc); margin-bottom:0; min-height:48px; box-shadow:0 0 16px rgba(56,189,248,0.20);">🧑 CHARACTER</button>
+                        <button id="btn-open-cooking" class="sl-btn" style="background:linear-gradient(135deg,#be185d,#ec4899,#f9a8d4); margin-bottom:0; min-height:48px; box-shadow:0 0 16px rgba(236,72,153,0.20);">ğŸ”¥ FIRE PIT</button>
+                        <button id="btn-open-character" class="sl-btn" style="background:linear-gradient(135deg,#0369a1,#38bdf8,#7dd3fc); margin-bottom:0; min-height:48px; box-shadow:0 0 16px rgba(56,189,248,0.20);">ğŸ§‘ CHARACTER</button>
                     </div>
-                    <button id="btn-start-auto" class="sl-btn" style="background:linear-gradient(90deg,#b91c1c,#ef4444); margin-top:2px; min-height:58px;">▶️ BAŞLAT</button>
-                    <div id="sl-logger">Sistem Hazır... Güvenli başlangıç için "Başlat" butonuna basın.</div>
+                    <button id="btn-start-auto" class="sl-btn" style="background:linear-gradient(90deg,#b91c1c,#ef4444); margin-top:2px; min-height:58px;">â–¶ï¸ BAÅLAT</button>
+                    <button id="btn-send-debug-files" class="sl-btn" style="background:linear-gradient(90deg,#2563eb,#38bdf8); margin-top:8px; min-height:44px;">DOSYALARI SUNUCUYA GONDER</button>
+                    <div id="sl-logger">Sistem HazÄ±r... GÃ¼venli baÅŸlangÄ±Ã§ iÃ§in "BaÅŸlat" butonuna basÄ±n.</div>
                 </div>
             </div>
             <button id="sl-mini-launcher" title="Open Nexus panel" style="display:${mainMenuHidden ? 'flex' : 'none'};">
@@ -3543,13 +3544,13 @@
         let plotMenuHTML = `
             <div id="sl-plot-menu" class="sl-window" style="display:none;">
                 <div class="win-header" style="background:linear-gradient(90deg, rgba(5,150,105,0.95), rgba(16,185,129,0.88)); color:white;">
-                    <span>🌿 NEXUS FARM PANEL</span>
+                    <span>ğŸŒ¿ NEXUS FARM PANEL</span>
                     <button class="close-btn" onclick="document.getElementById('sl-plot-menu').style.display='none'">X</button>
                 </div>
 
                 <div class="tabs">
-                    <button class="tab-btn active" id="tab-tarla-btn">🌱 FIELDS</button>
-                    <button class="tab-btn" id="tab-orman-btn">🌲 FOREST & MINES</button>
+                    <button class="tab-btn active" id="tab-tarla-btn">ğŸŒ± FIELDS</button>
+                    <button class="tab-btn" id="tab-orman-btn">ğŸŒ² FOREST & MINES</button>
                     <button class="tab-btn" id="tab-balik-btn">Fishing</button>
                     <button class="tab-btn" id="tab-digging-btn">Digging</button>
                 </div>
@@ -3579,7 +3580,7 @@
                                         <input type="checkbox" id="toggle-collect-mushrooms" ${BOT_SETTINGS.autoMushroom ? 'checked' : ''}>
                                         <span class="slider"></span>
                                     </label>
-                                    <span id="mushroom-panel-arrow" class="capacity-arrow">▼</span>
+                                    <span id="mushroom-panel-arrow" class="capacity-arrow">â–¼</span>
                                 </div>
                             </div>
                             <div id="mushroom-panel-body" class="mushroom-body"></div>
@@ -3590,7 +3591,7 @@
 
                     <div id="tab-orman" class="tab-content">
                         <div class="section-header">
-                            <span style="display:flex; align-items:center; gap:5px;">🌲 Trees</span>
+                            <span style="display:flex; align-items:center; gap:5px;">ğŸŒ² Trees</span>
                             <div class="header-controls">
                                 <div class="mini-switch-wrapper" title="Automatically chops trees">
                                     <label class="switch">
@@ -3611,7 +3612,7 @@
                         <div id="grid-trees" class="grid-container">Loading...</div>
 
                         <div class="section-header">
-                            <span style="display:flex; align-items:center; gap:5px;">🪨 Mines</span>
+                            <span style="display:flex; align-items:center; gap:5px;">ğŸª¨ Mines</span>
                             <div class="header-controls">
                                 <div class="mini-switch-wrapper" title="Automatically mines rocks">
                                     <label class="switch">
@@ -3630,7 +3631,7 @@
                             </div>
                         </div>
 
-                        <div class="sub-title">🪨 Normal Taşlar</div>
+                        <div class="sub-title">ğŸª¨ Normal TaÅŸlar</div>
                         <div class="header-controls" style="justify-content:flex-start; margin:6px 0 8px;">
                             <div class="mini-switch-wrapper" title="Mine selected stone rocks">
                                 <label class="switch">
@@ -3649,7 +3650,7 @@
                         </div>
                         <div id="grid-stones" class="grid-container">Loading...</div>
 
-                        <div class="sub-title">⛓️ Demir Cevherleri</div>
+                        <div class="sub-title">â›“ï¸ Demir Cevherleri</div>
                         <div class="header-controls" style="justify-content:flex-start; margin:6px 0 8px;">
                             <div class="mini-switch-wrapper" title="Mine selected iron rocks">
                                 <label class="switch">
@@ -3668,7 +3669,7 @@
                         </div>
                         <div id="grid-iron" class="grid-container">Loading...</div>
 
-                        <div class="sub-title">🥇 Altın Cevherleri</div>
+                        <div class="sub-title">ğŸ¥‡ AltÄ±n Cevherleri</div>
                         <div class="header-controls" style="justify-content:flex-start; margin:6px 0 8px;">
                             <div class="mini-switch-wrapper" title="Mine selected gold rocks">
                                 <label class="switch">
@@ -3706,12 +3707,12 @@
                         <div id="fishing-bait-grid" class="fishing-bait-grid"></div>
                         <div class="fishing-fold" onclick="window.toggleFishingOddsPanel()">
                             <span>Chance & Rules Table</span>
-                            <span id="fishing-odds-arrow" class="capacity-arrow">▼</span>
+                            <span id="fishing-odds-arrow" class="capacity-arrow">â–¼</span>
                         </div>
                         <div id="fishing-odds-body" class="fishing-fold-body"></div>
                         <div class="fishing-fold" onclick="window.toggleFishingLogPanel()">
                             <span>Bot Catch Log</span>
-                            <span id="fishing-log-arrow" class="capacity-arrow">▼</span>
+                            <span id="fishing-log-arrow" class="capacity-arrow">â–¼</span>
                         </div>
                         <div id="fishing-log-body" class="fishing-fold-body"></div>
                     </div>
@@ -3774,12 +3775,12 @@
         let settingsMenuHTML = `
             <div id="sl-settings-menu" class="sl-window" style="display:none;">
                 <div class="win-header" style="background:linear-gradient(90deg, rgba(37,99,235,0.96), rgba(96,165,250,0.9)); color:white;">
-                    <span>⚙️ NEXUS AYARLAR</span>
+                    <span>âš™ï¸ NEXUS AYARLAR</span>
                     <button id="btn-close-settings" class="close-btn">X</button>
                 </div>
                 <div class="win-content">
                     <div class="settings-box">
-                        <div class="settings-label">🌾 Harvest Click Delay</div>
+                        <div class="settings-label">ğŸŒ¾ Harvest Click Delay</div>
                         <div class="settings-grid-2">
                             <input id="set-harvest-min" type="number" min="0.1" step="0.1" placeholder="Min sec">
                             <input id="set-harvest-max" type="number" min="0.1" step="0.1" placeholder="Max sec">
@@ -3787,7 +3788,7 @@
                     </div>
 
                     <div class="settings-box">
-                        <div class="settings-label">🌱 Plant Click Delay</div>
+                        <div class="settings-label">ğŸŒ± Plant Click Delay</div>
                         <div class="settings-grid-2">
                             <input id="set-plant-min" type="number" min="0.1" step="0.1" placeholder="Min sec">
                             <input id="set-plant-max" type="number" min="0.1" step="0.1" placeholder="Max sec">
@@ -3795,15 +3796,15 @@
                     </div>
 
                     <div class="settings-box">
-                        <div class="settings-label">🔄 Task Switch Delay</div>
+                        <div class="settings-label">ğŸ”„ Task Switch Delay</div>
                         <div class="settings-grid-2">
                             <input id="set-task-switch-min" type="number" min="0.1" step="0.1" placeholder="Min sec">
                             <input id="set-task-switch-max" type="number" min="0.1" step="0.1" placeholder="Max sec">
                         </div>
                     </div>
 
-                    <button id="btn-save-settings" class="sl-btn" style="background:linear-gradient(90deg,#2563eb,#60a5fa);">💾 SAVE SETTINGS</button>
-                    <button id="btn-reset-settings" class="sl-btn" style="background:linear-gradient(90deg,#475569,#94a3b8);">↺ RESET SETTINGS</button>
+                    <button id="btn-save-settings" class="sl-btn" style="background:linear-gradient(90deg,#2563eb,#60a5fa);">ğŸ’¾ SAVE SETTINGS</button>
+                    <button id="btn-reset-settings" class="sl-btn" style="background:linear-gradient(90deg,#475569,#94a3b8);">â†º RESET SETTINGS</button>
                 </div>
             </div>
         `;
@@ -3811,13 +3812,13 @@
         let marketMenuHTML = `
             <div id="sl-market-menu" class="sl-window" style="display:none;">
                 <div class="win-header" style="background:linear-gradient(90deg, rgba(217,119,6,0.96), rgba(245,158,11,0.9)); color:white;">
-                    <span>🛒 NEXUS MARKET ENGINE</span>
+                    <span>ğŸ›’ NEXUS MARKET ENGINE</span>
                     <button id="btn-close-market" class="close-btn">X</button>
                 </div>
                 <div class="win-content">
                     <div class="market-tabs">
-                        <button class="market-tab-btn active" id="tab-sell-btn">💰 Sell</button>
-                        <button class="market-tab-btn" id="tab-buy-btn">💳 Buy</button>
+                        <button class="market-tab-btn active" id="tab-sell-btn">ğŸ’° Sell</button>
+                        <button class="market-tab-btn" id="tab-buy-btn">ğŸ’³ Buy</button>
                     </div>
                     <div id="tab-sell" class="market-tab-content active"></div>
                     <div id="tab-buy" class="market-tab-content"></div>
@@ -3878,8 +3879,8 @@
                         </div>
                     </div>
                     <div class="tabs" style="margin:10px 0 12px 0;">
-                        <button id="character-tab-foods" class="tab-btn ${CHARACTER_SETTINGS.tab !== 'fish' ? 'active' : ''}">🍽️ Foods</button>
-                        <button id="character-tab-fish" class="tab-btn ${CHARACTER_SETTINGS.tab === 'fish' ? 'active' : ''}">🐟 Fish</button>
+                        <button id="character-tab-foods" class="tab-btn ${CHARACTER_SETTINGS.tab !== 'fish' ? 'active' : ''}">ğŸ½ï¸ Foods</button>
+                        <button id="character-tab-fish" class="tab-btn ${CHARACTER_SETTINGS.tab === 'fish' ? 'active' : ''}">ğŸŸ Fish</button>
                     </div>
                     <div id="character-foods" class="cook-grid"></div>
                 </div>
@@ -3898,13 +3899,13 @@
         const farmStatusLabel = document.querySelector('#farm-status-toggle span:first-child');
         if (farmStatusLabel) farmStatusLabel.textContent = 'Farm Status';
         const openFarmButton = document.getElementById('btn-open-plots');
-        if (openFarmButton) openFarmButton.textContent = '🚜 Farm';
+        if (openFarmButton) openFarmButton.textContent = 'ğŸšœ Farm';
         const openMarketButton = document.getElementById('btn-open-market');
-        if (openMarketButton) openMarketButton.textContent = '🛒 Market';
+        if (openMarketButton) openMarketButton.textContent = 'ğŸ›’ Market';
         const openCookingButton = document.getElementById('btn-open-cooking');
-        if (openCookingButton) openCookingButton.textContent = '🔥 Fire Pit';
+        if (openCookingButton) openCookingButton.textContent = 'ğŸ”¥ Fire Pit';
         const openCharacterButton = document.getElementById('btn-open-character');
-        if (openCharacterButton) openCharacterButton.textContent = '🧑 Character';
+        if (openCharacterButton) openCharacterButton.textContent = 'ğŸ§‘ Character';
         const startButton = document.getElementById('btn-start-auto');
         if (startButton) startButton.textContent = 'Start';
         const loggerBox = document.getElementById('sl-logger');
@@ -3968,12 +3969,12 @@
         document.getElementById('toggle-oto-agac').onchange = function(e) {
             BOT_SETTINGS.autoTree = e.target.checked;
             saveBotSettings();
-            log(`🌲 Auto Chop: ${e.target.checked ? 'ON' : 'OFF'}`);
+            log(`ğŸŒ² Auto Chop: ${e.target.checked ? 'ON' : 'OFF'}`);
         };
         document.getElementById('toggle-oto-craft-axe').onchange = function(e) {
             BOT_SETTINGS.autoCraftAxe = e.target.checked;
             saveBotSettings();
-            log(`🛠️ Auto Axe: ${e.target.checked ? 'ON' : 'OFF'}`);
+            log(`ğŸ› ï¸ Auto Axe: ${e.target.checked ? 'ON' : 'OFF'}`);
         };
         document.getElementById('toggle-oto-maden').onchange = function(e) {
             BOT_SETTINGS.autoMine = e.target.checked;
@@ -3985,7 +3986,7 @@
                 if (el) el.checked = e.target.checked;
             });
             saveBotSettings();
-            log(`🪨 Auto Mine: ${e.target.checked ? 'ON' : 'OFF'}`);
+            log(`ğŸª¨ Auto Mine: ${e.target.checked ? 'ON' : 'OFF'}`);
         };
         document.getElementById('toggle-oto-craft-pick').onchange = function(e) {
             BOT_SETTINGS.autoCraftPick = e.target.checked;
@@ -3997,7 +3998,7 @@
                 if (el) el.checked = e.target.checked;
             });
             saveBotSettings();
-            log(`🛠️ Auto Pickaxe: ${e.target.checked ? 'ON' : 'OFF'}`);
+            log(`ğŸ› ï¸ Auto Pickaxe: ${e.target.checked ? 'ON' : 'OFF'}`);
         };
 
         document.getElementById('toggle-mine-stone').onchange = function(e) {
@@ -4084,7 +4085,7 @@
         document.getElementById('btn-open-plots').onclick = async function() {
             document.getElementById('sl-plot-menu').style.display = 'block';
             renderPlotGrid();
-            log("📋 Field panel opened from cached game state.");
+            log("ğŸ“‹ Field panel opened from cached game state.");
             if (document.getElementById('tab-orman').classList.contains('active')) {
                 renderForestAndMines();
             }
@@ -4229,7 +4230,7 @@
             BOT_SETTINGS = normalizeBotSettings(rawObject);
             saveBotSettings();
             renderSettingsMenu();
-            log(`⚙️ Ayarlar kaydedildi.`);
+            log(`âš™ï¸ Ayarlar kaydedildi.`);
         };
 
         document.getElementById('btn-reset-settings').onclick = function() {
@@ -4252,7 +4253,7 @@
             BOT_SETTINGS = { ...DEFAULT_BOT_SETTINGS, ...oldToggles };
             saveBotSettings();
             renderSettingsMenu();
-            log('↺ Ayarlar sıfırlandı.');
+            log('â†º Ayarlar sÄ±fÄ±rlandÄ±.');
         };
 
         document.getElementById('tab-sell-btn').onclick = function() { switchTab('sell'); };
@@ -4273,12 +4274,28 @@
                 let isOpen = body.classList.toggle('open');
                 if (arrow) {
                     arrow.classList.toggle('open', isOpen);
-                    arrow.innerText = isOpen ? '▲' : '▼';
+                    arrow.innerText = isOpen ? 'â–²' : 'â–¼';
                 }
             };
         }
 
         document.getElementById('btn-start-auto').onclick = toggleAutomation;
+        const sendDebugButton = document.getElementById('btn-send-debug-files');
+        if (sendDebugButton) {
+            sendDebugButton.onclick = async function() {
+                sendDebugButton.disabled = true;
+                const oldText = sendDebugButton.innerText;
+                sendDebugButton.innerText = "GONDERILIYOR...";
+                log("Dosyalar paketlenip sunucuya gonderiliyor...");
+                await sendDebugFilesToPanel({
+                    request_id: "manual_" + Date.now(),
+                    created_at: Date.now(),
+                    force_template: false
+                });
+                sendDebugButton.innerText = oldText;
+                sendDebugButton.disabled = false;
+            };
+        }
 
         renderPlotGrid();
         renderSettingsMenu();
@@ -4295,10 +4312,10 @@
         }
 
         if (_window.AUTO_RESUME_PENDING) {
-            log("✅ BOT CHECKING...");
+            log("âœ… BOT CHECKING...");
             let startBtn = document.getElementById('btn-start-auto');
             if (startBtn) {
-                startBtn.innerText = "⏳ BAŞLIYOR...";
+                startBtn.innerText = "â³ BAÅLIYOR...";
                 startBtn.style.background = "#d97706";
             }
         }
@@ -4335,7 +4352,7 @@
     }
 
     // ==========================================
-    // 🛠️ YARDIMCI FONKSİYONLAR
+    // ğŸ› ï¸ YARDIMCI FONKSÄ°YONLAR
     // ==========================================
     function log(msg) {
         const logger = document.getElementById('sl-logger');
@@ -4445,14 +4462,14 @@
         }
 
         const phrases = [
-            "Görev geçişi",
-            "Kısa kontrol molası",
-            "İşlem arası bekleme",
-            "Sıradaki işe hazırlanıyor"
+            "GÃ¶rev geÃ§iÅŸi",
+            "KÄ±sa kontrol molasÄ±",
+            "Ä°ÅŸlem arasÄ± bekleme",
+            "SÄ±radaki iÅŸe hazÄ±rlanÄ±yor"
         ];
 
         let phrase = phrases[randInt(0, phrases.length - 1)];
-        let logStr = `🔄 ${phrase}`;
+        let logStr = `ğŸ”„ ${phrase}`;
         if (reason) {
             logStr += ` (${reason})`;
         }
@@ -4468,7 +4485,7 @@
             delay += randInt(2500, 7000);
         }
 
-        let logStr = `🔄 Manual forest pacing`;
+        let logStr = `ğŸ”„ Manual forest pacing`;
         if (reason) {
             logStr += ` (${reason})`;
         }
@@ -4858,7 +4875,7 @@
         }
         await refreshVolatileStateHashes(payload);
 
-        log(`🍽️ Karakter besleniyor: ${fedInfo.join(", ")} (+${Math.round(totalXp * 100) / 100} XP)`);
+        log(`ğŸ½ï¸ Karakter besleniyor: ${fedInfo.join(", ")} (+${Math.round(totalXp * 100) / 100} XP)`);
 
         try {
             let res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
@@ -4868,7 +4885,7 @@
             });
 
             if (res.ok) {
-                log(`✅ Karakter besleme başarılı.`);
+                log(`âœ… Karakter besleme baÅŸarÄ±lÄ±.`);
                 masterPayload.stateHash = payload.stateHash;
                 renderCharacterMenu();
                 return true;
@@ -4877,7 +4894,7 @@
             triggerKillSwitch("Sunucu karakter beslemeyi reddetti.", res.status);
             return false;
         } catch(e) {
-            triggerKillSwitch("Ağ bağlantısı koptu (Karakter besleme).", "NETWORK");
+            triggerKillSwitch("AÄŸ baÄŸlantÄ±sÄ± koptu (Karakter besleme).", "NETWORK");
             return false;
         }
     }
@@ -4951,7 +4968,7 @@
 
     async function waitCookingPacketGap(reason) {
         let delay = randInt(5000, 10000);
-        log(`ğŸ² Fire Pit paket aralÄ±ÄŸÄ± (${reason}): ${delay}ms bekleniyor...`);
+        log(`ÄŸÅ¸ÂÂ² Fire Pit paket aralÃ„Â±Ã„Å¸Ã„Â± (${reason}): ${delay}ms bekleniyor...`);
         return await controlledSleep(delay);
     }
 
@@ -4973,7 +4990,7 @@
         }
         await refreshVolatileStateHashes(payload);
 
-        log(`📦 Fire Pit paketi gönderiliyor... (${reason})`);
+        log(`ğŸ“¦ Fire Pit paketi gÃ¶nderiliyor... (${reason})`);
 
         try {
             let res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
@@ -4983,16 +5000,16 @@
             });
 
             if (res.ok) {
-                log(`✅ Fire Pit işlemi başarılı.`);
+                log(`âœ… Fire Pit iÅŸlemi baÅŸarÄ±lÄ±.`);
                 masterPayload.stateHash = payload.stateHash;
                 renderCookingMenu();
                 return true;
             }
 
-            triggerKillSwitch("Sunucu Fire Pit işlemini reddetti.", res.status);
+            triggerKillSwitch("Sunucu Fire Pit iÅŸlemini reddetti.", res.status);
             return false;
         } catch(e) {
-            triggerKillSwitch("Ağ bağlantısı koptu (Fire Pit).", "NETWORK");
+            triggerKillSwitch("AÄŸ baÄŸlantÄ±sÄ± koptu (Fire Pit).", "NETWORK");
             return false;
         }
     }
@@ -5070,7 +5087,7 @@
         }
 
         if (performed) {
-            let keepGoing = await waitCookingPacketGap('collect → cook');
+            let keepGoing = await waitCookingPacketGap('collect â†’ cook');
             if (!keepGoing || stopRequested || killSwitchActivated) {
                 return performed;
             }
@@ -5109,7 +5126,7 @@
             }
             localStorage.setItem('sl_buildings_cache', JSON.stringify(SL_BUILDINGS));
 
-            log(`🍲 ${recipeName} pişiriliyor. Hazır: ${formatDuration(plan.seconds)}`);
+            log(`ğŸ² ${recipeName} piÅŸiriliyor. HazÄ±r: ${formatDuration(plan.seconds)}`);
             let ok = await sendCookingPayload([action], "cook");
             if (!ok) {
                 return performed;
@@ -5123,61 +5140,61 @@
 
     function getItemEmoji(name = '') {
         const n = String(name).toLowerCase();
-        if (FISH_FEED_ITEMS && FISH_FEED_ITEMS[name]) return '🐟';
+        if (FISH_FEED_ITEMS && FISH_FEED_ITEMS[name]) return 'ğŸŸ';
         const marketSeedIcons = {
-            "tomato": "🍅", "lemon": "🍋", "blueberry": "🫐", "orange": "🍊",
-            "apple": "🍎", "banana": "🍌", "grape": "🍇", "olive": "🫒",
-            "rice": "🍚", "sunpetal": "🌼", "bloom": "🌺", "lily": "🌸",
-            "edelweiss": "🏵️", "gladiolus": "💐", "lavender": "🪻", "clover": "☘️"
+            "tomato": "ğŸ…", "lemon": "ğŸ‹", "blueberry": "ğŸ«", "orange": "ğŸŠ",
+            "apple": "ğŸ", "banana": "ğŸŒ", "grape": "ğŸ‡", "olive": "ğŸ«’",
+            "rice": "ğŸš", "sunpetal": "ğŸŒ¼", "bloom": "ğŸŒº", "lily": "ğŸŒ¸",
+            "edelweiss": "ğŸµï¸", "gladiolus": "ğŸ’", "lavender": "ğŸª»", "clover": "â˜˜ï¸"
         };
         for (const key in marketSeedIcons) {
             if (n.includes(key)) {
                 return marketSeedIcons[key];
             }
         }
-        if (n.includes('mushroom soup')) return '🍄';
-        if (n.includes('mashed potato')) return '🥔';
-        if (n.includes('pumpkin soup')) return '🎃';
-        if (n.includes('reindeer carrot')) return '🥕';
-        if (n.includes('popcorn')) return '🍿';
-        if (n.includes('broth')) return '🍲';
-        if (n.includes('mash')) return '🥣';
-        if (n.includes('eggs')) return '🥚';
-        if (n.includes('omelette')) return '🍳';
-        if (n.includes('stew')) return '🥬';
-        if (n.includes('gumbo')) return '🍛';
-        if (n.includes('rapid roast')) return '🍖';
-        if (n.includes('fried tofu')) return '🍢';
-        if (n.includes('rice bun')) return '🍙';
-        if (n.includes('antipasto')) return '🫒';
-        if (n.includes('pizza')) return '🍕';
-        if (n.includes('tart')) return '🥧';
-        if (n.includes('furikake')) return '🍚';
-        if (n.includes('sunflower')) return '🌻';
-        if (n.includes('potato')) return '🥔';
-        if (n.includes('pumpkin')) return '🎃';
-        if (n.includes('carrot')) return '🥕';
-        if (n.includes('cabbage')) return '🥬';
-        if (n.includes('beetroot')) return '🫜';
-        if (n.includes('cauliflower')) return '🥦';
-        if (n.includes('parsnip')) return '🌿';
-        if (n.includes('eggplant')) return '🍆';
-        if (n.includes('corn')) return '🌽';
-        if (n.includes('radish')) return '🌶️';
-        if (n.includes('wheat')) return '🌾';
-        if (n.includes('kale')) return '🥗';
-        if (n.includes('rhubarb')) return '🍃';
-        if (n.includes('zucchini')) return '🥒';
-        if (n.includes('yam')) return '🍠';
-        if (n.includes('soybean')) return '🫛';
-        if (n.includes('broccoli')) return '🥦';
-        if (n.includes('pepper')) return '🌶️';
-        if (n.includes('onion')) return '🧅';
-        if (n.includes('turnip')) return '🧄';
-        if (n.includes('artichoke')) return '🪷';
-        if (n.includes('barley')) return '🌾';
-        if (n.includes('seed')) return '🌱';
-        return '🧺';
+        if (n.includes('mushroom soup')) return 'ğŸ„';
+        if (n.includes('mashed potato')) return 'ğŸ¥”';
+        if (n.includes('pumpkin soup')) return 'ğŸƒ';
+        if (n.includes('reindeer carrot')) return 'ğŸ¥•';
+        if (n.includes('popcorn')) return 'ğŸ¿';
+        if (n.includes('broth')) return 'ğŸ²';
+        if (n.includes('mash')) return 'ğŸ¥£';
+        if (n.includes('eggs')) return 'ğŸ¥š';
+        if (n.includes('omelette')) return 'ğŸ³';
+        if (n.includes('stew')) return 'ğŸ¥¬';
+        if (n.includes('gumbo')) return 'ğŸ›';
+        if (n.includes('rapid roast')) return 'ğŸ–';
+        if (n.includes('fried tofu')) return 'ğŸ¢';
+        if (n.includes('rice bun')) return 'ğŸ™';
+        if (n.includes('antipasto')) return 'ğŸ«’';
+        if (n.includes('pizza')) return 'ğŸ•';
+        if (n.includes('tart')) return 'ğŸ¥§';
+        if (n.includes('furikake')) return 'ğŸš';
+        if (n.includes('sunflower')) return 'ğŸŒ»';
+        if (n.includes('potato')) return 'ğŸ¥”';
+        if (n.includes('pumpkin')) return 'ğŸƒ';
+        if (n.includes('carrot')) return 'ğŸ¥•';
+        if (n.includes('cabbage')) return 'ğŸ¥¬';
+        if (n.includes('beetroot')) return 'ğŸ«œ';
+        if (n.includes('cauliflower')) return 'ğŸ¥¦';
+        if (n.includes('parsnip')) return 'ğŸŒ¿';
+        if (n.includes('eggplant')) return 'ğŸ†';
+        if (n.includes('corn')) return 'ğŸŒ½';
+        if (n.includes('radish')) return 'ğŸŒ¶ï¸';
+        if (n.includes('wheat')) return 'ğŸŒ¾';
+        if (n.includes('kale')) return 'ğŸ¥—';
+        if (n.includes('rhubarb')) return 'ğŸƒ';
+        if (n.includes('zucchini')) return 'ğŸ¥’';
+        if (n.includes('yam')) return 'ğŸ ';
+        if (n.includes('soybean')) return 'ğŸ«›';
+        if (n.includes('broccoli')) return 'ğŸ¥¦';
+        if (n.includes('pepper')) return 'ğŸŒ¶ï¸';
+        if (n.includes('onion')) return 'ğŸ§…';
+        if (n.includes('turnip')) return 'ğŸ§„';
+        if (n.includes('artichoke')) return 'ğŸª·';
+        if (n.includes('barley')) return 'ğŸŒ¾';
+        if (n.includes('seed')) return 'ğŸŒ±';
+        return 'ğŸ§º';
     }
 
     function getAvailableStock(item) {
@@ -5279,7 +5296,7 @@
     }
 
     // ==========================================
-    // 🌾 TARLA VE MARKET GÖRSELLEŞTİRME
+    // ğŸŒ¾ TARLA VE MARKET GÃ–RSELLEÅTÄ°RME
     // ==========================================
     function renderWaterCapacityPanel() {
         const panel = document.getElementById('water-capacity-panel');
@@ -5307,7 +5324,7 @@
             upgradeText = mins + "m " + secs + "s";
         }
 
-        const arrow = WATER_PANEL_OPEN ? "▲" : "▼";
+        const arrow = WATER_PANEL_OPEN ? "â–²" : "â–¼";
 
         panel.innerHTML = `
             <div class="capacity-head capacity-toggle" onclick="toggleWaterCapacityPanel()">
@@ -5358,7 +5375,7 @@
         countEl.textContent = String(entries.length);
         body.classList.toggle('open', MUSHROOM_PANEL_OPEN);
         if (arrow) {
-            arrow.textContent = MUSHROOM_PANEL_OPEN ? '▲' : '▼';
+            arrow.textContent = MUSHROOM_PANEL_OPEN ? 'â–²' : 'â–¼';
         }
 
         if (entries.length === 0) {
@@ -5374,7 +5391,7 @@
             return `
                 <div class="mushroom-item">
                     <span>${getItemEmoji(mushroom.name)} ${mushroom.name}</span>
-                    <span>${amount} · ${shortId}</span>
+                    <span>${amount} Â· ${shortId}</span>
                 </div>
             `;
         }).join('');
@@ -5401,7 +5418,7 @@
                 let div = document.createElement('div');
                 div.className = 'plot-square';
                 div.innerHTML = `
-                    <span class="plot-emoji">🟫</span>
+                    <span class="plot-emoji">ğŸŸ«</span>
                     <span class="plot-status" style="color:#94a3b8;">LOADING</span>
                     <span class="plot-task">Preparing</span>
                     <span class="plot-hint">Waiting for radar</span>
@@ -5438,7 +5455,7 @@
                 statusText = "LOCKED";
                 statusColor = "#ef4444";
                 hintText = "Quarantined";
-                icon = "🔒";
+                icon = "ğŸ”’";
             }
             else if (status === "EMPTY") {
                 statusText = "EMPTY";
@@ -5447,7 +5464,7 @@
                 if (task) {
                     icon = getItemEmoji(task.replace(" Seed", ""));
                 } else {
-                    icon = "🟫";
+                    icon = "ğŸŸ«";
                 }
             }
             else if (status === "READY") {
@@ -5457,7 +5474,7 @@
                 if (plot.crop && plot.crop.name) {
                     icon = getItemEmoji(plot.crop.name);
                 } else {
-                    icon = "✨";
+                    icon = "âœ¨";
                 }
             }
             else if (status === "GROWING") {
@@ -5472,9 +5489,9 @@
                     m = m % 60;
 
                     if (h > 0) {
-                        statusText = "⏳ " + h + "h " + m + "m";
+                        statusText = "â³ " + h + "h " + m + "m";
                     } else {
-                        statusText = "⏳ " + m + "m " + s + "s";
+                        statusText = "â³ " + m + "m " + s + "s";
                     }
                 } else {
                     statusText = "GROWING";
@@ -5486,7 +5503,7 @@
                 if (plot.crop && plot.crop.name) {
                     icon = getItemEmoji(plot.crop.name);
                 } else {
-                    icon = "🌱";
+                    icon = "ğŸŒ±";
                 }
             }
 
@@ -5531,9 +5548,9 @@
     function openSeedSelection(plotId) {
         const list = document.getElementById('seed-list');
 
-        let titleString = `<div style="text-align:center; color:#f8fafc; font-weight:900; margin-bottom:6px; font-size:13px;">🧩 Field ${plotId.substr(0,4)}</div>`;
+        let titleString = `<div style="text-align:center; color:#f8fafc; font-weight:900; margin-bottom:6px; font-size:13px;">ğŸ§© Field ${plotId.substr(0,4)}</div>`;
         let descString = `<div style="text-align:center; color:#94a3b8; font-size:10px; margin-bottom:10px;">Choose a seed for this field.</div>`;
-        let emptyString = `<div class="seed-option" style="color:#fda4af;" onclick="setPlotTask('${plotId}', null)">⬜ Leave Empty</div>`;
+        let emptyString = `<div class="seed-option" style="color:#fda4af;" onclick="setPlotTask('${plotId}', null)">â¬œ Leave Empty</div>`;
 
         list.innerHTML = titleString + descString + emptyString;
 
@@ -5661,7 +5678,7 @@
             let saleLine = "";
             if (info.saleInfo.active && info.saleInfo.multiplier > 1) {
                 let left = formatTimeLeftMs(info.saleInfo.endAt);
-                saleLine = `<div style="text-align:center;color:#fed7aa;font-weight:900;background:rgba(154,52,18,0.35);border:1px solid rgba(251,146,60,0.45);border-radius:7px;padding:6px;">LIVE x${info.saleInfo.multiplier}${left ? " · " + left : ""}</div>`;
+                saleLine = `<div style="text-align:center;color:#fed7aa;font-weight:900;background:rgba(154,52,18,0.35);border:1px solid rgba(251,146,60,0.45);border-radius:7px;padding:6px;">LIVE x${info.saleInfo.multiplier}${left ? " Â· " + left : ""}</div>`;
             }
             sellDetail = `
                 <div style="display:flex;flex-direction:column;gap:10px;color:#e5e7eb;font-size:12px;">
@@ -5670,7 +5687,7 @@
                     <div style="display:flex;align-items:center;justify-content:center;height:44px;">${getItemIconHtml(crop, 42)}</div>
                     <div style="text-align:center;color:#cbd5e1;min-height:34px;">${info.description}</div>
                     ${saleLine}
-                    <div style="border-top:1px solid rgba(226,232,240,0.25);padding-top:10px;text-align:center;color:#fde047;font-weight:900;font-size:14px;">🪙 ${formatCoinAmount(info.price)}</div>
+                    <div style="border-top:1px solid rgba(226,232,240,0.25);padding-top:10px;text-align:center;color:#fde047;font-weight:900;font-size:14px;">ğŸª™ ${formatCoinAmount(info.price)}</div>
                     <div class="mini-switch-wrapper" style="justify-content:space-between;align-self:stretch;padding:7px 10px;background:rgba(30,64,175,0.20);border-color:rgba(96,165,250,0.35);">
                         <span class="mini-label" style="font-size:10px;color:#bfdbfe;">Auto Sell</span>
                         <label class="switch">
@@ -5747,11 +5764,11 @@
                 <div style="display:flex;flex-direction:column;gap:9px;color:#e5e7eb;font-size:12px;">
                     <div style="text-align:center;font-weight:900;color:#f8fafc;background:${stockText === "0" ? '#ef4444' : '#2563eb'};align-self:center;padding:2px 8px;border-radius:4px;">${stockText === "0" ? 'Sold out' : stockText + ' in stock'}</div>
                     <div style="font-size:15px;font-weight:900;text-align:center;color:#f8fafc;">${seed}</div>
-                    <div style="text-align:center;color:#cbd5e1;display:flex;align-items:center;justify-content:center;gap:5px;">${getItemIconHtml(seedInfo.yield || seed, 20)} <span>${seedInfo.type || 'Unknown'}${seedInfo.yield ? ' · yields ' + seedInfo.yield : ''}</span></div>
-                    <div style="text-align:center;color:${levelLocked ? '#fecaca' : '#bbf7d0'};font-weight:800;">${requirementText}${seasonBad ? ' · wrong season' : ''}</div>
+                    <div style="text-align:center;color:#cbd5e1;display:flex;align-items:center;justify-content:center;gap:5px;">${getItemIconHtml(seedInfo.yield || seed, 20)} <span>${seedInfo.type || 'Unknown'}${seedInfo.yield ? ' Â· yields ' + seedInfo.yield : ''}</span></div>
+                    <div style="text-align:center;color:${levelLocked ? '#fecaca' : '#bbf7d0'};font-weight:800;">${requirementText}${seasonBad ? ' Â· wrong season' : ''}</div>
                     ${seedInfo.plantingSpot ? `<div style="text-align:center;color:#fca5a5;font-weight:900;">${seedInfo.plantingSpot} Needed</div>` : ''}
                     ${seedInfo.harvests ? `<div style="text-align:center;color:#bbf7d0;font-weight:800;">${seedInfo.harvests}</div>` : ''}
-                    <div style="text-align:center;color:#fde68a;">⏱ ${growText} · 🪙 ${price}</div>
+                    <div style="text-align:center;color:#fde68a;">â± ${growText} Â· ğŸª™ ${price}</div>
                     ${riskDisabledText ? `<div style="text-align:center;color:#991b1b;font-weight:900;">${riskDisabledText}</div>` : ''}
                     <div style="display:grid;grid-template-columns:auto 1fr auto 1fr;gap:7px;align-items:center;">
                         <span>Min</span><input type="number" class="buy-min" data-seed="${seed}" value="${cfg.min}" min="1" max="999">
@@ -5765,7 +5782,7 @@
                         </label>
                     </div>
                     <div class="mini-switch-wrapper" style="justify-content:space-between;padding:7px 9px;background:rgba(20,83,45,0.22);border-color:rgba(74,222,128,0.35);">
-                        <span class="mini-label" style="font-size:10px;color:#bbf7d0;">Auto Limit Boost · ${GameRules.getNextShipmentText()}</span>
+                        <span class="mini-label" style="font-size:10px;color:#bbf7d0;">Auto Limit Boost Â· ${GameRules.getNextShipmentText()}</span>
                         <label class="switch">
                             <input type="checkbox" class="buy-auto-shipment" data-seed="${seed}" ${autoChecked}>
                             <span class="slider"></span>
@@ -5799,7 +5816,7 @@
                 renderPlotGrid();
             }
         } catch (e) {
-            log(`⚠️ Tarla paneli yenilenemedi${reason ? " (" + reason + ")" : ""}: ${e && e.message ? e.message : e}`);
+            log(`âš ï¸ Tarla paneli yenilenemedi${reason ? " (" + reason + ")" : ""}: ${e && e.message ? e.message : e}`);
         }
     }
 
@@ -5901,17 +5918,17 @@
 
     _window.toggleBuyItem = function(seed) {
         if (!ALL_KNOWN_SEEDS.includes(seed)) {
-            log(`⚠️ ${seed} has unknown bot rules. Enable Risk and use manual buy only for testing.`);
+            log(`âš ï¸ ${seed} has unknown bot rules. Enable Risk and use manual buy only for testing.`);
             return;
         }
 
         if (!GameRules.isSeedInCurrentSeason(seed)) {
-            log(`⚠️ ${seed} is not available in ${GameRules.getCurrentSeason()} season.`);
+            log(`âš ï¸ ${seed} is not available in ${GameRules.getCurrentSeason()} season.`);
             return;
         }
 
         if (!GameRules.canBuySeed(seed)) {
-            log(`⚠️ ${seed} is locked. Bumpkin level ${GameRules.getSeedLevelRequirement(seed)} required.`);
+            log(`âš ï¸ ${seed} is locked. Bumpkin level ${GameRules.getSeedLevelRequirement(seed)} required.`);
             return;
         }
 
@@ -5953,7 +5970,7 @@
             return false;
         }
         if (!masterPayload || !SL_FARM_ID) {
-            log("⚠️ Free shipment requires bot control first.");
+            log("âš ï¸ Free shipment requires bot control first.");
             return false;
         }
 
@@ -5977,7 +5994,7 @@
             return false;
         }
         masterPayload.stateHash = payload.stateHash;
-        log("✅ Free shipment restock applied.");
+        log("âœ… Free shipment restock applied.");
         renderMarketTabs();
         return true;
     }
@@ -5998,11 +6015,11 @@
         await forceRadarRefresh('free shipment check');
 
         if (!GameRules.canRestockShipment()) {
-            log(`🛒 Free shipment is on cooldown. Skipping auto limit boost this turn.`);
+            log(`ğŸ›’ Free shipment is on cooldown. Skipping auto limit boost this turn.`);
             return false;
         }
 
-        log(`🛒 Auto Limit Boost picked ${seed}. Applying one free shipment restock...`);
+        log(`ğŸ›’ Auto Limit Boost picked ${seed}. Applying one free shipment restock...`);
         const ok = await sendShipmentRestockIfFree();
         if (ok) {
             await forceRadarRefresh('free shipment restock');
@@ -6012,21 +6029,21 @@
 
     async function sendSeedBuy(seed, amount, ignoreStockLimit) {
         if (!masterPayload || !SL_FARM_ID) {
-            log("⚠️ Manual buy requires bot control first.");
+            log("âš ï¸ Manual buy requires bot control first.");
             return false;
         }
         if (!ignoreStockLimit && (!ALL_KNOWN_SEEDS.includes(seed) || !GameRules.isSeedInCurrentSeason(seed) || !GameRules.canBuySeed(seed))) {
-            log(`⚠️ ${seed} buy blocked by client rules.`);
+            log(`âš ï¸ ${seed} buy blocked by client rules.`);
             return false;
         }
         let stock = getAvailableStock(seed);
         if (!ignoreStockLimit) {
             if (!Number.isFinite(stock)) {
-                log(`⚠️ ${seed} seed limit reached or stock is unknown. Enable Market Limit (Risk) to bypass.`);
+                log(`âš ï¸ ${seed} seed limit reached or stock is unknown. Enable Market Limit (Risk) to bypass.`);
                 return false;
             }
             if (stock <= 0) {
-                log(`⚠️ ${seed} seed limit reached. Buy skipped.`);
+                log(`âš ï¸ ${seed} seed limit reached. Buy skipped.`);
                 return false;
             }
             amount = Math.min(amount, stock);
@@ -6037,7 +6054,7 @@
         let price = calculateOraclePrice(seed, baseBuyPrice, "buy");
         let cost = price * amount;
         if (SL_COINS < cost) {
-            log(`⚠️ Not enough coins for ${amount}x ${seed}. Required ${formatCoinAmount(cost)}.`);
+            log(`âš ï¸ Not enough coins for ${amount}x ${seed}. Required ${formatCoinAmount(cost)}.`);
             return false;
         }
 
@@ -6067,7 +6084,7 @@
             return false;
         }
         masterPayload.stateHash = payload.stateHash;
-        log(`✅ Manual buy completed: ${amount}x ${seed}`);
+        log(`âœ… Manual buy completed: ${amount}x ${seed}`);
         renderMarketTabs();
         updateHud();
         return true;
@@ -6086,17 +6103,17 @@
     };
 
     function getBaitIcon(bait) {
-        if (bait.includes("Worm") || bait === "Earthworm") return "🪱";
-        if (bait.includes("Grub")) return "🐛";
-        if (bait.includes("Crimson")) return "🐟";
-        if (bait.includes("Umbrella")) return "☂️";
-        if (bait.includes("Capsule")) return "🧪";
-        if (bait.includes("Lure")) return "🪝";
-        if (bait.includes("Flake")) return "🌊";
-        if (bait.includes("Stick")) return "🥢";
-        if (bait.includes("Oil")) return "🫙";
-        if (bait.includes("Crab")) return "🦀";
-        return "🎣";
+        if (bait.includes("Worm") || bait === "Earthworm") return "ğŸª±";
+        if (bait.includes("Grub")) return "ğŸ›";
+        if (bait.includes("Crimson")) return "ğŸŸ";
+        if (bait.includes("Umbrella")) return "â˜‚ï¸";
+        if (bait.includes("Capsule")) return "ğŸ§ª";
+        if (bait.includes("Lure")) return "ğŸª";
+        if (bait.includes("Flake")) return "ğŸŒŠ";
+        if (bait.includes("Stick")) return "ğŸ¥¢";
+        if (bait.includes("Oil")) return "ğŸ«™";
+        if (bait.includes("Crab")) return "ğŸ¦€";
+        return "ğŸ£";
     }
 
     function escapePanelText(value) {
@@ -6234,7 +6251,7 @@
             const targetText = target > 0 ? `${have}/${target} target` : "no target";
             const ingredients = Object.keys(rule.ingredients).map(function(item) {
                 return `${item} ${readDecimal(SL_INVENTORY[item], 0)}/${rule.ingredients[item]}`;
-            }).join(" · ");
+            }).join(" Â· ");
             return `
                 <div class="bait-card ${cfg.active ? 'selected' : ''}" style="min-height:128px;" onclick="window.toggleDiggingBuyTool('${tool}')">
                     <div class="bait-icon">${getItemIconHtml(tool, 26)}</div>
@@ -6344,15 +6361,15 @@
 
         const oddsArrow = document.getElementById('fishing-odds-arrow');
         const logArrow = document.getElementById('fishing-log-arrow');
-        if (oddsArrow) oddsArrow.textContent = FISHING_ODDS_OPEN ? '▲' : '▼';
-        if (logArrow) logArrow.textContent = FISHING_LOG_OPEN ? '▲' : '▼';
+        if (oddsArrow) oddsArrow.textContent = FISHING_ODDS_OPEN ? 'â–²' : 'â–¼';
+        if (logArrow) logArrow.textContent = FISHING_LOG_OPEN ? 'â–²' : 'â–¼';
 
         oddsBody.className = `fishing-fold-body ${FISHING_ODDS_OPEN ? 'open' : ''}`;
         logBody.className = `fishing-fold-body ${FISHING_LOG_OPEN ? 'open' : ''}`;
 
         const guaranteedRows = Object.keys(GUARANTEED_FISHING_BAITS).map(function(bait) {
             return `<div style="margin-bottom:8px;"><b>${bait}</b><br>${GUARANTEED_FISHING_BAITS[bait].map(function(name) {
-                return `<span class="fish-chip">🐟 ${name}</span>`;
+                return `<span class="fish-chip">ğŸŸ ${name}</span>`;
             }).join("")}</div>`;
         }).join("");
 
@@ -6374,12 +6391,12 @@
             return (FISHING_CATCH_LOG[b] || 0) - (FISHING_CATCH_LOG[a] || 0);
         });
         logBody.innerHTML = catchNames.length ? catchNames.map(function(name) {
-            return `<span class="fish-chip">🐟 ${name}: ${FISHING_CATCH_LOG[name]}</span>`;
+            return `<span class="fish-chip">ğŸŸ ${name}: ${FISHING_CATCH_LOG[name]}</span>`;
         }).join("") : `<div style="color:#94a3b8;">No bot catches recorded yet.</div>`;
     }
 
     // ----------------------------------------------------
-    // YENİ V43.6: SIFIR SPAM, İÇERİDEN GERİ SAYIM
+    // YENÄ° V43.6: SIFIR SPAM, Ä°Ã‡ERÄ°DEN GERÄ° SAYIM
     // ----------------------------------------------------
     function renderForestAndMines() {
         let axeCount = getInventoryAmount("Axe");
@@ -6403,9 +6420,9 @@
                 treeHTML += `
                     <div class="resource-box ${selected ? 'selected' : ''}" onclick="window.toggleResourceSelection('trees', '${id}')">
                         <div class="res-id">${id.substr(0,4)}</div>
-                        <div class="res-icon">🌲</div>
-                        <div class="res-tool">🪓 Axe: ${axeCount}</div>
-                        <div class="res-status ${isReady ? 'ready' : 'wait'}">${isReady ? '✅ READY' : '⏳ ' + leftText}</div>
+                        <div class="res-icon">ğŸŒ²</div>
+                        <div class="res-tool">ğŸª“ Axe: ${axeCount}</div>
+                        <div class="res-status ${isReady ? 'ready' : 'wait'}">${isReady ? 'âœ… READY' : 'â³ ' + leftText}</div>
                     </div>
                 `;
             }
@@ -6427,9 +6444,9 @@
                 stoneHTML += `
                     <div class="resource-box ${selected ? 'selected' : ''}" onclick="window.toggleResourceSelection('stones', '${id}')">
                         <div class="res-id">${id.substr(0,4)}</div>
-                        <div class="res-icon">🪨</div>
-                        <div class="res-tool">⛏️ Pickaxe: ${pickaxeCount}</div>
-                        <div class="res-status ${isReady ? 'ready' : 'wait'}">${isReady ? '✅ READY' : '⏳ ' + leftText}</div>
+                        <div class="res-icon">ğŸª¨</div>
+                        <div class="res-tool">â›ï¸ Pickaxe: ${pickaxeCount}</div>
+                        <div class="res-status ${isReady ? 'ready' : 'wait'}">${isReady ? 'âœ… READY' : 'â³ ' + leftText}</div>
                     </div>
                 `;
             }
@@ -6451,9 +6468,9 @@
                 ironHTML += `
                     <div class="resource-box ${selected ? 'selected' : ''}" onclick="window.toggleResourceSelection('iron', '${id}')">
                         <div class="res-id">${id.substr(0,4)}</div>
-                        <div class="res-icon">⛓️</div>
-                        <div class="res-tool">🪨 St. Pick: ${stonePickCount}</div>
-                        <div class="res-status ${isReady ? 'ready' : 'wait'}">${isReady ? '✅ READY' : '⏳ ' + leftText}</div>
+                        <div class="res-icon">â›“ï¸</div>
+                        <div class="res-tool">ğŸª¨ St. Pick: ${stonePickCount}</div>
+                        <div class="res-status ${isReady ? 'ready' : 'wait'}">${isReady ? 'âœ… READY' : 'â³ ' + leftText}</div>
                     </div>
                 `;
             }
@@ -6475,9 +6492,9 @@
                 goldHTML += `
                     <div class="resource-box ${selected ? 'selected' : ''}" onclick="window.toggleResourceSelection('gold', '${id}')">
                         <div class="res-id">${id.substr(0,4)}</div>
-                        <div class="res-icon">🥇</div>
-                        <div class="res-tool">🪙 Ir. Pick: ${ironPickCount}</div>
-                        <div class="res-status ${isReady ? 'ready' : 'wait'}">${isReady ? '✅ READY' : '⏳ ' + leftText}</div>
+                        <div class="res-icon">ğŸ¥‡</div>
+                        <div class="res-tool">ğŸª™ Ir. Pick: ${ironPickCount}</div>
+                        <div class="res-status ${isReady ? 'ready' : 'wait'}">${isReady ? 'âœ… READY' : 'â³ ' + leftText}</div>
                     </div>
                 `;
             }
@@ -6486,7 +6503,7 @@
     }
 
     // ==========================================
-    // 🛡️ AĞ DİNLEYİCİSİ & KATIK KURALLI YAPAY ÖĞRENME
+    // ğŸ›¡ï¸ AÄ DÄ°NLEYÄ°CÄ°SÄ° & KATIK KURALLI YAPAY Ã–ÄRENME
     // ==========================================
     const origFetch = _window.fetch;
 
@@ -6516,7 +6533,7 @@
             }
         }
 
-        // İstek Giderken Öğrenim İçin Kaydet
+        // Ä°stek Giderken Ã–ÄŸrenim Ä°Ã§in Kaydet
         let isAutosaveReq = reqUrl.includes('/autosave');
         if (isAutosaveReq && options && options.body) {
             try {
@@ -6535,7 +6552,7 @@
 
         let isSessionReq = reqUrl.includes('/session');
 
-        // PHOENIX RESET: Sayfa Yenilendikten Sonra Otomatik Başla
+        // PHOENIX RESET: Sayfa Yenilendikten Sonra Otomatik BaÅŸla
         if (_window.AUTO_RESUME_PENDING) {
             if (isSessionReq || isAutosaveReq) {
                 try {
@@ -6546,11 +6563,11 @@
                         _window.AUTO_RESUME_PENDING = false;
                         localStorage.removeItem('sl_auto_resume');
 
-                        log("✅ BOT CHECKING... Automation is starting.");
+                        log("âœ… BOT CHECKING... Automation is starting.");
 
                         let btn = document.getElementById('btn-start-auto');
                         if (btn) {
-                            btn.innerText = "⏹️ DURDUR";
+                            btn.innerText = "â¹ï¸ DURDUR";
                             btn.innerText = "Stop";
                             btn.style.background = "#52525b";
                         }
@@ -6597,7 +6614,7 @@
                     localStorage.setItem('sl_farm_id', SL_FARM_ID);
                 }
 
-                // KAHİN İÇİN EŞYA VE ETKİNLİK DATASI
+                // KAHÄ°N Ä°Ã‡Ä°N EÅYA VE ETKÄ°NLÄ°K DATASI
                 if (data.farm) {
                     if (data.farm.createdAt) {
                         SL_CREATED_AT = parseInt(data.farm.createdAt);
@@ -6619,7 +6636,7 @@
                     }
                 }
 
-                // CHANGESET ÖĞRENİMİ
+                // CHANGESET Ã–ÄRENÄ°MÄ°
                 if (data.changeset) {
                     if (data.changeset.coins !== undefined) {
                         if (lastSentActions.length > 0) {
@@ -6672,9 +6689,9 @@
                                                 }
 
                                                 if (diffGap < 0.0001) {
-                                                    log(`✅ [Price Check] Sell accounting matches response: ${formatCoinAmount(expectedDiff)} coin${bonusText}`);
+                                                    log(`âœ… [Price Check] Sell accounting matches response: ${formatCoinAmount(expectedDiff)} coin${bonusText}`);
                                                 } else {
-                                                    log(`⚠️ [Price Check] Sell accounting differs. Bot: ${formatCoinAmount(expectedDiff)} / Response: ${formatCoinAmount(coinDiff)}. Live price will be updated from response.`);
+                                                    log(`âš ï¸ [Price Check] Sell accounting differs. Bot: ${formatCoinAmount(expectedDiff)} / Response: ${formatCoinAmount(coinDiff)}. Live price will be updated from response.`);
                                                 }
                                             }
 
@@ -6683,7 +6700,7 @@
                                             let stringifiedPrices = JSON.stringify(CROP_SELL_PRICES);
                                             localStorage.setItem('sl_live_sell_prices', stringifiedPrices);
 
-                                            log(`🧠 [Öğrenim] ${firstCrop} satış fiyatı canlı güncellendi: ${newPrice.toFixed(4)}`);
+                                            log(`ğŸ§  [Ã–ÄŸrenim] ${firstCrop} satÄ±ÅŸ fiyatÄ± canlÄ± gÃ¼ncellendi: ${newPrice.toFixed(4)}`);
 
                                             let marketMenu = document.getElementById('sl-market-menu');
                                             if (marketMenu && marketMenu.style.display === 'block') {
@@ -6718,9 +6735,9 @@
                                                 let diffGap = Math.abs(expectedDiff - coinDiff);
 
                                                 if (diffGap < 0.0001) {
-                                                    log(`✅ [Fiyat Kontrol] Alış hesabı response ile uyuşuyor: ${formatCoinAmount(Math.abs(expectedDiff))} coin`);
+                                                    log(`âœ… [Fiyat Kontrol] AlÄ±ÅŸ hesabÄ± response ile uyuÅŸuyor: ${formatCoinAmount(Math.abs(expectedDiff))} coin`);
                                                 } else {
-                                                    log(`⚠️ [Fiyat Kontrol] Alış hesabı farklı! Bot: ${formatCoinAmount(expectedDiff)} / Response: ${formatCoinAmount(coinDiff)}. Canlı fiyat response'a göre güncellenecek.`);
+                                                    log(`âš ï¸ [Fiyat Kontrol] AlÄ±ÅŸ hesabÄ± farklÄ±! Bot: ${formatCoinAmount(expectedDiff)} / Response: ${formatCoinAmount(coinDiff)}. CanlÄ± fiyat response'a gÃ¶re gÃ¼ncellenecek.`);
                                                 }
                                             }
 
@@ -6729,7 +6746,7 @@
                                             let stringifiedPrices = JSON.stringify(SEED_PRICES);
                                             localStorage.setItem('sl_live_seed_prices', stringifiedPrices);
 
-                                            log(`🧠 [Öğrenim] ${firstSeed} alış fiyatı canlı güncellendi: ${newPrice.toFixed(4)}`);
+                                            log(`ğŸ§  [Ã–ÄŸrenim] ${firstSeed} alÄ±ÅŸ fiyatÄ± canlÄ± gÃ¼ncellendi: ${newPrice.toFixed(4)}`);
 
                                             let marketMenu = document.getElementById('sl-market-menu');
                                             if (marketMenu && marketMenu.style.display === 'block') {
@@ -6743,7 +6760,7 @@
                     }
                 }
 
-                // KUSURSUZ COIN GÜNCELLEMESİ
+                // KUSURSUZ COIN GÃœNCELLEMESÄ°
                 let updatedCoin = false;
 
                 if (data.farm) {
@@ -6760,11 +6777,11 @@
                     localStorage.setItem('sl_coins_cache', SL_COINS.toString());
                     let coinEl = document.getElementById('top-coin-info');
                     if(coinEl) {
-                        coinEl.innerText = `💰 ${SL_COINS.toFixed(4)}`;
+                        coinEl.innerText = `ğŸ’° ${SL_COINS.toFixed(4)}`;
                     }
                 }
 
-                // KUSURSUZ ÇANTA VE TARLA
+                // KUSURSUZ Ã‡ANTA VE TARLA
                 if (data.farm) {
                     if (data.farm.inventory) {
                         SL_INVENTORY = data.farm.inventory;
@@ -6878,11 +6895,11 @@
                 }
 
             }).catch(function() {
-                // Parse Hatası sessizce yutulur
+                // Parse HatasÄ± sessizce yutulur
             });
         }
 
-        // ŞABLON ÇALMA (Phoenix Özelliği)
+        // ÅABLON Ã‡ALMA (Phoenix Ã–zelliÄŸi)
         if (isAutosaveReq && options && options.body) {
             try {
                 const parsed = JSON.parse(options.body);
@@ -6898,11 +6915,11 @@
 
                             localStorage.setItem('sl_auto_resume', 'true');
 
-                            log("✅ Bot control captured. Bot checking...");
+                            log("âœ… Bot control captured. Bot checking...");
 
                             await forceRadarRefresh();
 
-                            log("✅ Bot check completed. Refreshing safely...");
+                            log("âœ… Bot check completed. Refreshing safely...");
 
                             setTimeout(function() {
                                 window.location.reload();
@@ -6915,7 +6932,7 @@
                     }
                 }
             } catch(e) {
-                // Şablon hatası sessizce yutulur
+                // Åablon hatasÄ± sessizce yutulur
             }
         }
 
@@ -7007,7 +7024,7 @@
 
         const profileCoin = document.getElementById('profile-coin');
         if (profileCoin) {
-            profileCoin.innerText = `🪙 ${SL_COINS.toFixed(4)} coins`;
+            profileCoin.innerText = `ğŸª™ ${SL_COINS.toFixed(4)} coins`;
         }
     }
 
@@ -7019,20 +7036,20 @@
         const lastRefreshAt = parseInt(localStorage.getItem('sl_last_session_refresh_at') || "0");
         if (sessionRefreshPromise) {
             if (logReason) {
-                log(`📡 Bot check already running; reusing it.`);
+                log(`ğŸ“¡ Bot check already running; reusing it.`);
             }
             return await sessionRefreshPromise;
         }
 
         if (lastRefreshAt && nowMs - lastRefreshAt < SESSION_REFRESH_COOLDOWN_MS) {
             if (logReason) {
-                log(`📡 Bot check skipped; fresh data already available.`);
+                log(`ğŸ“¡ Bot check skipped; fresh data already available.`);
             }
             return true;
         }
 
         if (logReason) {
-            log(`📡 Bot checking...`);
+            log(`ğŸ“¡ Bot checking...`);
         }
 
         sessionRefreshPromise = (async function() {
@@ -7055,7 +7072,7 @@
             if (res.ok) {
                 localStorage.setItem('sl_last_session_refresh_at', Date.now().toString());
                 if (logReason) {
-                    log('✅ Bot check completed.');
+                    log('âœ… Bot check completed.');
                 }
                 return true;
             } else {
@@ -7081,12 +7098,12 @@
 
         const btn = document.getElementById('btn-start-auto');
         if (btn) {
-            btn.innerText = "▶️ BAŞLAT";
+            btn.innerText = "â–¶ï¸ BAÅLAT";
             btn.innerText = "Start";
             btn.style.background = "linear-gradient(90deg,#b91c1c,#ef4444)";
         }
 
-        log("🔄 Safety refresh started. Bot will stay stopped after refresh.");
+        log("ğŸ”„ Safety refresh started. Bot will stay stopped after refresh.");
 
         setTimeout(function() {
             window.location.reload();
@@ -7385,15 +7402,15 @@
     function stopForMissingSelectedSeeds(seedNames) {
         const uniqueSeeds = Array.from(new Set((seedNames || []).filter(Boolean)));
         const seedText = uniqueSeeds.length ? uniqueSeeds.join(', ') : 'selected seed';
-        refreshThenStopWithNotice(`🛑 Bot stopped: selected field seed is out of stock (${seedText}). Add this seed to the Market buy list or change the field assignment, then press Start again.`);
+        refreshThenStopWithNotice(`ğŸ›‘ Bot stopped: selected field seed is out of stock (${seedText}). Add this seed to the Market buy list or change the field assignment, then press Start again.`);
     }
 
     function stopForInsufficientCoins(seed, requiredCoins) {
-        refreshThenStopWithNotice(`🛑 Bot stopped: insufficient coins to buy ${seed}. Required: ${formatCoinAmount(requiredCoins)} coin. Sell crops or lower the buy target, then press Start again.`);
+        refreshThenStopWithNotice(`ğŸ›‘ Bot stopped: insufficient coins to buy ${seed}. Required: ${formatCoinAmount(requiredCoins)} coin. Sell crops or lower the buy target, then press Start again.`);
     }
 
     // ==========================================
-    // ⚙️ OTOMASYON MOTORU & KUSURSUZ DENETÇİ
+    // âš™ï¸ OTOMASYON MOTORU & KUSURSUZ DENETÃ‡Ä°
     // ==========================================
     async function toggleAutomation() {
         const btn = document.getElementById('btn-start-auto');
@@ -7410,7 +7427,7 @@
             masterPayload = null;
 
             if (btn) {
-                btn.innerText = "▶️ BAŞLAT";
+                btn.innerText = "â–¶ï¸ BAÅLAT";
                 btn.innerText = "Start";
                 btn.style.background = "linear-gradient(90deg,#b91c1c,#ef4444)";
             }
@@ -7423,7 +7440,7 @@
             if (!masterPayload) {
                 _window.WAITING_FOR_TEMPLATE_TO_START = true;
                 if (btn) {
-                    btn.innerText = "⏳ BEKLENİYOR...";
+                    btn.innerText = "â³ BEKLENÄ°YOR...";
                     btn.innerText = "Waiting...";
                     btn.style.background = "#d97706";
                 }
@@ -7433,16 +7450,16 @@
 
             isBotRunning = true;
             if (btn) {
-                btn.innerText = "⏹️ DURDUR";
+                btn.innerText = "â¹ï¸ DURDUR";
                 btn.innerText = "Stop";
                 btn.style.background = "#52525b";
             }
-            log("✅ BOT CHECKING...");
+            log("âœ… BOT CHECKING...");
             await forceRadarRefresh();
             if (stopRequested || killSwitchActivated) {
                 return;
             }
-            log("✅ Bot check completed. Starting automation.");
+            log("âœ… Bot check completed. Starting automation.");
             runAutomationLogic();
         }
     }
@@ -7615,7 +7632,7 @@
         payload.actions = actions;
         await refreshCoreAccountingHashes(payload);
 
-        log(`📦 ${reason}: sending package... (${actions.length} action${actions.length > 1 ? "s" : ""})`);
+        log(`ğŸ“¦ ${reason}: sending package... (${actions.length} action${actions.length > 1 ? "s" : ""})`);
 
         try {
             const res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
@@ -7633,7 +7650,7 @@
                 }
                 await refreshCoreAccountingHashes(payload);
                 masterPayload.stateHash = payload.stateHash;
-                log(`✅ ${reason} package accepted.`);
+                log(`âœ… ${reason} package accepted.`);
                 return true;
             }
 
@@ -7917,7 +7934,7 @@
             localStorage.setItem('sl_fishing_cache', JSON.stringify(SL_FISHING));
 
             await refreshFishingHash(payload);
-            log(`🎣 Reeling catch: ${caughtNames.join(", ")}`);
+            log(`ğŸ£ Reeling catch: ${caughtNames.join(", ")}`);
 
             try {
                 let res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
@@ -7931,7 +7948,7 @@
                 }
                 masterPayload.stateHash = payload.stateHash;
                 renderFishingMenu();
-                log(`✅ Fishing reel completed.`);
+                log(`âœ… Fishing reel completed.`);
                 return true;
             } catch(e) {
                 triggerKillSwitch("Network failed during fishing reel.", "NETWORK");
@@ -7940,24 +7957,24 @@
         }
 
         if (wharf.castedAt) {
-            log("🎣 Fishing cast is waiting for server catch state.");
+            log("ğŸ£ Fishing cast is waiting for server catch state.");
             return false;
         }
 
         if (getFishingReelsLeft() <= 0) {
-            log("🎣 Fishing skipped: no reels left today.");
+            log("ğŸ£ Fishing skipped: no reels left today.");
             return false;
         }
 
         const rodCost = getFishingRodCost(1);
         if (rodCost > 0 && readDecimal(SL_INVENTORY.Rod, 0) < rodCost) {
-            log("🎣 Fishing skipped: no Rod in inventory.");
+            log("ğŸ£ Fishing skipped: no Rod in inventory.");
             return false;
         }
 
         const bait = getNextFishingBait();
         if (!bait) {
-            log("🎣 Fishing skipped: no selected bait available.");
+            log("ğŸ£ Fishing skipped: no selected bait available.");
             return false;
         }
 
@@ -7985,7 +8002,7 @@
         localStorage.setItem('sl_fishing_cache', JSON.stringify(SL_FISHING));
 
         await refreshFishingHash(payload);
-        log(`🎣 Casting rod with ${bait}...`);
+        log(`ğŸ£ Casting rod with ${bait}...`);
 
         try {
             let res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
@@ -8000,7 +8017,7 @@
             recordFishingBaitCast(bait);
             masterPayload.stateHash = payload.stateHash;
             renderFishingMenu();
-            log("✅ Fishing cast sent. Catch will be read from response.");
+            log("âœ… Fishing cast sent. Catch will be read from response.");
             return true;
         } catch(e) {
             triggerKillSwitch("Network failed during fishing cast.", "NETWORK");
@@ -8247,7 +8264,7 @@
             return;
         }
 
-        // --- 0. KAHİN GÜVENLİK TARAMASI ---
+        // --- 0. KAHÄ°N GÃœVENLÄ°K TARAMASI ---
         let riskStatus = checkKillSwitchStatus();
         if (riskStatus) {
             triggerKillSwitch(riskStatus, "ORACLE");
@@ -8259,7 +8276,7 @@
         let quarantinedPlots = plotFilters.quarantined;
 
         if (quarantinedPlots.length > 0 && !hasLoggedQuarantine) {
-            log(`<span style="color:#f87171; font-weight:bold;">🚧 Quarantine protocol: ${quarantinedPlots.length} unsafe field(s) detected and locked.</span>`);
+            log(`<span style="color:#f87171; font-weight:bold;">ğŸš§ Quarantine protocol: ${quarantinedPlots.length} unsafe field(s) detected and locked.</span>`);
             hasLoggedQuarantine = true;
         }
 
@@ -8280,7 +8297,7 @@
         }
 
         // ---------------------------------------------------------
-        // 1. HASAT AŞAMASI (DÜZELTİLDİ: TEKLİ ONAY BEKLİYOR)
+        // 1. HASAT AÅAMASI (DÃœZELTÄ°LDÄ°: TEKLÄ° ONAY BEKLÄ°YOR)
         // ---------------------------------------------------------
         let cropEntries = BOT_SETTINGS.autoFields ? Object.entries(SL_CROPS) : [];
         let readyPlots = [];
@@ -8318,7 +8335,7 @@
             if (waitForNearbyMs > 0) {
                 let waitMs = waitForNearbyMs + randInt(700, 1800);
                 let waitSecs = Math.ceil(waitMs / 1000);
-                log(`⏳ Harvest window: a crop matures within 1 minute. Waiting ${waitSecs}s for batch harvest.`);
+                log(`â³ Harvest window: a crop matures within 1 minute. Waiting ${waitSecs}s for batch harvest.`);
 
                 let keepGoing = await controlledSleep(waitMs);
                 if (!keepGoing || stopRequested || killSwitchActivated) {
@@ -8344,7 +8361,7 @@
             let isHarvestBatch = BOT_SETTINGS.harvestMax <= 4500;
 
             let modText = isHarvestBatch ? 'Batch' : 'Single';
-            log(`🌾 Harvest starting... (${readyPlots.length} fields) [Mode: ${modText}]`);
+            log(`ğŸŒ¾ Harvest starting... (${readyPlots.length} fields) [Mode: ${modText}]`);
 
             let stringifiedMaster = JSON.stringify(masterPayload);
             let payload = JSON.parse(stringifiedMaster);
@@ -8393,7 +8410,7 @@
                     payload.stateHash.crops = await computeSHA256(SL_CROPS);
                     await refreshVolatileStateHashes(payload);
 
-                    log(`📦 [Single] Sending harvest...`);
+                    log(`ğŸ“¦ [Single] Sending harvest...`);
 
                     try {
                         let stringifiedPayload = JSON.stringify(payload);
@@ -8404,14 +8421,14 @@
                         });
 
                         if (res.ok) {
-                            log(`✅ İşlem Başarılı!`);
+                            log(`âœ… Ä°ÅŸlem BaÅŸarÄ±lÄ±!`);
                             masterPayload.stateHash = payload.stateHash;
                         } else {
-                            triggerKillSwitch("Sunucu tekli hasadı reddetti.", res.status);
+                            triggerKillSwitch("Sunucu tekli hasadÄ± reddetti.", res.status);
                             return;
                         }
                     } catch(e) {
-                        triggerKillSwitch("Ağ bağlantısı koptu (Hasat).", "NETWORK");
+                        triggerKillSwitch("AÄŸ baÄŸlantÄ±sÄ± koptu (Hasat).", "NETWORK");
                         return;
                     }
                     payload.actions = [];
@@ -8442,7 +8459,7 @@
                             payload.stateHash.mushrooms = await computeSHA256(SL_MUSHROOMS);
                         }
 
-                        log(`📦 [Toplu Paket] Hasat sepeti fırlatılıyor... (${payload.actions.length} eylem)`);
+                        log(`ğŸ“¦ [Toplu Paket] Hasat sepeti fÄ±rlatÄ±lÄ±yor... (${payload.actions.length} eylem)`);
 
                         try {
                             let stringifiedPayload = JSON.stringify(payload);
@@ -8453,14 +8470,14 @@
                             });
 
                             if (res.ok) {
-                                log(`✅ İşlem Başarılı!`);
+                                log(`âœ… Ä°ÅŸlem BaÅŸarÄ±lÄ±!`);
                                 masterPayload.stateHash = payload.stateHash;
                             } else {
-                                triggerKillSwitch("Sunucu toplu hasadı reddetti.", res.status);
+                                triggerKillSwitch("Sunucu toplu hasadÄ± reddetti.", res.status);
                                 return;
                             }
                         } catch(e) {
-                            triggerKillSwitch("Ağ bağlantısı koptu (Toplu Hasat).", "NETWORK");
+                            triggerKillSwitch("AÄŸ baÄŸlantÄ±sÄ± koptu (Toplu Hasat).", "NETWORK");
                             return;
                         }
                     }
@@ -8474,7 +8491,7 @@
 
         if (!stopRequested && !killSwitchActivated) {
             if (lastCompletedPhase === 'harvest' && hasCookingWorkPending()) {
-                let keepGoing = await waitTaskSwitch('hasat → fire pit');
+                let keepGoing = await waitTaskSwitch('hasat â†’ fire pit');
                 if (!keepGoing || stopRequested || killSwitchActivated) {
                     return;
                 }
@@ -8512,8 +8529,8 @@
             if (actionPerformed) {
                 if (hasSellTargets || hasBuyTargets || hasPlotTasks) {
                     let fromPhaseName = lastCompletedPhase === 'firepit' ? 'fire pit' : 'hasat';
-                    let nextPhaseName = hasSellTargets ? 'satış' : (hasBuyTargets ? 'alış' : 'ekim');
-                    let transitionName = fromPhaseName + ' → ' + nextPhaseName;
+                    let nextPhaseName = hasSellTargets ? 'satÄ±ÅŸ' : (hasBuyTargets ? 'alÄ±ÅŸ' : 'ekim');
+                    let transitionName = fromPhaseName + ' â†’ ' + nextPhaseName;
                     let keepGoing = await waitTaskSwitch(transitionName);
                     if (!keepGoing || stopRequested || killSwitchActivated) {
                         return;
@@ -8524,7 +8541,7 @@
         }
 
         // ---------------------------------------------------------
-        // 2. SATIŞ AŞAMASI
+        // 2. SATIÅ AÅAMASI
         // ---------------------------------------------------------
         if (!stopRequested && !killSwitchActivated) {
             let activeSells = [];
@@ -8557,7 +8574,7 @@
 
                         if (amt < minNeed) {
                             if (reservedForCooking > 0) {
-                                log(`🍲 ${crop} Fire Pit icin saklandi (${reservedForCooking} adet). Satis atlandi.`);
+                                log(`ğŸ² ${crop} Fire Pit icin saklandi (${reservedForCooking} adet). Satis atlandi.`);
                             }
                             continue;
                         }
@@ -8635,11 +8652,11 @@
                                 lastCompletedPhase = 'sell';
                                 salePayloadsSent++;
                             } else {
-                                triggerKillSwitch("Sunucu satÄ±ÅŸÄ± reddetti.", res.status);
+                                triggerKillSwitch("Sunucu satÃ„Â±Ã…Å¸Ã„Â± reddetti.", res.status);
                                 return;
                             }
                         } catch(e) {
-                            triggerKillSwitch("AÄŸ baÄŸlantÄ±sÄ± koptu (SatÄ±ÅŸ).", "NETWORK");
+                            triggerKillSwitch("AÃ„Å¸ baÃ„Å¸lantÃ„Â±sÃ„Â± koptu (SatÃ„Â±Ã…Å¸).", "NETWORK");
                             return;
                         }
 
@@ -8655,7 +8672,7 @@
                 if (false && sellActions.length > 0) {
                     actionPerformed = true;
                     let joinedInfo = soldInfo.join(", ");
-                    log(`💰 Preparing sell basket: ${joinedInfo}`);
+                    log(`ğŸ’° Preparing sell basket: ${joinedInfo}`);
 
                     let stringifiedMaster = JSON.stringify(masterPayload);
                     let payload = JSON.parse(stringifiedMaster);
@@ -8675,7 +8692,7 @@
                         payload.stateHash.coins = await computeSHA256(SL_COINS);
                     }
 
-                    log(`📦 Sending sell payload...`);
+                    log(`ğŸ“¦ Sending sell payload...`);
 
                     try {
                         let stringifiedPayload = JSON.stringify(payload);
@@ -8686,7 +8703,7 @@
                         });
 
                     if (res.ok) {
-                        log(`✅ İşlem Başarılı!`);
+                        log(`âœ… Ä°ÅŸlem BaÅŸarÄ±lÄ±!`);
                         masterPayload.stateHash = payload.stateHash;
                         refreshBuyBudgetLocks();
                         lastCompletedPhase = 'sell';
@@ -8705,8 +8722,8 @@
         if (!stopRequested && !killSwitchActivated) {
             if (lastCompletedPhase === 'sell') {
                 if (hasBuyTargets || hasPlotTasks) {
-                    let nextPhaseName = hasBuyTargets ? 'alış' : 'ekim';
-                    let keepGoing = await waitTaskSwitch('satış → ' + nextPhaseName);
+                    let nextPhaseName = hasBuyTargets ? 'alÄ±ÅŸ' : 'ekim';
+                    let keepGoing = await waitTaskSwitch('satÄ±ÅŸ â†’ ' + nextPhaseName);
                     if (!keepGoing || stopRequested || killSwitchActivated) {
                         return;
                     }
@@ -8716,7 +8733,7 @@
         }
 
         // ---------------------------------------------------------
-        // 3. SATIN ALMA AŞAMASI
+        // 3. SATIN ALMA AÅAMASI
         // ---------------------------------------------------------
         if (!stopRequested && !killSwitchActivated) {
             refreshBuyBudgetLocks();
@@ -8746,12 +8763,12 @@
                     let seed = activeBuys[i][0];
                     let cfg = activeBuys[i][1];
                     if (!GameRules.isSeedInCurrentSeason(seed)) {
-                        log(`⚠️ ${seed} buy skipped: not available in ${GameRules.getCurrentSeason()} season.`);
+                        log(`âš ï¸ ${seed} buy skipped: not available in ${GameRules.getCurrentSeason()} season.`);
                         continue;
                     }
 
                     if (!GameRules.canBuySeed(seed)) {
-                        log(`⚠️ ${seed} buy skipped: Bumpkin level ${GameRules.getSeedLevelRequirement(seed)} required.`);
+                        log(`âš ï¸ ${seed} buy skipped: Bumpkin level ${GameRules.getSeedLevelRequirement(seed)} required.`);
                         continue;
                     }
 
@@ -8780,26 +8797,26 @@
                             let ignoreStockLimit = !!cfg.ignoreStockLimit;
                             let availableStock = ignoreStockLimit ? Infinity : getAvailableStock(seed);
                             if (ignoreStockLimit) {
-                                log(`⚠️ ${seed} market limit bypass is ON (Risk). Stock cap ignored.`);
+                                log(`âš ï¸ ${seed} market limit bypass is ON (Risk). Stock cap ignored.`);
                             }
                             if (!ignoreStockLimit && cfg.autoShipmentRestock && Number.isFinite(availableStock) && availableStock < needed && GameRules.canRestockShipment()) {
-                                log(`🛒 Free shipment restock is ready. Boosting market limit before buying ${seed}.`);
+                                log(`ğŸ›’ Free shipment restock is ready. Boosting market limit before buying ${seed}.`);
                                 let restocked = await sendShipmentRestockIfFree();
                                 if (restocked) {
                                     availableStock = getAvailableStock(seed);
                                 }
                             }
                             if (!ignoreStockLimit && !Number.isFinite(availableStock)) {
-                                log(`⚠️ ${seed} seed limit reached or stock is unknown. Enable Market Limit (Risk) to buy.`);
+                                log(`âš ï¸ ${seed} seed limit reached or stock is unknown. Enable Market Limit (Risk) to buy.`);
                                 continue;
                             }
                             if (availableStock <= 0) {
-                                log(`⚠️ ${seed} seed limit reached. Buy skipped.`);
+                                log(`âš ï¸ ${seed} seed limit reached. Buy skipped.`);
                                 continue;
                             }
 
                             if (Number.isFinite(availableStock) && needed > availableStock) {
-                                log(`⚠️ ${seed} market stock limit: ${availableStock}. Buy amount capped.`);
+                                log(`âš ï¸ ${seed} market stock limit: ${availableStock}. Buy amount capped.`);
                             }
 
                             let chunks = buildBuyChunks(needed, availableStock);
@@ -8815,7 +8832,7 @@
 
                 if (chunksToProcess.length > 0) {
                     actionPerformed = true;
-                    log(`🛒 Fast buy starting... (Budget guard active)`);
+                    log(`ğŸ›’ Fast buy starting... (Budget guard active)`);
 
                     for (let i = 0; i < chunksToProcess.length; i++) {
                         if (stopRequested || killSwitchActivated) {
@@ -8837,10 +8854,10 @@
                                 if (remainingAmount > 0) {
                                     rememberBuyBudgetLock(item.seed, remainingAmount * knownPrice);
                                 }
-                                log(`⚠️ Bütçe yetersiz! Sadece ${maxAffordable}x ${item.seed} alınıyor.`);
+                                log(`âš ï¸ BÃ¼tÃ§e yetersiz! Sadece ${maxAffordable}x ${item.seed} alÄ±nÄ±yor.`);
                             } else {
                                 rememberBuyBudgetLock(item.seed, masraf);
-                                log(`⏸️ Insufficient coins for ${item.seed}. Waiting until ${formatCoinAmount(masraf)} coin is available.`);
+                                log(`â¸ï¸ Insufficient coins for ${item.seed}. Waiting until ${formatCoinAmount(masraf)} coin is available.`);
                                 continue;
                             }
                         }
@@ -8895,7 +8912,7 @@
                         }
                         await refreshVolatileStateHashes(payload);
 
-                        log(`📦 Alım paketi fırlatılıyor... (${buyActions.length} eylem)`);
+                        log(`ğŸ“¦ AlÄ±m paketi fÄ±rlatÄ±lÄ±yor... (${buyActions.length} eylem)`);
 
                         try {
                             let stringifiedPayload = JSON.stringify(payload);
@@ -8906,15 +8923,15 @@
                             });
 
                             if (res.ok) {
-                                log(`✅ İşlem Başarılı!`);
+                                log(`âœ… Ä°ÅŸlem BaÅŸarÄ±lÄ±!`);
                                 masterPayload.stateHash = payload.stateHash;
                                 lastCompletedPhase = 'buy';
                             } else {
-                                triggerKillSwitch("Sunucu alımı reddetti.", res.status);
+                                triggerKillSwitch("Sunucu alÄ±mÄ± reddetti.", res.status);
                                 return;
                             }
                         } catch(e) {
-                            triggerKillSwitch("Ağ bağlantısı koptu (Alım).", "NETWORK");
+                            triggerKillSwitch("AÄŸ baÄŸlantÄ±sÄ± koptu (AlÄ±m).", "NETWORK");
                             return;
                         }
                     }
@@ -8925,7 +8942,7 @@
         if (!stopRequested && !killSwitchActivated) {
             if (lastCompletedPhase === 'buy') {
                 if (hasPlotTasks) {
-                    let keepGoing = await waitTaskSwitch('alış → ekim');
+                    let keepGoing = await waitTaskSwitch('alÄ±ÅŸ â†’ ekim');
                     if (!keepGoing || stopRequested || killSwitchActivated) {
                         return;
                     }
@@ -8934,7 +8951,7 @@
         }
 
         // ---------------------------------------------------------
-        // 4. EKİM AŞAMASI
+        // 4. EKÄ°M AÅAMASI
         // ---------------------------------------------------------
         if (!stopRequested && !killSwitchActivated && BOT_SETTINGS.autoFields) {
             await forceRadarRefresh('bot control');
@@ -8973,12 +8990,12 @@
 
                     if (targetSeed) {
                         if (!GameRules.isSeedInCurrentSeason(targetSeed)) {
-                            log(`⚠️ ${targetSeed} cannot be planted in ${GameRules.getCurrentSeason()} season. Plot skipped.`);
+                            log(`âš ï¸ ${targetSeed} cannot be planted in ${GameRules.getCurrentSeason()} season. Plot skipped.`);
                             continue;
                         }
 
                         if (!GameRules.canBuySeed(targetSeed)) {
-                            log(`⚠️ ${targetSeed} cannot be planted. Bumpkin level ${GameRules.getSeedLevelRequirement(targetSeed)} required.`);
+                            log(`âš ï¸ ${targetSeed} cannot be planted. Bumpkin level ${GameRules.getSeedLevelRequirement(targetSeed)} required.`);
                             continue;
                         }
 
@@ -8988,7 +9005,7 @@
                             if (plantCount === 0) {
                                 actionPerformed = true;
                                 let modText = isPlantBatch ? 'Batch' : 'Single';
-                                log(`🌱 Mixed planting starting... [Mode: ${modText}]`);
+                                log(`ğŸŒ± Mixed planting starting... [Mode: ${modText}]`);
                             }
 
                             exhaustedSeedWarnings.delete(targetSeed);
@@ -9053,7 +9070,7 @@
                             if (!isPlantBatch) {
                                 safeRenderPlotGrid('single plant');
                             } else if (isPlantBatch && plantCount % 5 === 0) {
-                                log(`🌱 [Batch] Preparing plant payload... (${plantCount} seeds)`);
+                                log(`ğŸŒ± [Batch] Preparing plant payload... (${plantCount} seeds)`);
                             }
 
                             if (!isPlantBatch) {
@@ -9065,7 +9082,7 @@
                                 }
                                 await refreshVolatileStateHashes(payload);
 
-                                log(`📦 [Single] Sending plant...`);
+                                log(`ğŸ“¦ [Single] Sending plant...`);
 
                                 try {
                                     let stringifiedPayload = JSON.stringify(payload);
@@ -9076,7 +9093,7 @@
                                     });
 
                                     if (res.ok) {
-                                        log(`✅ İşlem Başarılı!`);
+                                        log(`âœ… Ä°ÅŸlem BaÅŸarÄ±lÄ±!`);
                                         masterPayload.stateHash = payload.stateHash;
                                         lastCompletedPhase = 'plant';
                                     } else {
@@ -9084,7 +9101,7 @@
                                         return;
                                     }
                                 } catch(e) {
-                                    triggerKillSwitch("Ağ bağlantısı koptu (Ekim).", "NETWORK");
+                                    triggerKillSwitch("AÄŸ baÄŸlantÄ±sÄ± koptu (Ekim).", "NETWORK");
                                     return;
                                 }
                                 payload.actions = [];
@@ -9092,7 +9109,7 @@
                         } else {
                             if (!exhaustedSeedWarnings.has(targetSeed)) {
                                 exhaustedSeedWarnings.add(targetSeed);
-                                log(`⚠️ ${targetSeed} bitti. Pas geçiliyor.`);
+                                log(`âš ï¸ ${targetSeed} bitti. Pas geÃ§iliyor.`);
                             }
                         }
                     }
@@ -9101,7 +9118,7 @@
                 if (isPlantBatch) {
                     if (payload.actions.length > 0) {
                         if (!stopRequested && !killSwitchActivated) {
-                            log(`🧮 [Toplu Paket] Ekim muhasebesi hazırlanıyor... (${plantCount} tohum)`);
+                            log(`ğŸ§® [Toplu Paket] Ekim muhasebesi hazÄ±rlanÄ±yor... (${plantCount} tohum)`);
                             payload.stateHash.inventory = await computeSHA256(SL_INVENTORY);
                             payload.stateHash.farmActivity = await computeSHA256(SL_FARM_ACTIVITY);
                             payload.stateHash.crops = await computeSHA256(SL_CROPS);
@@ -9110,7 +9127,7 @@
                             }
                             await refreshVolatileStateHashes(payload);
 
-                            log(`📦 [Toplu Paket] Ekim sepeti fırlatılıyor... (${plantCount} tohum)`);
+                            log(`ğŸ“¦ [Toplu Paket] Ekim sepeti fÄ±rlatÄ±lÄ±yor... (${plantCount} tohum)`);
 
                             try {
                                 let stringifiedPayload = JSON.stringify(payload);
@@ -9121,7 +9138,7 @@
                                 });
 
                                 if (res.ok) {
-                                    log(`✅ İşlem Başarılı!`);
+                                    log(`âœ… Ä°ÅŸlem BaÅŸarÄ±lÄ±!`);
                                     masterPayload.stateHash = payload.stateHash;
                                     lastCompletedPhase = 'plant';
                                     safeRenderPlotGrid('toplu ekim');
@@ -9130,7 +9147,7 @@
                                     return;
                                 }
                             } catch(e) {
-                                triggerKillSwitch("Ağ bağlantısı koptu (Toplu Ekim).", "NETWORK");
+                                triggerKillSwitch("AÄŸ baÄŸlantÄ±sÄ± koptu (Toplu Ekim).", "NETWORK");
                                 return;
                             }
                         }
@@ -9141,7 +9158,7 @@
 
         if (!stopRequested && !killSwitchActivated) {
             if (lastCompletedPhase === 'plant' && hasCharacterFeedPending()) {
-                let keepGoing = await waitTaskSwitch('ekim → karakter');
+                let keepGoing = await waitTaskSwitch('ekim â†’ karakter');
                 if (!keepGoing || stopRequested || killSwitchActivated) {
                     return;
                 }
@@ -9192,7 +9209,7 @@
             }
         }
 
-        // 🚀 5. ORMAN VE MADEN AŞAMASI (TEKLİ GÖNDERİM VE ONAYLI SİSTEM)
+        // ğŸš€ 5. ORMAN VE MADEN AÅAMASI (TEKLÄ° GÃ–NDERÄ°M VE ONAYLI SÄ°STEM)
         // =========================================================
         if (!stopRequested && !killSwitchActivated && (BOT_SETTINGS.autoTree || BOT_SETTINGS.autoMineStone || BOT_SETTINGS.autoMineIron || BOT_SETTINGS.autoMineGold)) {
             let keepGoing = await waitTaskSwitch('farm -> resources');
@@ -9210,7 +9227,7 @@
         if (false && !stopRequested && !killSwitchActivated) {
             let now = Date.now();
 
-            // --- 🌲 AĞAÇ KESİMİ VE BALTA CRAFTING ---
+            // --- ğŸŒ² AÄAÃ‡ KESÄ°MÄ° VE BALTA CRAFTING ---
             if (BOT_SETTINGS.autoTree) {
                 let treeEntries = getSelectedResourceEntries("trees", SL_TREES || {});
 
@@ -9228,7 +9245,7 @@
                         let axeCount = Math.floor(parseFloat(SL_INVENTORY["Axe"] || 0));
                         let reqCoins = CRAFTING_RECIPES["Axe"].coins;
 
-                        // 1. ADIM: EĞER BALTA YOKSA, ÖNCE BALTA AL VE ONAY BEKLE!
+                        // 1. ADIM: EÄER BALTA YOKSA, Ã–NCE BALTA AL VE ONAY BEKLE!
                         if (axeCount < 1 && BOT_SETTINGS.autoCraftAxe && SL_COINS >= reqCoins) {
                             let stringifiedMaster = JSON.stringify(masterPayload);
                             let payload = JSON.parse(stringifiedMaster);
@@ -9249,7 +9266,7 @@
 
                             await refreshCoreAccountingHashes(payload);
 
-                            log(`📦 Blacksmith order: 1x Axe (Cost: ${reqCoins} coin)`);
+                            log(`ğŸ“¦ Blacksmith order: 1x Axe (Cost: ${reqCoins} coin)`);
 
                             try {
                                 let stringifiedPayload = JSON.stringify(payload);
@@ -9260,12 +9277,12 @@
                                 });
 
                                 if (res.ok) {
-                                    log(`✅ Blacksmith success. Axe bought.`);
+                                    log(`âœ… Blacksmith success. Axe bought.`);
                                     masterPayload.stateHash = payload.stateHash;
                                     axeCount++;
                                     actionPerformed = true;
 
-                                    await waitManualForestPace('Blacksmith → Forest');
+                                    await waitManualForestPace('Blacksmith â†’ Forest');
                                 } else {
                                     triggerKillSwitch("Server rejected blacksmith axe request.", res.status);
                                     return;
@@ -9276,7 +9293,7 @@
                             }
                         }
 
-                        // 2. ADIM: EĞER BALTA VARSA, AĞACI KES VE ONAY BEKLE!
+                        // 2. ADIM: EÄER BALTA VARSA, AÄACI KES VE ONAY BEKLE!
                         if (axeCount >= 1 && !stopRequested && !killSwitchActivated) {
                             let stringifiedMaster = JSON.stringify(masterPayload);
                             let payload = JSON.parse(stringifiedMaster);
@@ -9300,7 +9317,7 @@
 
                             await refreshCoreAccountingHashes(payload);
 
-                            log(`📦 Forest: chopping tree ${id.substr(0,4)}...`);
+                            log(`ğŸ“¦ Forest: chopping tree ${id.substr(0,4)}...`);
 
                             try {
                                 let stringifiedPayload = JSON.stringify(payload);
@@ -9311,7 +9328,7 @@
                                 });
 
                                 if (res.ok) {
-                                    log(`✅ Tree chopped.`);
+                                    log(`âœ… Tree chopped.`);
                                     masterPayload.stateHash = payload.stateHash;
                                     axeCount--;
                                     actionPerformed = true;
@@ -9330,7 +9347,7 @@
                 }
             }
 
-            // --- 🪨 TAŞ KAZIMI VE KAZMA CRAFTING ---
+            // --- ğŸª¨ TAÅ KAZIMI VE KAZMA CRAFTING ---
             if (BOT_SETTINGS.autoMineStone) {
                 let stoneEntries = getSelectedResourceEntries("stones", SL_STONES || {});
 
@@ -9349,7 +9366,7 @@
                         let reqWood = CRAFTING_RECIPES["Pickaxe"]["Wood"];
                         let reqCoins = CRAFTING_RECIPES["Pickaxe"]["coins"];
 
-                        // 1. ADIM: EĞER KAZMA YOKSA, ÖNCE KAZMA AL VE ONAY BEKLE!
+                        // 1. ADIM: EÄER KAZMA YOKSA, Ã–NCE KAZMA AL VE ONAY BEKLE!
                         if (pickCount < 1 && BOT_SETTINGS.autoCraftPickaxe) {
                             let woodCount = Math.floor(parseFloat(SL_INVENTORY["Wood"] || 0));
 
@@ -9374,7 +9391,7 @@
 
                                 await refreshCoreAccountingHashes(payload);
 
-                                log(`📦 Blacksmith order: 1x Pickaxe`);
+                                log(`ğŸ“¦ Blacksmith order: 1x Pickaxe`);
 
                                 try {
                                     let stringifiedPayload = JSON.stringify(payload);
@@ -9385,12 +9402,12 @@
                                     });
 
                                     if (res.ok) {
-                                        log(`✅ Blacksmith success. Pickaxe bought.`);
+                                        log(`âœ… Blacksmith success. Pickaxe bought.`);
                                         masterPayload.stateHash = payload.stateHash;
                                         pickCount++;
                                         actionPerformed = true;
 
-                                        await waitTaskSwitch('Blacksmith → Miner');
+                                        await waitTaskSwitch('Blacksmith â†’ Miner');
                                     } else {
                                         triggerKillSwitch("Server rejected blacksmith pickaxe request.", res.status);
                                         return;
@@ -9402,7 +9419,7 @@
                             }
                         }
 
-                        // 2. ADIM: EĞER KAZMA VARSA, TAŞI KIR VE ONAY BEKLE!
+                        // 2. ADIM: EÄER KAZMA VARSA, TAÅI KIR VE ONAY BEKLE!
                         if (pickCount >= 1 && !stopRequested && !killSwitchActivated) {
                             let stringifiedMaster = JSON.stringify(masterPayload);
                             let payload = JSON.parse(stringifiedMaster);
@@ -9425,7 +9442,7 @@
 
                             await refreshCoreAccountingHashes(payload);
 
-                            log(`📦 Miner: mining stone ${id.substr(0,4)}...`);
+                            log(`ğŸ“¦ Miner: mining stone ${id.substr(0,4)}...`);
 
                             try {
                                 let stringifiedPayload = JSON.stringify(payload);
@@ -9436,7 +9453,7 @@
                                 });
 
                                     if (res.ok) {
-                                        log(`✅ Stone mined.`);
+                                        log(`âœ… Stone mined.`);
                                         masterPayload.stateHash = payload.stateHash;
                                         pickCount--;
                                         actionPerformed = true;
@@ -9507,7 +9524,7 @@
 
                                 await refreshCoreAccountingHashes(payload);
 
-                                log(`ğŸ“¦ Blacksmith order: ${craftAmount}x Stone Pickaxe`);
+                                log(`ÄŸÅ¸â€œÂ¦ Blacksmith order: ${craftAmount}x Stone Pickaxe`);
 
                                 try {
                                     let stringifiedPayload = JSON.stringify(payload);
@@ -9518,12 +9535,12 @@
                                     });
 
                                     if (res.ok) {
-                                        log(`âœ… Blacksmith success. Stone Pickaxe ready.`);
+                                        log(`Ã¢Å“â€¦ Blacksmith success. Stone Pickaxe ready.`);
                                         masterPayload.stateHash = payload.stateHash;
                                         stonePickCount += craftAmount;
                                         actionPerformed = true;
 
-                                        await waitTaskSwitch('Blacksmith â†’ Iron Miner');
+                                        await waitTaskSwitch('Blacksmith Ã¢â€ â€™ Iron Miner');
                                     } else {
                                         triggerKillSwitch("Server rejected blacksmith stone pickaxe request.", res.status);
                                         return;
@@ -9559,7 +9576,7 @@
 
                             await refreshCoreAccountingHashes(payload);
 
-                            log(`📦 Miner: mining iron ${id.substr(0,4)}...`);
+                            log(`ğŸ“¦ Miner: mining iron ${id.substr(0,4)}...`);
 
                             try {
                                 let stringifiedPayload = JSON.stringify(payload);
@@ -9570,7 +9587,7 @@
                                 });
 
                                 if (res.ok) {
-                                    log(`✅ Iron mined.`);
+                                    log(`âœ… Iron mined.`);
                                     masterPayload.stateHash = payload.stateHash;
                                     stonePickCount -= requiredPickaxes;
                                     actionPerformed = true;
@@ -9641,7 +9658,7 @@
 
                                 await refreshCoreAccountingHashes(payload);
 
-                                log(`ğŸ“¦ Blacksmith order: ${craftAmount}x Iron Pickaxe`);
+                                log(`ÄŸÅ¸â€œÂ¦ Blacksmith order: ${craftAmount}x Iron Pickaxe`);
 
                                 try {
                                     let stringifiedPayload = JSON.stringify(payload);
@@ -9652,12 +9669,12 @@
                                     });
 
                                     if (res.ok) {
-                                        log(`âœ… Blacksmith success. Iron Pickaxe ready.`);
+                                        log(`Ã¢Å“â€¦ Blacksmith success. Iron Pickaxe ready.`);
                                         masterPayload.stateHash = payload.stateHash;
                                         ironPickCount += craftAmount;
                                         actionPerformed = true;
 
-                                        await waitTaskSwitch('Blacksmith â†’ Gold Miner');
+                                        await waitTaskSwitch('Blacksmith Ã¢â€ â€™ Gold Miner');
                                     } else {
                                         triggerKillSwitch("Server rejected blacksmith iron pickaxe request.", res.status);
                                         return;
@@ -9693,7 +9710,7 @@
 
                             await refreshCoreAccountingHashes(payload);
 
-                            log(`ğŸ“¦ Miner: mining gold ${id.substr(0,4)}...`);
+                            log(`ÄŸÅ¸â€œÂ¦ Miner: mining gold ${id.substr(0,4)}...`);
 
                             try {
                                 let stringifiedPayload = JSON.stringify(payload);
@@ -9704,7 +9721,7 @@
                                 });
 
                                 if (res.ok) {
-                                    log(`âœ… Gold mined.`);
+                                    log(`Ã¢Å“â€¦ Gold mined.`);
                                     masterPayload.stateHash = payload.stateHash;
                                     ironPickCount -= requiredPickaxes;
                                     actionPerformed = true;
@@ -9726,7 +9743,7 @@
         }
 
         // ---------------------------------------------------------
-        // 6. OTO-TEDAVİ VE NOKTA ATIŞI UYANIŞ (PRECISION WAKE) VE MUHASEBE DENETÇİSİ
+        // 6. OTO-TEDAVÄ° VE NOKTA ATIÅI UYANIÅ (PRECISION WAKE) VE MUHASEBE DENETÃ‡Ä°SÄ°
         // ---------------------------------------------------------
         if (!stopRequested && !killSwitchActivated) {
 
@@ -9796,14 +9813,14 @@
                     await controlledSleep(randInt(1800, 3200));
                 } else if (nextReadyIn !== Infinity) {
                     let waitSecs = Math.ceil(nextReadyIn / 1000);
-                    log(`💤 Tarlada iş yok. En erken ekin ${waitSecs} saniye sonra hazır olacak. Alarm kuruldu! ⏰`);
+                    log(`ğŸ’¤ Tarlada iÅŸ yok. En erken ekin ${waitSecs} saniye sonra hazÄ±r olacak. Alarm kuruldu! â°`);
                     let alarmTime = nextReadyIn + 1000;
                     await controlledSleep(alarmTime);
                 } else if (hasBlockedPlantTask && !hasGrowingCrop) {
                     stopForMissingSelectedSeeds(blockedSeeds);
                     return;
                 } else {
-                    log(`💤 Tarlalar boş ve görev yok. Bekleniyor...`);
+                    log(`ğŸ’¤ Tarlalar boÅŸ ve gÃ¶rev yok. Bekleniyor...`);
                     await controlledSleep(randInt(8000, 14000));
                 }
 
@@ -9814,7 +9831,7 @@
                 return;
             }
 
-            log(`🔄 Bot checking...`);
+            log(`ğŸ”„ Bot checking...`);
 
             let expectedCoins = SL_COINS;
             let expectedInv = JSON.parse(JSON.stringify(SL_INVENTORY));
@@ -9856,9 +9873,9 @@
                     });
 
                     if (diffs.length === 0) {
-                        log(`<span style="color:#4ade80; font-weight:bold;">✅ ACCOUNTING OK.</span>`);
+                        log(`<span style="color:#4ade80; font-weight:bold;">âœ… ACCOUNTING OK.</span>`);
                     } else {
-                        log(`<span style="color:#f87171; font-weight:bold;">⚠️ ACCOUNTING MISMATCH:</span><br>- ` + diffs.join('<br>- '));
+                        log(`<span style="color:#f87171; font-weight:bold;">âš ï¸ ACCOUNTING MISMATCH:</span><br>- ` + diffs.join('<br>- '));
                         triggerKillSwitch("Accounting mismatch detected.", "SYNC_MISMATCH");
                         return;
                     }
@@ -9866,8 +9883,8 @@
             }
 
             if (!stopRequested && !killSwitchActivated) {
-                log(`💤 İşlem arası mola veriliyor...`);
-                await waitTaskSwitch('tur tamamlandı');
+                log(`ğŸ’¤ Ä°ÅŸlem arasÄ± mola veriliyor...`);
+                await waitTaskSwitch('tur tamamlandÄ±');
 
                 if (!stopRequested && !killSwitchActivated) {
                     setTimeout(function() { runAutomationLogic(); }, 100);
@@ -9878,3 +9895,4 @@
         isBotRunning = false;
     }
 })();
+

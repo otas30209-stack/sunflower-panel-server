@@ -830,6 +830,7 @@ class SunflowerPanel:
         for key, text, color in [
             ('bot', 'BOT SEC', '#0ea5e9'),
             ('script', 'SCRIPT URET', '#22c55e'),
+            ('files', 'DOSYALAR', '#f59e0b'),
             ('all', 'DETAYLAR', '#a855f7')
         ]:
             btn = tk.Button(nav, text=text, command=lambda k=key: self.switch_left_panel(k), bg='#132238', fg='#dbeafe', relief='flat', font=('Consolas', 10, 'bold'), cursor='hand2')
@@ -841,6 +842,7 @@ class SunflowerPanel:
         self.left_panels = {}
         self._build_left_bot_panel()
         self._build_left_script_panel()
+        self._build_left_files_panel()
         self._build_left_all_logs_panel()
 
         detail_wrap = tk.Frame(left, bg='#101c31', height=210)
@@ -895,7 +897,19 @@ class SunflowerPanel:
         self.all_log_text = scrolledtext.ScrolledText(panel, height=34, bg='#09111f', fg='#dbeafe', insertbackground='white', font=('Consolas', 9), relief='flat')
         self.all_log_text.pack(fill='both', expand=True)
 
+    def _build_left_files_panel(self):
+        panel = tk.Frame(self.left_host, bg='#101c31')
+        self.left_panels['files'] = panel
+        tk.Label(panel, text='BOT DOSYA PAKETLERI', bg='#101c31', fg='#fde68a', font=('Consolas', 11, 'bold')).pack(anchor='w', pady=(0, 6))
+        tk.Label(panel, text='Bot icindeki DOSYALARI SUNUCUYA GONDER butonuna basinca paket burada gorunur.', bg='#101c31', fg='#cbd5e1', font=('Consolas', 9, 'bold'), wraplength=380, justify='left').pack(anchor='w', pady=(0, 10))
+        tk.Button(panel, text='DOSYALARI YENILE', command=self.refresh_debug_files, bg='#f59e0b', fg='#111827', relief='flat', font=('Consolas', 10, 'bold')).pack(anchor='w', ipadx=14, ipady=8, pady=(0, 10))
+        tk.Label(panel, text='Sag tarafta script paketini sec, sonra dosyayi sec. Kopyala butonu icerigi panoya alir.', bg='#101c31', fg='#94a3b8', font=('Consolas', 9), wraplength=380, justify='left').pack(anchor='w')
+
     def _build_right_panel(self, parent):
+        self.right_users_frame = tk.Frame(parent, bg='#101c31')
+        self.right_files_frame = tk.Frame(parent, bg='#101c31')
+        parent = self.right_users_frame
+
         top = tk.Frame(parent, bg='#101c31')
         top.pack(fill='x', padx=12, pady=(12, 8))
         tk.Label(top, text='KULLANICILAR', bg='#101c31', fg='#fde68a', font=('Consolas', 12, 'bold')).pack(side='left')
@@ -941,17 +955,65 @@ class SunflowerPanel:
         self.tree_menu.add_command(label='Dosyalari Iste / Indir', command=self.request_and_download_debug_files)
         self.tree_menu.add_separator()
 
+        self._build_right_files_panel(self.right_files_frame)
+
+    def _build_right_files_panel(self, parent):
+        top = tk.Frame(parent, bg='#101c31')
+        top.pack(fill='x', padx=12, pady=(12, 8))
+        tk.Label(top, text='GELEN DOSYALAR', bg='#101c31', fg='#fde68a', font=('Consolas', 12, 'bold')).pack(side='left')
+        tk.Button(top, text='YENILE', command=self.refresh_debug_files, bg='#f59e0b', fg='#111827', relief='flat', font=('Consolas', 9, 'bold')).pack(side='right', ipadx=8, ipady=6)
+        tk.Button(top, text='KOPYALA', command=self.copy_debug_file_content, bg='#2563eb', fg='white', relief='flat', font=('Consolas', 9, 'bold')).pack(side='right', padx=(0, 8), ipadx=8, ipady=6)
+
+        body = tk.Frame(parent, bg='#101c31')
+        body.pack(fill='both', expand=True, padx=12, pady=(0, 12))
+
+        left = tk.Frame(body, bg='#101c31', width=330)
+        left.pack(side='left', fill='y', padx=(0, 10))
+        left.pack_propagate(False)
+
+        tk.Label(left, text='SCRIPT PAKETLERI', bg='#101c31', fg='#cbd5e1', font=('Consolas', 10, 'bold')).pack(anchor='w', pady=(0, 6))
+        self.debug_package_list = tk.Listbox(left, bg='#09111f', fg='#e5e7eb', selectbackground='#1d4ed8', relief='flat', font=('Consolas', 10), height=12)
+        self.debug_package_list.pack(fill='x', pady=(0, 10))
+        self.debug_package_list.bind('<<ListboxSelect>>', lambda e: self.on_debug_package_select())
+
+        tk.Label(left, text='DOSYALAR', bg='#101c31', fg='#cbd5e1', font=('Consolas', 10, 'bold')).pack(anchor='w', pady=(0, 6))
+        self.debug_file_list = tk.Listbox(left, bg='#09111f', fg='#e5e7eb', selectbackground='#047857', relief='flat', font=('Consolas', 10), height=8)
+        self.debug_file_list.pack(fill='x')
+        self.debug_file_list.bind('<<ListboxSelect>>', lambda e: self.on_debug_file_select())
+
+        right = tk.Frame(body, bg='#101c31')
+        right.pack(side='left', fill='both', expand=True)
+        self.debug_title_var = tk.StringVar(value='Dosya secilmedi')
+        tk.Label(right, textvariable=self.debug_title_var, bg='#101c31', fg='#fde68a', font=('Consolas', 10, 'bold')).pack(anchor='w', pady=(0, 6))
+        self.debug_content_text = scrolledtext.ScrolledText(right, bg='#06090f', fg='#dbeafe', insertbackground='white', font=('Consolas', 9), relief='flat')
+        self.debug_content_text.pack(fill='both', expand=True)
+        self.debug_packages = []
+        self.debug_package_by_label = {}
+        self.current_debug = {}
+
     def switch_left_panel(self, key):
         for panel in self.left_panels.values():
             panel.pack_forget()
+        if hasattr(self, 'right_users_frame'):
+            self.right_users_frame.pack_forget()
+        if hasattr(self, 'right_files_frame'):
+            self.right_files_frame.pack_forget()
         for btn, _ in self.left_nav_buttons.values():
             btn.config(bg='#132238', fg='#dbeafe')
         self.active_left_panel = key
+        if key == 'files':
+            self.log_title_var.set('DOSYA DETAYLARI')
+            if hasattr(self, 'right_files_frame'):
+                self.right_files_frame.pack(fill='both', expand=True)
+            self.refresh_debug_files(silent=True)
+        else:
+            if hasattr(self, 'right_users_frame'):
+                self.right_users_frame.pack(fill='both', expand=True)
         if key == 'bot':
             self.log_title_var.set('KULLANICI DETAYLARI')
         elif key == 'script':
             self.log_title_var.set('KULLANICI DETAYLARI')
-        else:
+        elif key == 'all':
             self.log_title_var.set('KULLANICI DETAYLARI')
             self.render_selected_details()
         self.left_panels[key].pack(fill='both', expand=True)
@@ -1291,6 +1353,79 @@ class SunflowerPanel:
         except Exception as e:
             self.log(f'Mod degistirme hata: {e}', 'script')
             messagebox.showerror('Hata', str(e))
+
+    def refresh_debug_files(self, silent=False):
+        if not hasattr(self, 'debug_package_list'):
+            return
+        try:
+            res = self.request_json('GET', '/admin/debug-files', need_admin=True)
+            if not res.get('success'):
+                raise RuntimeError(res.get('error') or 'dosyalar alinamadi')
+            items = res.get('items') or []
+            self.debug_packages = items
+            self.debug_package_by_label = {}
+            self.debug_package_list.delete(0, 'end')
+            self.debug_file_list.delete(0, 'end')
+            self.debug_content_text.delete('1.0', 'end')
+            self.debug_title_var.set('Dosya secilmedi')
+            for item in items:
+                label = f"{item.get('client_name') or item.get('license_id')} | {item.get('uid') or '-'} | {item.get('updated_at') or '-'}"
+                self.debug_package_by_label[label] = item
+                self.debug_package_list.insert('end', label)
+            if not silent:
+                self.log(f'Dosya paketleri yenilendi: {len(items)}', 'script')
+        except Exception as e:
+            self.log(f'Dosya listeleme hata: {e}', 'script')
+            if not silent:
+                messagebox.showerror('Hata', str(e))
+
+    def on_debug_package_select(self):
+        sel = self.debug_package_list.curselection()
+        if not sel:
+            return
+        label = self.debug_package_list.get(sel[0])
+        item = self.debug_package_by_label.get(label) or {}
+        license_id = str(item.get('license_id') or '').strip()
+        if not license_id:
+            return
+        try:
+            res = self.request_json('GET', '/admin/debug-files/' + quote(license_id, safe=''), need_admin=True)
+            if not res.get('success'):
+                raise RuntimeError(res.get('error') or 'dosya paketi acilamadi')
+            self.current_debug = res.get('debug') or {}
+            files = self.current_debug.get('files') or {}
+            self.debug_file_list.delete(0, 'end')
+            for name in files.keys():
+                self.debug_file_list.insert('end', name)
+            self.debug_content_text.delete('1.0', 'end')
+            self.debug_title_var.set(f'{license_id} paketi acildi')
+            self.log(f'Dosya paketi acildi: {license_id}', 'script')
+        except Exception as e:
+            self.log(f'Dosya paketi acma hata: {e}', 'script')
+            messagebox.showerror('Hata', str(e))
+
+    def on_debug_file_select(self):
+        sel = self.debug_file_list.curselection()
+        if not sel:
+            return
+        name = self.debug_file_list.get(sel[0])
+        files = (self.current_debug or {}).get('files') or {}
+        content = str(files.get(name) or '')
+        self.debug_title_var.set(f'{self.current_debug.get("license_id", "-")} / {name} ({len(content)} karakter)')
+        self.debug_content_text.delete('1.0', 'end')
+        self.debug_content_text.insert('1.0', content)
+
+    def copy_debug_file_content(self):
+        if not hasattr(self, 'debug_content_text'):
+            return
+        content = self.debug_content_text.get('1.0', 'end-1c')
+        if not content:
+            messagebox.showwarning('Bos', 'Kopyalanacak dosya sec knk')
+            return
+        self.root.clipboard_clear()
+        self.root.clipboard_append(content)
+        self.log('Dosya icerigi kopyalandi', 'script')
+        messagebox.showinfo('Tamam', 'Dosya icerigi kopyalandi knk')
 
     def request_and_download_debug_files(self):
         license_id, row = self.get_selected_license()
