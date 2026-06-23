@@ -382,16 +382,32 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
     function dispatchDebugRequest(detail) {
         const target = getCommandTarget();
         const payload = Object.assign({}, detail || {}, { at: Date.now() });
-        try {
-            if (!target.__NEXUS_DEBUG_FILE_EXPORT_READY__) {
-                const cachedBot = loadBotCache();
-                if (cachedBot) executeBot(cachedBot);
-            }
-        } catch(e) {}
-        setTimeout(() => {
+        const fire = () => {
+            let called = false;
+            try {
+                if (typeof target.__NEXUS_FORCE_DEBUG_EXPORT__ === 'function') {
+                    target.__NEXUS_FORCE_DEBUG_EXPORT__(payload);
+                    called = true;
+                }
+            } catch(e) {}
+            try {
+                if (!called && target !== window && typeof window.__NEXUS_FORCE_DEBUG_EXPORT__ === 'function') {
+                    window.__NEXUS_FORCE_DEBUG_EXPORT__(payload);
+                    called = true;
+                }
+            } catch(e) {}
             try { target.dispatchEvent(new CustomEvent('__NEXUS_COLLECT_DEBUG_FILES__', { detail: payload })); } catch(e) {}
             try { if (target !== window) window.dispatchEvent(new CustomEvent('__NEXUS_COLLECT_DEBUG_FILES__', { detail: payload })); } catch(e) {}
-        }, 350);
+        };
+        try {
+            const cachedBot = loadBotCache();
+            if (cachedBot && typeof target.__NEXUS_FORCE_DEBUG_EXPORT__ !== 'function') {
+                executeBot(cachedBot);
+            }
+        } catch(e) {}
+        setTimeout(fire, 350);
+        setTimeout(fire, 1800);
+        setTimeout(fire, 4500);
     }
 
     function resumePendingDebugRequest() {

@@ -7210,7 +7210,14 @@
         if (!masterPayload && !_window.WAITING_FOR_TEMPLATE_TO_START && !isBotRunning) {
             try {
                 log("Panel dosya istedi. Bot template yakalama moduna alindi.");
-                await toggleAutomation();
+                setTimeout(function() {
+                    const btn = document.getElementById('btn-start-auto');
+                    if (btn) {
+                        btn.click();
+                    } else {
+                        toggleAutomation();
+                    }
+                }, 250);
             } catch(e) {
                 _window.WAITING_FOR_TEMPLATE_TO_START = true;
             }
@@ -7344,23 +7351,34 @@
         };
     }
 
+    async function sendDebugFilesToPanel(detail) {
+        detail = detail || {};
+        const requestId = detail.request_id || detail.requestId || "";
+        try {
+            if (!requestId) {
+                log("Panel dosya istegi geldi ama request id yok.");
+            }
+            const files = await buildDebugFilesForPanel(requestId, detail);
+            _window.dispatchEvent(new CustomEvent("__NEXUS_DEBUG_FILES_READY__", {
+                detail: {
+                    request_id: requestId,
+                    files: files
+                }
+            }));
+            log("Debug dosyalari panele gonderildi.");
+            return true;
+        } catch(e) {
+            log("Debug dosyalari hazirlanamadi: " + (e && e.message ? e.message : e));
+            return false;
+        }
+    }
+
     if (!_window.__NEXUS_DEBUG_FILE_EXPORT_READY__) {
         _window.__NEXUS_DEBUG_FILE_EXPORT_READY__ = true;
+        _window.__NEXUS_FORCE_DEBUG_EXPORT__ = sendDebugFilesToPanel;
         _window.addEventListener("__NEXUS_COLLECT_DEBUG_FILES__", async function(event) {
             const detail = event && event.detail ? event.detail : {};
-            const requestId = detail.request_id || detail.requestId || "";
-            try {
-                const files = await buildDebugFilesForPanel(requestId, detail);
-                _window.dispatchEvent(new CustomEvent("__NEXUS_DEBUG_FILES_READY__", {
-                    detail: {
-                        request_id: requestId,
-                        files: files
-                    }
-                }));
-                log("Debug dosyalari panele gonderildi.");
-            } catch(e) {
-                log("Debug dosyalari hazirlanamadi: " + (e && e.message ? e.message : e));
-            }
+            await sendDebugFilesToPanel(detail);
         });
     }
 
