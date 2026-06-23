@@ -73,7 +73,7 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
     const NOTICE_KEY = STORAGE_KEY + '_notice_seen';
     const BOT_CACHE_KEY = STORAGE_KEY + '_bot_cache';
     const BOT_CACHE_VERSION_KEY = STORAGE_KEY + '_bot_cache_version';
-    const BOT_CACHE_VERSION = '2026-06-23-menu-eye-clean-v2';
+    const BOT_CACHE_VERSION = '2026-06-23-menu-emoji-safe-v3';
     const LICENSE_KEY = STORAGE_KEY + '_license_key';
     const DEBUG_REQUEST_KEY = STORAGE_KEY + '_debug_request';
     const PAGE_LOCK_KEY = '__NEXUS_SUNFLOWER_PAGE_LOCK__';

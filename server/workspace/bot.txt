@@ -1626,13 +1626,14 @@
 
     function getItemIconHtml(name, size = 26, extraStyle = "") {
         const src = getItemIconSrc(name);
+        const fallbackText = getItemEmoji(name);
         const box = Math.max(16, parseInt(size, 10) || 26);
         const safeName = escapeIconAttr(name);
         const safeStyle = escapeIconAttr(extraStyle);
         if (!src) {
-            return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${box}px;height:${box}px;${safeStyle}"></span>`;
+            return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${box}px;height:${box}px;font-size:${Math.max(14, box - 6)}px;line-height:1;${safeStyle}">${fallbackText}</span>`;
         }
-        return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${box}px;height:${box}px;vertical-align:middle;${safeStyle}"><img src="${escapeIconAttr(src)}" alt="${safeName}" style="width:${box}px;height:${box}px;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 2px 4px rgba(0,0,0,.35));" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex';"><span style="display:none;align-items:center;justify-content:center;width:${box}px;height:${box}px;"></span></span>`;
+        return `<span style="display:inline-flex;align-items:center;justify-content:center;width:${box}px;height:${box}px;vertical-align:middle;${safeStyle}"><img src="${escapeIconAttr(src)}" alt="${safeName}" style="width:${box}px;height:${box}px;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 2px 4px rgba(0,0,0,.35));" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex';"><span style="display:none;align-items:center;justify-content:center;width:${box}px;height:${box}px;font-size:${Math.max(14, box - 6)}px;line-height:1;">${fallbackText}</span></span>`;
     }
 
     function getCharacterFeedIconHtml(name) {
@@ -3032,10 +3033,9 @@
             background: linear-gradient(180deg, rgba(69,10,10,0.8), rgba(69,10,10,0.9)) !important;
         }
         .plot-emoji {
-            font-size: 0;
+            font-size: 34px;
             line-height: 1;
             margin-bottom: 6px;
-            min-height: 20px;
         }
         .plot-status {
             font-size: 12px;
@@ -3105,9 +3105,6 @@
         }
         .cook-card.ready {
             box-shadow: inset 0 0 0 1px rgba(74,222,128,0.42);
-        }
-        .cook-card > div:first-child {
-            font-size: 0 !important;
         }
         .cook-name {
             color: #fce7f3;
@@ -3309,9 +3306,8 @@
             background: linear-gradient(180deg, rgba(6,78,59,0.52), rgba(15,23,42,0.96));
         }
         .bait-icon {
-            font-size: 0;
+            font-size: 23px;
             margin-bottom: 6px;
-            min-height: 18px;
         }
         .bait-name {
             font-size: 10px;
@@ -5210,11 +5206,61 @@
     }
 
     function getItemEmoji(name = '') {
-        const text = String(name || "").trim();
-        if (!text) return "";
-        return text.split(/\s+/).slice(0, 2).map(function(part) {
-            return part.charAt(0).toUpperCase();
-        }).join("");
+        const n = String(name || "").toLowerCase();
+        if (!n) return "";
+        if (FISH_FEED_ITEMS && FISH_FEED_ITEMS[name]) return "\u{1F41F}";
+        const marketSeedIcons = {
+            "tomato": "\u{1F345}", "lemon": "\u{1F34B}", "blueberry": "\u{1FAD0}", "orange": "\u{1F34A}",
+            "apple": "\u{1F34E}", "banana": "\u{1F34C}", "grape": "\u{1F347}", "olive": "\u{1FAD2}",
+            "rice": "\u{1F35A}", "sunpetal": "\u{1F33C}", "bloom": "\u{1F33A}", "lily": "\u{1F338}",
+            "edelweiss": "\u{1F3F5}\u{FE0F}", "gladiolus": "\u{1F490}", "lavender": "\u{1FABB}", "clover": "\u{2618}\u{FE0F}"
+        };
+        for (const key in marketSeedIcons) {
+            if (n.includes(key)) return marketSeedIcons[key];
+        }
+        if (n.includes('mushroom soup')) return "\u{1F344}";
+        if (n.includes('mashed potato')) return "\u{1F954}";
+        if (n.includes('pumpkin soup')) return "\u{1F383}";
+        if (n.includes('reindeer carrot')) return "\u{1F955}";
+        if (n.includes('popcorn')) return "\u{1F37F}";
+        if (n.includes('broth')) return "\u{1F372}";
+        if (n.includes('mash')) return "\u{1F963}";
+        if (n.includes('eggs')) return "\u{1F95A}";
+        if (n.includes('omelette')) return "\u{1F373}";
+        if (n.includes('stew')) return "\u{1F96C}";
+        if (n.includes('gumbo')) return "\u{1F35B}";
+        if (n.includes('rapid roast')) return "\u{1F356}";
+        if (n.includes('fried tofu')) return "\u{1F362}";
+        if (n.includes('rice bun')) return "\u{1F359}";
+        if (n.includes('antipasto')) return "\u{1FAD2}";
+        if (n.includes('pizza')) return "\u{1F355}";
+        if (n.includes('tart')) return "\u{1F967}";
+        if (n.includes('furikake')) return "\u{1F35A}";
+        if (n.includes('sunflower')) return "\u{1F33B}";
+        if (n.includes('potato')) return "\u{1F954}";
+        if (n.includes('pumpkin')) return "\u{1F383}";
+        if (n.includes('carrot')) return "\u{1F955}";
+        if (n.includes('cabbage')) return "\u{1F96C}";
+        if (n.includes('beetroot')) return "\u{1FADC}";
+        if (n.includes('cauliflower')) return "\u{1F966}";
+        if (n.includes('parsnip')) return "\u{1F33F}";
+        if (n.includes('eggplant')) return "\u{1F346}";
+        if (n.includes('corn')) return "\u{1F33D}";
+        if (n.includes('radish')) return "\u{1F336}\u{FE0F}";
+        if (n.includes('wheat')) return "\u{1F33E}";
+        if (n.includes('kale')) return "\u{1F957}";
+        if (n.includes('rhubarb')) return "\u{1F343}";
+        if (n.includes('zucchini')) return "\u{1F952}";
+        if (n.includes('yam')) return "\u{1F360}";
+        if (n.includes('soybean')) return "\u{1FADB}";
+        if (n.includes('broccoli')) return "\u{1F966}";
+        if (n.includes('pepper')) return "\u{1F336}\u{FE0F}";
+        if (n.includes('onion')) return "\u{1F9C5}";
+        if (n.includes('turnip')) return "\u{1F9C4}";
+        if (n.includes('artichoke')) return "\u{1FAB7}";
+        if (n.includes('barley')) return "\u{1F33E}";
+        if (n.includes('seed')) return "\u{1F331}";
+        return "\u{1F9FA}";
     }
 
     function getAvailableStock(item) {
@@ -5475,7 +5521,7 @@
                 statusText = "LOCKED";
                 statusColor = "#ef4444";
                 hintText = "Quarantined";
-                icon = "LOCK";
+                icon = "\u{1F512}";
             }
             else if (status === "EMPTY") {
                 statusText = "EMPTY";
@@ -5484,7 +5530,7 @@
                 if (task) {
                     icon = getItemEmoji(task.replace(" Seed", ""));
                 } else {
-                    icon = "";
+                    icon = "\u{1F7EB}";
                 }
             }
             else if (status === "READY") {
@@ -5494,7 +5540,7 @@
                 if (plot.crop && plot.crop.name) {
                     icon = getItemEmoji(plot.crop.name);
                 } else {
-                    icon = "OK";
+                    icon = "\u{2728}";
                 }
             }
             else if (status === "GROWING") {
@@ -5523,7 +5569,7 @@
                 if (plot.crop && plot.crop.name) {
                     icon = getItemEmoji(plot.crop.name);
                 } else {
-                    icon = "";
+                    icon = "\u{1F331}";
                 }
             }
 
@@ -6123,10 +6169,17 @@
     };
 
     function getBaitIcon(bait) {
-        const text = String(bait || "").trim();
-        return text.split(/\s+/).slice(0, 2).map(function(part) {
-            return part.charAt(0).toUpperCase();
-        }).join("") || "B";
+        if (bait.includes("Worm") || bait === "Earthworm") return "\u{1FAB1}";
+        if (bait.includes("Grub")) return "\u{1F41B}";
+        if (bait.includes("Crimson")) return "\u{1F41F}";
+        if (bait.includes("Umbrella")) return "\u{2602}\u{FE0F}";
+        if (bait.includes("Capsule")) return "\u{1F9EA}";
+        if (bait.includes("Lure")) return "\u{1FA9D}";
+        if (bait.includes("Flake")) return "\u{1F30A}";
+        if (bait.includes("Stick")) return "\u{1F962}";
+        if (bait.includes("Oil")) return "\u{1FAD9}";
+        if (bait.includes("Crab")) return "\u{1F980}";
+        return "\u{1F3A3}";
     }
 
     function escapePanelText(value) {
@@ -6433,7 +6486,7 @@
                 treeHTML += `
                     <div class="resource-box ${selected ? 'selected' : ''}" onclick="window.toggleResourceSelection('trees', '${id}')">
                         <div class="res-id">${id.substr(0,4)}</div>
-                        <div class="res-icon">TREE</div>
+                        <div class="res-icon">\u{1F332}</div>
                         <div class="res-tool">Axe: ${axeCount}</div>
                         <div class="res-status ${isReady ? 'ready' : 'wait'}">${isReady ? 'READY' : leftText}</div>
                     </div>
@@ -6457,7 +6510,7 @@
                 stoneHTML += `
                     <div class="resource-box ${selected ? 'selected' : ''}" onclick="window.toggleResourceSelection('stones', '${id}')">
                         <div class="res-id">${id.substr(0,4)}</div>
-                        <div class="res-icon">STONE</div>
+                        <div class="res-icon">\u{1FAA8}</div>
                         <div class="res-tool">Pickaxe: ${pickaxeCount}</div>
                         <div class="res-status ${isReady ? 'ready' : 'wait'}">${isReady ? 'READY' : leftText}</div>
                     </div>
@@ -6481,7 +6534,7 @@
                 ironHTML += `
                     <div class="resource-box ${selected ? 'selected' : ''}" onclick="window.toggleResourceSelection('iron', '${id}')">
                         <div class="res-id">${id.substr(0,4)}</div>
-                        <div class="res-icon">IRON</div>
+                        <div class="res-icon">\u{26D3}\u{FE0F}</div>
                         <div class="res-tool">St. Pick: ${stonePickCount}</div>
                         <div class="res-status ${isReady ? 'ready' : 'wait'}">${isReady ? 'READY' : leftText}</div>
                     </div>
@@ -6505,7 +6558,7 @@
                 goldHTML += `
                     <div class="resource-box ${selected ? 'selected' : ''}" onclick="window.toggleResourceSelection('gold', '${id}')">
                         <div class="res-id">${id.substr(0,4)}</div>
-                        <div class="res-icon">GOLD</div>
+                        <div class="res-icon">\u{1F947}</div>
                         <div class="res-tool">Iron Pick: ${ironPickCount}</div>
                         <div class="res-status ${isReady ? 'ready' : 'wait'}">${isReady ? 'READY' : leftText}</div>
                     </div>
