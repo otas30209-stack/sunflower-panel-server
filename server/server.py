@@ -2034,6 +2034,18 @@ def admin_debug_files_get(license_id):
     return jsonify({'success': True, 'debug': data})
 
 
+@app.delete('/admin/debug-files/<license_id>')
+def admin_debug_files_delete(license_id):
+    if not check_admin(request):
+        return jsonify({'success': False, 'error': 'yetkisiz'}), 403
+    license_id = str(license_id or '').strip()
+    debug_files = load_debug_files()
+    if license_id in debug_files:
+        debug_files.pop(license_id, None)
+        save_debug_files(debug_files)
+    return jsonify({'success': True})
+
+
 @app.get('/admin/debug-files')
 def admin_debug_files_list():
     if not check_admin(request):

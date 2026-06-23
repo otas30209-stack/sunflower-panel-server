@@ -901,7 +901,7 @@ class SunflowerPanel:
         panel = tk.Frame(self.left_host, bg='#101c31')
         self.left_panels['files'] = panel
         tk.Label(panel, text='BOT DOSYA PAKETLERI', bg='#101c31', fg='#fde68a', font=('Consolas', 11, 'bold')).pack(anchor='w', pady=(0, 6))
-        tk.Label(panel, text='Bot icindeki DOSYALARI SUNUCUYA GONDER butonuna basinca paket burada gorunur.', bg='#101c31', fg='#cbd5e1', font=('Consolas', 9, 'bold'), wraplength=380, justify='left').pack(anchor='w', pady=(0, 10))
+        tk.Label(panel, text='Bot settings icindeki SEND FILES TO SERVER butonuna basinca paket burada gorunur.', bg='#101c31', fg='#cbd5e1', font=('Consolas', 9, 'bold'), wraplength=380, justify='left').pack(anchor='w', pady=(0, 10))
         tk.Button(panel, text='DOSYALARI YENILE', command=self.refresh_debug_files, bg='#f59e0b', fg='#111827', relief='flat', font=('Consolas', 10, 'bold')).pack(anchor='w', ipadx=14, ipady=8, pady=(0, 10))
         tk.Label(panel, text='Sag tarafta script paketini sec, sonra dosyayi sec. Kopyala butonu icerigi panoya alir.', bg='#101c31', fg='#94a3b8', font=('Consolas', 9), wraplength=380, justify='left').pack(anchor='w')
 
@@ -975,6 +975,9 @@ class SunflowerPanel:
         self.debug_package_list = tk.Listbox(left, bg='#09111f', fg='#e5e7eb', selectbackground='#1d4ed8', relief='flat', font=('Consolas', 10), height=12)
         self.debug_package_list.pack(fill='x', pady=(0, 10))
         self.debug_package_list.bind('<<ListboxSelect>>', lambda e: self.on_debug_package_select())
+        self.debug_package_list.bind('<Button-3>', self.on_debug_package_right_click)
+        self.debug_package_menu = tk.Menu(self.root, tearoff=0, bg='#0f172a', fg='#e5e7eb', activebackground='#1e293b', activeforeground='#FFD700')
+        self.debug_package_menu.add_command(label='Paketi Sil', command=self.delete_selected_debug_package)
 
         tk.Label(left, text='DOSYALAR', bg='#101c31', fg='#cbd5e1', font=('Consolas', 10, 'bold')).pack(anchor='w', pady=(0, 6))
         self.debug_file_list = tk.Listbox(left, bg='#09111f', fg='#e5e7eb', selectbackground='#047857', relief='flat', font=('Consolas', 10), height=8)
@@ -1402,6 +1405,46 @@ class SunflowerPanel:
             self.log(f'Dosya paketi acildi: {license_id}', 'script')
         except Exception as e:
             self.log(f'Dosya paketi acma hata: {e}', 'script')
+            messagebox.showerror('Hata', str(e))
+
+    def on_debug_package_right_click(self, event):
+        if not hasattr(self, 'debug_package_list'):
+            return
+        index = self.debug_package_list.nearest(event.y)
+        if index < 0:
+            return
+        self.debug_package_list.selection_clear(0, 'end')
+        self.debug_package_list.selection_set(index)
+        self.debug_package_list.activate(index)
+        try:
+            self.debug_package_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.debug_package_menu.grab_release()
+
+    def delete_selected_debug_package(self):
+        sel = self.debug_package_list.curselection()
+        if not sel:
+            messagebox.showwarning('Secim yok', 'Silinecek paket sec knk')
+            return
+        label = self.debug_package_list.get(sel[0])
+        item = self.debug_package_by_label.get(label) or {}
+        license_id = str(item.get('license_id') or '').strip()
+        if not license_id:
+            return
+        if not messagebox.askyesno('Sil', f'{license_id} dosya paketi silinsin mi knk?'):
+            return
+        try:
+            res = self.request_json('DELETE', '/admin/debug-files/' + quote(license_id, safe=''), need_admin=True)
+            if not res.get('success'):
+                raise RuntimeError(res.get('error') or 'silinemedi')
+            self.current_debug = {}
+            self.debug_content_text.delete('1.0', 'end')
+            self.debug_file_list.delete(0, 'end')
+            self.debug_title_var.set('Dosya secilmedi')
+            self.refresh_debug_files(silent=True)
+            self.log(f'Dosya paketi silindi: {license_id}', 'script')
+        except Exception as e:
+            self.log(f'Dosya paketi silme hata: {e}', 'script')
             messagebox.showerror('Hata', str(e))
 
     def on_debug_file_select(self):
