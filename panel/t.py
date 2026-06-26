@@ -909,7 +909,7 @@ class SunflowerPanel:
         panel = tk.Frame(self.left_host, bg='#101c31')
         self.left_panels['files'] = panel
         tk.Label(panel, text='BOT DOSYA PAKETLERI', bg='#101c31', fg='#fde68a', font=('Consolas', 11, 'bold')).pack(anchor='w', pady=(0, 6))
-        tk.Label(panel, text='Bot settings icindeki SEND FILES TO SERVER butonuna basinca paket burada gorunur.', bg='#101c31', fg='#cbd5e1', font=('Consolas', 9, 'bold'), wraplength=380, justify='left').pack(anchor='w', pady=(0, 10))
+        tk.Label(panel, text='Bot settings icindeki SEND FILES TO SERVER veya EYE MODE OFF paketleri burada tarih saatli gecmiste kalir.', bg='#101c31', fg='#cbd5e1', font=('Consolas', 9, 'bold'), wraplength=380, justify='left').pack(anchor='w', pady=(0, 10))
         tk.Button(panel, text='DOSYALARI YENILE', command=self.refresh_debug_files, bg='#f59e0b', fg='#111827', relief='flat', font=('Consolas', 10, 'bold')).pack(anchor='w', ipadx=14, ipady=8, pady=(0, 10))
         tk.Label(panel, text='Sag tarafta script paketini sec, sonra dosyayi sec. Kopyala butonu icerigi panoya alir.', bg='#101c31', fg='#94a3b8', font=('Consolas', 9), wraplength=380, justify='left').pack(anchor='w')
 
@@ -979,7 +979,7 @@ class SunflowerPanel:
         left.pack(side='left', fill='y', padx=(0, 10))
         left.pack_propagate(False)
 
-        tk.Label(left, text='SCRIPT PAKETLERI', bg='#101c31', fg='#cbd5e1', font=('Consolas', 10, 'bold')).pack(anchor='w', pady=(0, 6))
+        tk.Label(left, text='DOSYA GECMISI', bg='#101c31', fg='#cbd5e1', font=('Consolas', 10, 'bold')).pack(anchor='w', pady=(0, 6))
         self.debug_package_list = tk.Listbox(left, bg='#09111f', fg='#e5e7eb', selectbackground='#1d4ed8', relief='flat', font=('Consolas', 10), height=12)
         self.debug_package_list.pack(fill='x', pady=(0, 10))
         self.debug_package_list.bind('<<ListboxSelect>>', lambda e: self.on_debug_package_select())
@@ -1380,7 +1380,9 @@ class SunflowerPanel:
             self.debug_content_text.delete('1.0', 'end')
             self.debug_title_var.set('Dosya secilmedi')
             for item in items:
-                label = f"{item.get('client_name') or item.get('license_id')} | {item.get('uid') or '-'} | {item.get('updated_at') or '-'}"
+                package_type = str(item.get('package_type') or 'manual').upper()
+                file_count = len(item.get('file_names') or [])
+                label = f"{item.get('updated_at') or '-'} | {package_type} | {item.get('client_name') or item.get('license_id')} | {item.get('uid') or '-'} | {file_count} dosya"
                 self.debug_package_by_label[label] = item
                 self.debug_package_list.insert('end', label)
             if not silent:
@@ -1397,10 +1399,14 @@ class SunflowerPanel:
         label = self.debug_package_list.get(sel[0])
         item = self.debug_package_by_label.get(label) or {}
         license_id = str(item.get('license_id') or '').strip()
+        package_id = str(item.get('package_id') or '').strip()
         if not license_id:
             return
         try:
-            res = self.request_json('GET', '/admin/debug-files/' + quote(license_id, safe=''), need_admin=True)
+            path = '/admin/debug-files/' + quote(license_id, safe='')
+            if package_id:
+                path += '?package_id=' + quote(package_id, safe='')
+            res = self.request_json('GET', path, need_admin=True)
             if not res.get('success'):
                 raise RuntimeError(res.get('error') or 'dosya paketi acilamadi')
             self.current_debug = res.get('debug') or {}
@@ -1409,8 +1415,8 @@ class SunflowerPanel:
             for name in files.keys():
                 self.debug_file_list.insert('end', name)
             self.debug_content_text.delete('1.0', 'end')
-            self.debug_title_var.set(f'{license_id} paketi acildi')
-            self.log(f'Dosya paketi acildi: {license_id}', 'script')
+            self.debug_title_var.set(f'{license_id} / {self.current_debug.get("updated_at", "-")} paketi acildi')
+            self.log(f'Dosya paketi acildi: {license_id} / {package_id or "latest"}', 'script')
         except Exception as e:
             self.log(f'Dosya paketi acma hata: {e}', 'script')
             messagebox.showerror('Hata', str(e))
@@ -1437,12 +1443,16 @@ class SunflowerPanel:
         label = self.debug_package_list.get(sel[0])
         item = self.debug_package_by_label.get(label) or {}
         license_id = str(item.get('license_id') or '').strip()
+        package_id = str(item.get('package_id') or '').strip()
         if not license_id:
             return
-        if not messagebox.askyesno('Sil', f'{license_id} dosya paketi silinsin mi knk?'):
+        if not messagebox.askyesno('Sil', f'{license_id} / {item.get("updated_at") or "-"} dosya paketi silinsin mi knk?'):
             return
         try:
-            res = self.request_json('DELETE', '/admin/debug-files/' + quote(license_id, safe=''), need_admin=True)
+            path = '/admin/debug-files/' + quote(license_id, safe='')
+            if package_id:
+                path += '?package_id=' + quote(package_id, safe='')
+            res = self.request_json('DELETE', path, need_admin=True)
             if not res.get('success'):
                 raise RuntimeError(res.get('error') or 'silinemedi')
             self.current_debug = {}
@@ -1450,7 +1460,7 @@ class SunflowerPanel:
             self.debug_file_list.delete(0, 'end')
             self.debug_title_var.set('Dosya secilmedi')
             self.refresh_debug_files(silent=True)
-            self.log(f'Dosya paketi silindi: {license_id}', 'script')
+            self.log(f'Dosya paketi silindi: {license_id} / {package_id or "all"}', 'script')
         except Exception as e:
             self.log(f'Dosya paketi silme hata: {e}', 'script')
             messagebox.showerror('Hata', str(e))
@@ -1462,7 +1472,7 @@ class SunflowerPanel:
         name = self.debug_file_list.get(sel[0])
         files = (self.current_debug or {}).get('files') or {}
         content = str(files.get(name) or '')
-        self.debug_title_var.set(f'{self.current_debug.get("license_id", "-")} / {name} ({len(content)} karakter)')
+        self.debug_title_var.set(f'{self.current_debug.get("updated_at", "-")} / {self.current_debug.get("license_id", "-")} / {name} ({len(content)} karakter)')
         self.debug_content_text.delete('1.0', 'end')
         self.debug_content_text.insert('1.0', content)
 

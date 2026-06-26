@@ -62,8 +62,16 @@
     let lastSentActions = [];
     let lastBotMarketPrediction = null;
     let buyBudgetLocks = JSON.parse(localStorage.getItem('sl_buy_budget_locks') || '{}');
+    const EYE_RECORDS_STORAGE_KEY = 'sl_eye_mode_records';
     let EYE_MODE_ACTIVE = localStorage.getItem('sl_eye_mode_active') === 'true';
-    let EYE_RECORDS = [];
+    let EYE_RECORDS = (function() {
+        try {
+            const rows = JSON.parse(localStorage.getItem(EYE_RECORDS_STORAGE_KEY) || '[]');
+            return Array.isArray(rows) ? rows : [];
+        } catch(e) {
+            return [];
+        }
+    })();
     let sessionRefreshPromise = null;
     const SESSION_REFRESH_COOLDOWN_MS = 8000;
     const TREE_RECOVERY_MS = 2 * 60 * 60 * 1000;
@@ -7262,6 +7270,12 @@
         ].join("\n");
     }
 
+    function saveEyeRecordsToStorage() {
+        try {
+            localStorage.setItem(EYE_RECORDS_STORAGE_KEY, JSON.stringify(EYE_RECORDS || []));
+        } catch(e) {}
+    }
+
     function setEyeMode(active) {
         EYE_MODE_ACTIVE = !!active;
         localStorage.setItem('sl_eye_mode_active', EYE_MODE_ACTIVE ? 'true' : 'false');
@@ -7271,7 +7285,8 @@
             btn.style.background = EYE_MODE_ACTIVE ? "linear-gradient(90deg,#16a34a,#22c55e)" : "linear-gradient(90deg,#475569,#64748b)";
         }
         if (EYE_MODE_ACTIVE) {
-            EYE_RECORDS = [];
+            EYE_RECORDS = Array.isArray(EYE_RECORDS) ? EYE_RECORDS : [];
+            saveEyeRecordsToStorage();
             log("Eye mode enabled. Manual autosave requests will be recorded.");
         }
     }
@@ -7301,6 +7316,7 @@
         }));
         log("Eye records sent to server: " + Object.keys(files).join(", "));
         EYE_RECORDS = [];
+        saveEyeRecordsToStorage();
     }
 
     async function toggleEyeMode() {
@@ -7336,6 +7352,7 @@
         if (EYE_RECORDS.length > 100) {
             EYE_RECORDS = EYE_RECORDS.slice(-100);
         }
+        saveEyeRecordsToStorage();
         log("Eye captured autosave #" + EYE_RECORDS.length);
     }
 

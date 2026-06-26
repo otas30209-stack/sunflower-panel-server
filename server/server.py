@@ -804,6 +804,69 @@ def save_debug_files(data):
     save_json(DEBUG_FILES_FILE, data if isinstance(data, dict) else {})
 
 
+def make_debug_package(license_id, uid, request_id, files, package_type='manual'):
+    now = datetime.now().isoformat()
+    return {
+        'package_id': secrets.token_hex(8),
+        'license_id': str(license_id or '').strip(),
+        'uid': str(uid or '').strip(),
+        'created_at': now,
+        'updated_at': now,
+        'request_id': str(request_id or '').strip(),
+        'package_type': str(package_type or 'manual').strip() or 'manual',
+        'files': files if isinstance(files, dict) else {},
+    }
+
+
+def normalize_debug_entry(license_id, data):
+    data = data if isinstance(data, dict) else {}
+    history = data.get('history')
+    if isinstance(history, list):
+        packages = [item for item in history if isinstance(item, dict) and isinstance(item.get('files'), dict)]
+    else:
+        packages = []
+    if isinstance(data.get('files'), dict) and data.get('files'):
+        current_id = str(data.get('package_id') or data.get('request_id') or '').strip()
+        already = any(str(pkg.get('package_id') or '') == current_id and current_id for pkg in packages)
+        if not already:
+            packages.append({
+                'package_id': current_id or secrets.token_hex(8),
+                'license_id': str(data.get('license_id') or license_id or '').strip(),
+                'uid': str(data.get('uid') or '').strip(),
+                'created_at': data.get('created_at') or data.get('updated_at') or '',
+                'updated_at': data.get('updated_at') or data.get('created_at') or '',
+                'request_id': str(data.get('request_id') or '').strip(),
+                'package_type': str(data.get('package_type') or 'manual').strip() or 'manual',
+                'files': data.get('files') or {},
+            })
+    packages.sort(key=lambda pkg: str(pkg.get('updated_at') or pkg.get('created_at') or ''), reverse=True)
+    latest = packages[0] if packages else {}
+    return {
+        'license_id': str(data.get('license_id') or license_id or '').strip(),
+        'uid': str(latest.get('uid') or data.get('uid') or '').strip(),
+        'created_at': latest.get('created_at') or data.get('created_at') or '',
+        'updated_at': latest.get('updated_at') or data.get('updated_at') or '',
+        'request_id': latest.get('request_id') or data.get('request_id') or '',
+        'package_id': latest.get('package_id') or data.get('package_id') or '',
+        'package_type': latest.get('package_type') or data.get('package_type') or '',
+        'files': latest.get('files') or data.get('files') or {},
+        'history': packages,
+        'requested_at': data.get('requested_at') or '',
+    }
+
+
+def get_debug_package(data, package_id=''):
+    normalized = normalize_debug_entry(data.get('license_id') if isinstance(data, dict) else '', data)
+    package_id = str(package_id or '').strip()
+    history = normalized.get('history') or []
+    if package_id:
+        for package in history:
+            if str(package.get('package_id') or '') == package_id:
+                return package
+        return {}
+    return history[0] if history else {}
+
+
 def _cleanup_sessions(user):
     user = dict(user or {})
     sessions = []
@@ -1426,16 +1489,32 @@ def api_debug_files_upload():
         clean_files[name[:80]] = str(value or '')[:15_000_000]
     if not clean_files:
         return jsonify({'success': False, 'error': 'Dosya yok'}), 400
+    request_id = str(data.get('request_id') or '').strip()
+    package_type = 'eye' if request_id.startswith('eye_') or any(str(name).startswith('goz_') for name in clean_files.keys()) else 'manual'
+    package = make_debug_package(license_id, uid, request_id, clean_files, package_type)
     debug_files = load_debug_files()
-    debug_files[license_id] = {
+    entry = normalize_debug_entry(license_id, debug_files.get(license_id) or {})
+    history = entry.get('history') or []
+    history.insert(0, package)
+    entry.update({
         'license_id': license_id,
         'uid': uid,
-        'updated_at': datetime.now().isoformat(),
-        'request_id': str(data.get('request_id') or '').strip(),
-        'files': clean_files
-    }
+        'updated_at': package['updated_at'],
+        'request_id': package['request_id'],
+        'package_id': package['package_id'],
+        'package_type': package['package_type'],
+        'files': clean_files,
+        'history': history,
+    })
+    debug_files[license_id] = entry
     save_debug_files(debug_files)
-    return jsonify({'success': True, 'license_id': license_id, 'updated_at': debug_files[license_id]['updated_at']})
+    return jsonify({
+        'success': True,
+        'license_id': license_id,
+        'package_id': package['package_id'],
+        'package_type': package['package_type'],
+        'updated_at': package['updated_at']
+    })
 
 
 @app.post('/api/telegram/register')
@@ -2021,7 +2100,7 @@ def admin_debug_files_request():
     request_id = secrets.token_hex(8)
     queue_client_command(f'collect_debug_files:{request_id}', license_id)
     debug_files = load_debug_files()
-    existing = dict(debug_files.get(license_id) or {})
+    existing = normalize_debug_entry(license_id, debug_files.get(license_id) or {})
     existing.update({'license_id': license_id, 'requested_at': datetime.now().isoformat(), 'request_id': request_id})
     debug_files[license_id] = existing
     save_debug_files(debug_files)
@@ -2033,10 +2112,12 @@ def admin_debug_files_get(license_id):
     if not check_admin(request):
         return jsonify({'success': False, 'error': 'yetkisiz'}), 403
     license_id = str(license_id or '').strip()
-    data = load_debug_files().get(license_id) or {}
-    if not data.get('files'):
+    package_id = str(request.args.get('package_id') or '').strip()
+    data = normalize_debug_entry(license_id, load_debug_files().get(license_id) or {})
+    package = get_debug_package(data, package_id)
+    if not package.get('files'):
         return jsonify({'success': False, 'error': 'dosya bekleniyor'}), 404
-    return jsonify({'success': True, 'debug': data})
+    return jsonify({'success': True, 'debug': package, 'history_count': len(data.get('history') or [])})
 
 
 @app.delete('/admin/debug-files/<license_id>')
@@ -2044,8 +2125,26 @@ def admin_debug_files_delete(license_id):
     if not check_admin(request):
         return jsonify({'success': False, 'error': 'yetkisiz'}), 403
     license_id = str(license_id or '').strip()
+    package_id = str(request.args.get('package_id') or '').strip()
     debug_files = load_debug_files()
-    if license_id in debug_files:
+    if license_id in debug_files and package_id:
+        entry = normalize_debug_entry(license_id, debug_files.get(license_id) or {})
+        history = [pkg for pkg in (entry.get('history') or []) if str(pkg.get('package_id') or '') != package_id]
+        if history:
+            latest = history[0]
+            entry.update({
+                'updated_at': latest.get('updated_at') or '',
+                'request_id': latest.get('request_id') or '',
+                'package_id': latest.get('package_id') or '',
+                'package_type': latest.get('package_type') or '',
+                'files': latest.get('files') or {},
+                'history': history,
+            })
+            debug_files[license_id] = entry
+        else:
+            debug_files.pop(license_id, None)
+        save_debug_files(debug_files)
+    elif license_id in debug_files:
         debug_files.pop(license_id, None)
         save_debug_files(debug_files)
     return jsonify({'success': True})
@@ -2058,19 +2157,27 @@ def admin_debug_files_list():
     licenses = load_licenses()
     items = []
     for license_id, data in load_debug_files().items():
-        if not isinstance(data, dict) or not data.get('files'):
+        data = normalize_debug_entry(license_id, data)
+        history = data.get('history') or []
+        if not history:
             continue
         row = dict(licenses.get(license_id, {}))
-        files = data.get('files') or {}
-        items.append({
-            'license_id': license_id,
-            'client_name': row.get('client_name') or license_id,
-            'uid': data.get('uid') or row.get('uid') or '',
-            'updated_at': data.get('updated_at') or '',
-            'request_id': data.get('request_id') or '',
-            'file_names': list(files.keys()),
-            'sizes': {name: len(str(value or '')) for name, value in files.items()}
-        })
+        for package in history:
+            files = package.get('files') or {}
+            if not files:
+                continue
+            items.append({
+                'license_id': license_id,
+                'package_id': package.get('package_id') or '',
+                'package_type': package.get('package_type') or '',
+                'client_name': row.get('client_name') or license_id,
+                'uid': package.get('uid') or data.get('uid') or row.get('uid') or '',
+                'created_at': package.get('created_at') or '',
+                'updated_at': package.get('updated_at') or package.get('created_at') or '',
+                'request_id': package.get('request_id') or '',
+                'file_names': list(files.keys()),
+                'sizes': {name: len(str(value or '')) for name, value in files.items()}
+            })
     items.sort(key=lambda item: str(item.get('updated_at') or ''), reverse=True)
     return jsonify({'success': True, 'items': items})
 
