@@ -466,7 +466,7 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
             const parts = raw.split(':');
             const command = parts[0];
             const requestId = parts[1] || '';
-            const mode = parts[2] || '';
+            const mode = parts[2] || (requestId.indexOf('full_') === 0 ? 'full' : 'light');
             if (command === 'collect_debug_files') {
                 const detail = {
                     request_id: requestId,
@@ -722,6 +722,16 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
         window[PAGE_LOCK_KEY] = CLIENT_ID;
         if (document.getElementById('nxMaster') || document.getElementById('nxDockIcon')) {
             helperStarted = true;
+            const auth = loadAuthState();
+            if (auth && auth.token && auth.uid) {
+                sessionToken = auth.token;
+                extractedUID = auth.uid;
+                startHeartbeatBridge();
+                startCommandBridge();
+                setTimeout(resumePendingDebugRequest, 1200);
+            } else {
+                installDebugBridge();
+            }
             return;
         }
         if (await restoreSession()) return;

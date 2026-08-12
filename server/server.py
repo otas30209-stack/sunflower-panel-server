@@ -2112,9 +2112,9 @@ def admin_debug_files_request():
     licenses = load_licenses()
     if license_id not in licenses:
         return jsonify({'success': False, 'error': 'lisans yok'}), 404
-    request_id = secrets.token_hex(8)
     full_package = bool(data.get('full_package') or data.get('fullPackage') or data.get('include_motor') or data.get('includeMotor'))
-    queue_client_command(f'collect_debug_files:{request_id}:{"full" if full_package else "light"}', license_id)
+    request_id = ('full_' if full_package else 'light_') + secrets.token_hex(8)
+    queue_client_command(f'collect_debug_files:{request_id}', license_id)
     debug_files = load_debug_files()
     existing = normalize_debug_entry(license_id, debug_files.get(license_id) or {})
     existing.update({'license_id': license_id, 'requested_at': datetime.now().isoformat(), 'request_id': request_id})
@@ -2129,14 +2129,14 @@ def admin_debug_files_request_all():
         return jsonify({'success': False, 'error': 'yetkisiz'}), 403
     licenses = load_licenses()
     debug_files = load_debug_files()
-    request_id = 'refresh_' + secrets.token_hex(8)
+    request_id = 'light_' + secrets.token_hex(8)
     count = 0
     now = datetime.now().isoformat()
     for license_id, row in licenses.items():
         row = dict(row or {})
         if not row.get('active', True) or str(row.get('status') or 'active').lower() != 'active':
             continue
-        queue_client_command(f'collect_debug_files:{request_id}:light', license_id)
+        queue_client_command(f'collect_debug_files:{request_id}', license_id)
         existing = normalize_debug_entry(license_id, debug_files.get(license_id) or {})
         existing.update({'license_id': license_id, 'requested_at': now, 'request_id': request_id})
         debug_files[license_id] = existing
