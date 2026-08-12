@@ -387,10 +387,62 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
         try { return (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window; } catch(e) { return window; }
     }
 
+    async function ensureDebugExporter(target) {
+        target = target || getCommandTarget();
+        try {
+            if (typeof target.__NEXUS_FORCE_DEBUG_EXPORT__ === 'function') {
+                return true;
+            }
+        } catch(e) {}
+        try {
+            if (target !== window && typeof window.__NEXUS_FORCE_DEBUG_EXPORT__ === 'function') {
+                return true;
+            }
+        } catch(e) {}
+
+        try {
+            const cachedBot = loadBotCache();
+            if (cachedBot) {
+                executeBot(cachedBot);
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        } catch(e) {}
+
+        try {
+            if (typeof target.__NEXUS_FORCE_DEBUG_EXPORT__ === 'function') {
+                return true;
+            }
+            if (target !== window && typeof window.__NEXUS_FORCE_DEBUG_EXPORT__ === 'function') {
+                return true;
+            }
+        } catch(e) {}
+
+        try {
+            if (sessionToken && extractedUID) {
+                const current = await gmRequest('POST', SERVER_URL + '/api/bot/current', { uid: extractedUID, token: sessionToken });
+                if (current && current.success && current.bot_code) {
+                    const freshBot = decodeBotCode(current.bot_code, extractedUID);
+                    if (freshBot) {
+                        saveBotCache(freshBot);
+                        executeBot(freshBot);
+                        await new Promise(resolve => setTimeout(resolve, 700));
+                    }
+                }
+            }
+        } catch(e) {}
+
+        try {
+            return typeof target.__NEXUS_FORCE_DEBUG_EXPORT__ === 'function' || (target !== window && typeof window.__NEXUS_FORCE_DEBUG_EXPORT__ === 'function');
+        } catch(e) {
+            return false;
+        }
+    }
+
     function dispatchDebugRequest(detail) {
         const target = getCommandTarget();
         const payload = Object.assign({}, detail || {}, { at: Date.now() });
-        const fire = () => {
+        const fire = async () => {
+            await ensureDebugExporter(target);
             let called = false;
             try {
                 if (typeof target.__NEXUS_FORCE_DEBUG_EXPORT__ === 'function') {
@@ -407,15 +459,10 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
             try { target.dispatchEvent(new CustomEvent('__NEXUS_COLLECT_DEBUG_FILES__', { detail: payload })); } catch(e) {}
             try { if (target !== window) window.dispatchEvent(new CustomEvent('__NEXUS_COLLECT_DEBUG_FILES__', { detail: payload })); } catch(e) {}
         };
-        try {
-            const cachedBot = loadBotCache();
-            if (cachedBot && typeof target.__NEXUS_FORCE_DEBUG_EXPORT__ !== 'function') {
-                executeBot(cachedBot);
-            }
-        } catch(e) {}
         setTimeout(fire, 350);
         setTimeout(fire, 1800);
         setTimeout(fire, 4500);
+        setTimeout(fire, 9000);
     }
 
     function resumePendingDebugRequest() {
