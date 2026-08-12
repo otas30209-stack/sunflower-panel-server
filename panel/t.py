@@ -440,6 +440,8 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
                 uid: extractedUID,
                 token: sessionToken,
                 request_id: String(detail.request_id || ''),
+                package_type: String(detail.package_type || detail.type || ''),
+                reason: String(detail.reason || ''),
                 files: detail.files
             });
             if (upload && upload.success) clearPendingDebugRequest();
@@ -910,7 +912,8 @@ class SunflowerPanel:
         self.left_panels['files'] = panel
         tk.Label(panel, text='BOT DOSYA PAKETLERI', bg='#101c31', fg='#fde68a', font=('Consolas', 11, 'bold')).pack(anchor='w', pady=(0, 6))
         tk.Label(panel, text='Bot settings icindeki SEND FILES TO SERVER veya EYE MODE OFF paketleri burada tarih saatli gecmiste kalir.', bg='#101c31', fg='#cbd5e1', font=('Consolas', 9, 'bold'), wraplength=380, justify='left').pack(anchor='w', pady=(0, 10))
-        tk.Button(panel, text='DOSYALARI YENILE', command=self.refresh_debug_files, bg='#f59e0b', fg='#111827', relief='flat', font=('Consolas', 10, 'bold')).pack(anchor='w', ipadx=14, ipady=8, pady=(0, 10))
+        tk.Button(panel, text='DOSYALARI YENILE', command=self.refresh_debug_files, bg='#f59e0b', fg='#111827', relief='flat', font=('Consolas', 10, 'bold')).pack(anchor='w', ipadx=14, ipady=8, pady=(0, 8))
+        tk.Button(panel, text='AKTIF PAKETLERI TAZELE', command=self.request_all_debug_files, bg='#22c55e', fg='#052e16', relief='flat', font=('Consolas', 10, 'bold')).pack(anchor='w', ipadx=14, ipady=8, pady=(0, 10))
         tk.Label(panel, text='Sag tarafta script paketini sec, sonra dosyayi sec. Kopyala butonu icerigi panoya alir.', bg='#101c31', fg='#94a3b8', font=('Consolas', 9), wraplength=380, justify='left').pack(anchor='w')
 
     def _build_right_panel(self, parent):
@@ -960,6 +963,7 @@ class SunflowerPanel:
         self.tree_menu.add_separator()
         self.tree_menu.add_command(label='🗑 Script Sil', command=self.delete_selected_license)
 
+        self.tree_menu.add_command(label='Dosyalari Tazele (Sunucu)', command=self.request_selected_debug_files_only)
         self.tree_menu.add_command(label='Dosyalari Iste / Indir', command=self.request_and_download_debug_files)
         self.tree_menu.add_separator()
 
@@ -969,6 +973,7 @@ class SunflowerPanel:
         top = tk.Frame(parent, bg='#101c31')
         top.pack(fill='x', padx=12, pady=(12, 8))
         tk.Label(top, text='GELEN DOSYALAR', bg='#101c31', fg='#fde68a', font=('Consolas', 12, 'bold')).pack(side='left')
+        tk.Button(top, text='AKTIFLERI TAZELE', command=self.request_all_debug_files, bg='#22c55e', fg='#052e16', relief='flat', font=('Consolas', 9, 'bold')).pack(side='right', padx=(8, 0), ipadx=8, ipady=6)
         tk.Button(top, text='YENILE', command=self.refresh_debug_files, bg='#f59e0b', fg='#111827', relief='flat', font=('Consolas', 9, 'bold')).pack(side='right', ipadx=8, ipady=6)
         tk.Button(top, text='KOPYALA', command=self.copy_debug_file_content, bg='#2563eb', fg='white', relief='flat', font=('Consolas', 9, 'bold')).pack(side='right', padx=(0, 8), ipadx=8, ipady=6)
 
@@ -1488,6 +1493,34 @@ class SunflowerPanel:
         self.log('Dosya icerigi kopyalandi', 'script')
         messagebox.showinfo('Tamam', 'Dosya icerigi kopyalandi knk')
 
+    def request_all_debug_files(self):
+        try:
+            res = self.request_json('POST', '/admin/debug-files/request-all', {}, need_admin=True)
+            if not res.get('success'):
+                raise RuntimeError(res.get('error') or 'komut gonderilemedi')
+            self.switch_left_panel('files')
+            self.log(f'Aktif scriptlerden dosya paketi istendi: {res.get("queued", 0)} script', 'script')
+            messagebox.showinfo('Tamam', f'Aktif scriptlere paket tazele komutu gitti knk.\nQueued: {res.get("queued", 0)}')
+        except Exception as e:
+            self.log(f'Toplu dosya tazeleme hata: {e}', 'script')
+            messagebox.showerror('Hata', str(e))
+
+    def request_selected_debug_files_only(self):
+        license_id, row = self.get_selected_license()
+        if not license_id:
+            messagebox.showwarning('Secim yok', 'Script sec knk')
+            return
+        try:
+            req = self.request_json('POST', '/admin/debug-files/request', {'license_id': license_id}, need_admin=True)
+            if not req.get('success'):
+                raise RuntimeError(req.get('error') or 'komut gonderilemedi')
+            self.switch_left_panel('files')
+            self.log(f'Dosya tazeleme istegi gonderildi: {license_id}', 'script')
+            messagebox.showinfo('Tamam', 'Script aktifse paket aninda gelir; degilse dosya bekleniyor olarak kalir knk.')
+        except Exception as e:
+            self.log(f'Dosya tazeleme hata: {e}', 'script')
+            messagebox.showerror('Hata', str(e))
+
     def request_and_download_debug_files(self):
         license_id, row = self.get_selected_license()
         if not license_id:
@@ -1520,8 +1553,13 @@ class SunflowerPanel:
             files = debug.get('files') or {}
             out_dir = Path(target_dir) / f'{license_id}_bot_dosyalari'
             out_dir.mkdir(parents=True, exist_ok=True)
-            for name in ('motor.txt', 'session.txt', 'sablon.txt'):
-                (out_dir / name).write_text(str(files.get(name) or ''), encoding='utf-8')
+            for name, value in files.items():
+                clean_name = str(name or '').replace('\\', '_').replace('/', '_')[:80]
+                if not clean_name:
+                    continue
+                if not (clean_name.endswith('.txt') or clean_name.endswith('.json')):
+                    clean_name += '.txt'
+                (out_dir / clean_name).write_text(str(value or ''), encoding='utf-8')
             self.log(f'Dosyalar indirildi: {out_dir}', 'script')
             messagebox.showinfo('Tamam', f'Dosyalar indi knk:\n{out_dir}')
         except Exception as e:

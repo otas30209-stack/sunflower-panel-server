@@ -50,6 +50,14 @@
     let SL_STONES = JSON.parse(localStorage.getItem('sl_stones_cache') || '{}');
     let SL_IRON = JSON.parse(localStorage.getItem('sl_iron_cache') || '{}');
     let SL_GOLD = JSON.parse(localStorage.getItem('sl_gold_cache') || '{}');
+    let SL_FRUIT_PATCHES = JSON.parse(localStorage.getItem('sl_fruit_patches_cache') || '{}');
+    let SL_OIL_RESERVES = JSON.parse(localStorage.getItem('sl_oil_reserves_cache') || '{}');
+    let SL_BEEHIVES = JSON.parse(localStorage.getItem('sl_beehives_cache') || '{}');
+    let SL_FLOWERS = JSON.parse(localStorage.getItem('sl_flowers_cache') || '{"flowerBeds":{}}');
+    let SL_CRIMSTONES = JSON.parse(localStorage.getItem('sl_crimstones_cache') || '{}');
+    let SL_SUNSTONES = JSON.parse(localStorage.getItem('sl_sunstones_cache') || '{}');
+    let SL_LAVA_PITS = JSON.parse(localStorage.getItem('sl_lava_pits_cache') || '{}');
+    let SL_ASCENSION_CRYSTALS = JSON.parse(localStorage.getItem('sl_ascension_crystals_cache') || '{}');
 
     let isBotRunning = false;
     let stopRequested = false;
@@ -74,10 +82,25 @@
     })();
     let sessionRefreshPromise = null;
     const SESSION_REFRESH_COOLDOWN_MS = 8000;
+    let SL_API_BASE = localStorage.getItem('sl_api_base') || 'https://api.sunflower-land.com';
+    let SL_SESSION_BODY_CACHE = (function() {
+        try {
+            const cached = JSON.parse(localStorage.getItem('sl_session_body_cache') || '{}');
+            return cached && typeof cached === 'object' ? cached : {};
+        } catch(e) {
+            return {};
+        }
+    })();
     const TREE_RECOVERY_MS = 2 * 60 * 60 * 1000;
     const STONE_RECOVERY_MS = 4 * 60 * 60 * 1000;
     const IRON_RECOVERY_MS = 8 * 60 * 60 * 1000;
     const GOLD_RECOVERY_MS = 24 * 60 * 60 * 1000;
+    const OIL_RECOVERY_MS = 24 * 60 * 60 * 1000;
+    const BEEHIVE_RECOVERY_MS = 24 * 60 * 60 * 1000;
+    const FLOWER_RECOVERY_MS = 24 * 60 * 60 * 1000;
+    const CRIMSTONE_RECOVERY_MS = 24 * 60 * 60 * 1000;
+    const SUNSTONE_RECOVERY_MS = 24 * 60 * 60 * 1000;
+    const LAVA_PIT_RECOVERY_MS = 24 * 60 * 60 * 1000;
     let BOT_ACTION_CLOCK_MS = 0;
 
     function nextBotActionTime(previousMs) {
@@ -122,8 +145,13 @@
         "Pickaxe": { "Wood": 3, "coins": 20 },
         "Stone Pickaxe": { "Wood": 3, "Stone": 5, "coins": 20 },
         "Iron Pickaxe": { "Wood": 3, "Iron": 5, "coins": 80 },
-        "Gold Pickaxe": { "Wood": 3, "Gold": 3, "coins": 100 }
+        "Gold Pickaxe": { "Wood": 3, "Gold": 3, "coins": 100 },
+        "Oil Drill": { "Wood": 20, "Iron": 9, "Leather": 10, "coins": 100 }
     };
+    let MOTOR_TOOL_RECIPES = {};
+    let MOTOR_TOOL_RECIPES_LOADED_AT = 0;
+    let MOTOR_SOURCE_CACHE = "";
+    let MOTOR_SOURCE_CACHE_AT = 0;
 
     function readDecimal(value, fallback = 0) {
         let parsed = parseFloat(value || fallback);
@@ -569,7 +597,17 @@
                 27: 152905, 28: 169405, 29: 186905, 30: 205405,
                 31: 225405, 32: 246905, 33: 269905, 34: 294405,
                 35: 320405, 36: 348405, 37: 378405, 38: 410405,
-                39: 444405, 40: 480405
+                39: 444405, 40: 480405, 41: 518905, 42: 559905,
+                43: 603405, 44: 649405, 45: 697905, 46: 749405,
+                47: 803905, 48: 861405, 49: 921905, 50: 985405,
+                51: 1053905, 52: 1127405, 53: 1205905, 54: 1289405,
+                55: 1377905, 56: 1476405, 57: 1584905, 58: 1703405,
+                59: 1831905, 60: 1970405, 61: 2128905, 62: 2287405,
+                63: 2485905, 64: 2704405, 65: 2942905, 66: 3221405,
+                67: 3539905, 68: 3898405, 69: 4296905, 70: 4735405,
+                71: 5233905, 72: 5743905, 73: 6263905, 74: 6793905,
+                75: 7333905, 76: 7883905, 77: 8443905, 78: 9013905,
+                79: 9593905, 80: 10183905
             };
         }
 
@@ -577,7 +615,8 @@
             const xp = asNumber(experience, 0);
             const thresholds = getLevelThresholds();
             let level = 1;
-            for (let i = 1; i <= 40; i++) {
+            const maxLevel = Math.max.apply(null, Object.keys(thresholds).map(function(key) { return parseInt(key, 10); }));
+            for (let i = 1; i <= maxLevel; i++) {
                 if (xp >= thresholds[i]) {
                     level = i;
                 } else {
@@ -1285,7 +1324,10 @@
         taskSwitchMax: 4200,
         autoFields: true,
         autoTree: false,
+        autoFruit: false,
+        autoOil: false,
         autoCraftAxe: false,
+        autoCraftOilDrill: false,
         autoMine: false,
         autoCraftPick: false,
         autoMineStone: false,
@@ -1316,7 +1358,10 @@
             taskSwitchMax: Math.max(100, parseInt(src.taskSwitchMax ?? DEFAULT_BOT_SETTINGS.taskSwitchMax) || DEFAULT_BOT_SETTINGS.taskSwitchMax),
             autoFields: src.autoFields === undefined ? true : !!src.autoFields,
             autoTree: !!src.autoTree,
+            autoFruit: !!src.autoFruit,
+            autoOil: !!src.autoOil,
             autoCraftAxe: !!src.autoCraftAxe,
+            autoCraftOilDrill: !!src.autoCraftOilDrill,
             autoMine: !!src.autoMine,
             autoCraftPick: !!src.autoCraftPick,
             autoMineStone: !!(src.autoMineStone ?? src.autoMine),
@@ -1342,11 +1387,20 @@
     let masterHeaders = null;
     let LAST_SESSION_SNAPSHOT = null;
     let LAST_AUTOSAVE_SNAPSHOT = null;
+    let LAST_BODY_AUDIT = JSON.parse(localStorage.getItem('sl_last_body_audit') || 'null');
+    let LAST_REQUEST_SNAPSHOT = null;
+    let LAST_RESPONSE_SNAPSHOT = null;
+    let LAST_CURL_BASH = "";
+    let LAST_TELEMETRY_SNAPSHOT = null;
+    let AUTO_DEBUG_PACKAGE_IN_FLIGHT = false;
+    let LAST_ERROR_DEBUG_PACKAGE_AT = 0;
+    let AUTOSAVE_BODY_EXAMPLES = JSON.parse(localStorage.getItem('sl_autosave_body_examples') || '{}');
+    let STOP_CONFIRM_UNTIL_MS = 0;
     const exhaustedSeedWarnings = new Set();
 
     let rawPlotTasks = localStorage.getItem('sl_plot_tasks');
     let PLOT_TASKS = JSON.parse(rawPlotTasks || "{}");
-    let RESOURCE_SELECTIONS = JSON.parse(localStorage.getItem('sl_resource_selections') || '{"trees":{},"stones":{},"iron":{},"gold":{}}');
+    let RESOURCE_SELECTIONS = JSON.parse(localStorage.getItem('sl_resource_selections') || '{"trees":{},"stones":{},"iron":{},"gold":{},"fruits":{},"oilReserves":{},"beehives":{},"flowers":{},"lavaPits":{},"specialRocks":{}}');
     let WATER_PANEL_OPEN = localStorage.getItem('sl_water_panel_open') === 'true';
     let MUSHROOM_PANEL_OPEN = localStorage.getItem('sl_mushroom_panel_open') === 'true';
     let FISHING_ODDS_OPEN = localStorage.getItem('sl_fishing_odds_open') === 'true';
@@ -2057,21 +2111,124 @@
 
     _window.toggleResourceSelection = toggleResourceSelection;
 
+    function isNexusUiTarget(target) {
+        return !!(target && target.closest && target.closest('.sl-window, #sl-mini-launcher, #nexus-seed-modal, #nexus-number-modal, #sl-game-click-guard'));
+    }
+
+    function isGameClickGuardActive() {
+        return !killSwitchActivated && (isBotRunning || _window.AUTO_RESUME_PENDING || localStorage.getItem('sl_auto_resume') === 'true');
+    }
+
+    function updateGameClickGuard() {
+        const guard = document.getElementById('sl-game-click-guard');
+        if (!guard) return;
+        guard.classList.toggle('active', isGameClickGuardActive());
+    }
+
+    function installGameClickGuard() {
+        if (_window.__NEXUS_GAME_CLICK_GUARD_INSTALLED__) return;
+        _window.__NEXUS_GAME_CLICK_GUARD_INSTALLED__ = true;
+
+        const guardedEvents = [
+            'pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'dblclick',
+            'touchstart', 'touchend', 'contextmenu'
+        ];
+
+        guardedEvents.forEach(function(eventName) {
+            document.addEventListener(eventName, function(event) {
+                updateGameClickGuard();
+                if (!isGameClickGuardActive() || isNexusUiTarget(event.target)) {
+                    return;
+                }
+
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                log("Game click blocked while bot is controlling the farm.");
+            }, true);
+        });
+
+        setInterval(updateGameClickGuard, 700);
+        updateGameClickGuard();
+    }
+
+    let nexusWakeLock = null;
+
+    async function requestNexusWakeLock() {
+        if (!("wakeLock" in navigator) || !navigator.wakeLock || document.visibilityState !== "visible") {
+            return false;
+        }
+        try {
+            nexusWakeLock = await navigator.wakeLock.request("screen");
+            nexusWakeLock.addEventListener("release", function() {
+                nexusWakeLock = null;
+            });
+            return true;
+        } catch(e) {
+            nexusWakeLock = null;
+            return false;
+        }
+    }
+
+    async function releaseNexusWakeLock() {
+        if (!nexusWakeLock) return;
+        try {
+            await nexusWakeLock.release();
+        } catch(e) {}
+        nexusWakeLock = null;
+    }
+
+    function installVisibilityGuard() {
+        if (_window.__NEXUS_VISIBILITY_GUARD_INSTALLED__) return;
+        _window.__NEXUS_VISIBILITY_GUARD_INSTALLED__ = true;
+
+        document.addEventListener("visibilitychange", function() {
+            if (document.visibilityState === "visible") {
+                if (isBotRunning || _window.AUTO_RESUME_PENDING) {
+                    requestNexusWakeLock();
+                    forceRadarRefresh("visible tab refresh", true).then(function() {
+                        safeRenderPlotGrid("visible tab refresh");
+                    }).catch(function() {});
+                }
+            } else if (isBotRunning || _window.AUTO_RESUME_PENDING) {
+                log("Tab hidden: browser may slow timers. Keep this game tab visible for stable long runs.");
+            }
+        });
+    }
+
     // ==========================================
     // ğŸš§ ANINDA Ã–LÃœM (INSTA-KILL) FONKSÄ°YONU
     // ==========================================
     function triggerKillSwitch(reason, status) {
         killSwitchActivated = true;
         isBotRunning = false;
-        log(`<span style="color:#ef4444; font-weight:900; font-size:14px;">ğŸ›‘ ANINDA Ã–LÃœM PROTOKOLÃœ Ã‡ALIÅTI!</span>`);
-        log(`<span style="color:#fca5a5; font-weight:bold;">AÃ§Ä±klama: ${reason} (Sunucu Kodu: ${status})</span>`);
-        log(`<span style="color:#fca5a5;">Bot gÃ¼venliÄŸiniz iÃ§in anÄ±nda durduruldu ve tÃ¼m iÅŸlemler kesildi!</span>`);
+        log(`<span style="color:#ef4444; font-weight:900; font-size:14px;">SAFETY STOP ACTIVATED</span>`);
+        log(`<span style="color:#fca5a5; font-weight:bold;">Reason: ${reason} (Server: ${status})</span>`);
+        log(`<span style="color:#fca5a5;">Bot stopped to protect the current session.</span>`);
+        sendErrorDebugPackage(reason, status).catch(function() {});
 
         let btn = document.getElementById('btn-start-auto');
         if (btn) {
-            btn.innerText = "âš ï¸ HATA (KÄ°LÄ°TLÄ°)";
+            btn.innerText = "ERROR LOCKED";
             btn.style.background = "#7f1d1d";
         }
+    }
+
+    function isRecoverableServerReject(status) {
+        const numeric = parseInt(status, 10);
+        return numeric === 409;
+    }
+
+    async function handleRecoverableServerReject(reason, status) {
+        if (!isRecoverableServerReject(status)) {
+            return false;
+        }
+
+        log(`<span style="color:#facc15;font-weight:900;">SYNC RETRY GUARD</span> ${reason} (Server ${status}). Live state will refresh; no kill switch.`);
+        sendErrorDebugPackage(reason, status).catch(function() {});
+        await forceRadarRefresh("recoverable reject " + reason, true).catch(function() {});
+        safeRenderPlotGrid("recoverable reject " + reason);
+        renderForestAndMines();
+        return true;
     }
 
     function getSafeAndQuarantinedPlots() {
@@ -2226,6 +2383,53 @@
         saveMasterHeaders();
     }
 
+    function headersToPlainObject(headers) {
+        const out = {};
+        if (!headers) {
+            return out;
+        }
+
+        try {
+            if (typeof headers.forEach === 'function') {
+                headers.forEach(function(value, key) {
+                    out[key] = value;
+                });
+                return out;
+            }
+        } catch(e) {
+            // Fall through to object readers.
+        }
+
+        if (Array.isArray(headers)) {
+            headers.forEach(function(pair) {
+                if (pair && pair.length >= 2) {
+                    out[pair[0]] = pair[1];
+                }
+            });
+            return out;
+        }
+
+        try {
+            Object.keys(headers).forEach(function(key) {
+                out[key] = headers[key];
+            });
+        } catch(e) {
+            // Ignore unreadable header containers.
+        }
+        return out;
+    }
+
+    function mergeHeaderObjects() {
+        const merged = {};
+        for (let i = 0; i < arguments.length; i++) {
+            const plain = headersToPlainObject(arguments[i]);
+            Object.keys(plain).forEach(function(key) {
+                merged[key] = plain[key];
+            });
+        }
+        return merged;
+    }
+
     function findHeaderKey(headers, wantedKey) {
         if (!headers) {
             return null;
@@ -2308,6 +2512,113 @@
         setHeaderValue(headers, 'x-transaction-id', makeTransactionId());
 
         return headers;
+    }
+
+    function rememberApiBaseFromUrl(url) {
+        const text = String(url || "");
+        const match = text.match(/^https:\/\/api\d*\.sunflower-land\.com/i);
+        if (!match) {
+            return;
+        }
+        SL_API_BASE = match[0];
+        localStorage.setItem('sl_api_base', SL_API_BASE);
+    }
+
+    function getSunflowerApiBase() {
+        return SL_API_BASE || 'https://api.sunflower-land.com';
+    }
+
+    function makeSunflowerApiUrl(path) {
+        return getSunflowerApiBase().replace(/\/+$/, '') + path;
+    }
+
+    function rememberSessionBody(bodyText) {
+        if (!bodyText) {
+            return;
+        }
+        try {
+            const parsed = typeof bodyText === "string" ? JSON.parse(bodyText) : bodyText;
+            if (!parsed || typeof parsed !== "object") {
+                return;
+            }
+            ["clientVersion", "timezone", "language"].forEach(function(key) {
+                if (parsed[key]) {
+                    SL_SESSION_BODY_CACHE[key] = parsed[key];
+                }
+            });
+            localStorage.setItem('sl_session_body_cache', JSON.stringify(SL_SESSION_BODY_CACHE));
+        } catch(e) {}
+    }
+
+    function getSessionRequestBody(cachedPayload) {
+        cachedPayload = cachedPayload || {};
+        let timezone = SL_SESSION_BODY_CACHE.timezone;
+        if (!timezone) {
+            try {
+                timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            } catch(e) {
+                timezone = "Europe/Istanbul";
+            }
+        }
+        return {
+            "clientVersion": SL_SESSION_BODY_CACHE.clientVersion || cachedPayload.clientVersion || "2026-07-20T04:39",
+            "timezone": timezone || "Europe/Istanbul",
+            "language": SL_SESSION_BODY_CACHE.language || "en"
+        };
+    }
+
+    function clearFarmRuntimeCaches() {
+        SL_INVENTORY = {};
+        SL_CROPS = {};
+        SL_TREES = {};
+        SL_STONES = {};
+        SL_IRON = {};
+        SL_GOLD = {};
+        SL_FRUIT_PATCHES = {};
+        SL_OIL_RESERVES = {};
+        SL_BEEHIVES = {};
+        SL_FLOWERS = { flowerBeds: {} };
+        SL_CRIMSTONES = {};
+        SL_SUNSTONES = {};
+        SL_LAVA_PITS = {};
+        SL_ASCENSION_CRYSTALS = {};
+        SL_MUSHROOMS = { mushrooms: {} };
+
+        [
+            'sl_inventory_cache',
+            'sl_crops_cache',
+            'sl_trees_cache',
+            'sl_stones_cache',
+            'sl_iron_cache',
+            'sl_gold_cache',
+            'sl_fruit_patches_cache',
+            'sl_oil_reserves_cache',
+            'sl_beehives_cache',
+            'sl_flowers_cache',
+            'sl_crimstones_cache',
+            'sl_sunstones_cache',
+            'sl_lava_pits_cache',
+            'sl_ascension_crystals_cache',
+            'sl_mushrooms_cache',
+            'sl_last_session_refresh_at'
+        ].forEach(function(key) {
+            localStorage.removeItem(key);
+        });
+    }
+
+    function rememberFarmIdFromResponse(farmId) {
+        if (!farmId) {
+            return;
+        }
+
+        const nextFarmId = String(farmId);
+        const currentFarmId = SL_FARM_ID ? String(SL_FARM_ID) : "";
+        if (currentFarmId && currentFarmId !== nextFarmId) {
+            clearFarmRuntimeCaches();
+        }
+
+        SL_FARM_ID = nextFarmId;
+        localStorage.setItem('sl_farm_id', SL_FARM_ID);
     }
 
     function runFarmHashTTL(farmHash) {
@@ -2430,6 +2741,28 @@
             object-position: center 18%;
             transform: translateY(6px);
             image-rendering: pixelated;
+        }
+        #sl-game-click-guard {
+            position: fixed;
+            left: 50%;
+            top: 14px;
+            transform: translateX(-50%);
+            z-index: 999997;
+            display: none;
+            pointer-events: none;
+            padding: 8px 14px;
+            border: 1px solid rgba(251,191,36,0.65);
+            border-radius: 999px;
+            background: rgba(15,23,42,0.92);
+            color: #fde68a;
+            font-family: Inter, Segoe UI, monospace;
+            font-size: 12px;
+            font-weight: 900;
+            letter-spacing: 0.2px;
+            box-shadow: 0 12px 28px rgba(2,6,23,0.42), 0 0 16px rgba(251,191,36,0.25);
+        }
+        #sl-game-click-guard.active {
+            display: block;
         }
         .win-content {
             position: relative;
@@ -3559,7 +3892,7 @@
 
                 <div class="tabs">
                     <button class="tab-btn active" id="tab-tarla-btn">FIELDS</button>
-                    <button class="tab-btn" id="tab-orman-btn">FOREST & MINES</button>
+                    <button class="tab-btn" id="tab-orman-btn">FARM</button>
                     <button class="tab-btn" id="tab-balik-btn">Fishing</button>
                     <button class="tab-btn" id="tab-digging-btn">Digging</button>
                 </div>
@@ -3619,6 +3952,67 @@
                             </div>
                         </div>
                         <div id="grid-trees" class="grid-container">Loading...</div>
+
+                        <div class="section-header" id="fruit-tree-section-header">
+                            <span style="display:flex; align-items:center; gap:5px;">Fruit Trees</span>
+                            <div class="header-controls">
+                                <div class="mini-switch-wrapper" title="Automatically harvests ready fruit patches">
+                                    <label class="switch">
+                                        <input type="checkbox" id="toggle-auto-fruit" ${BOT_SETTINGS.autoFruit ? 'checked' : ''}>
+                                        <span class="slider"></span>
+                                    </label>
+                                    <span class="mini-label">Auto Fruit</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="grid-fruits" class="grid-container">Loading...</div>
+
+                        <div id="oil-reserve-section">
+                            <div class="section-header">
+                                <span style="display:flex; align-items:center; gap:5px;">Oil Reserves</span>
+                                <div class="header-controls">
+                                    <div class="mini-switch-wrapper" title="Automatically drills ready oil reserves">
+                                        <label class="switch">
+                                            <input type="checkbox" id="toggle-auto-oil" ${BOT_SETTINGS.autoOil ? 'checked' : ''}>
+                                            <span class="slider"></span>
+                                        </label>
+                                        <span class="mini-label">Auto Oil</span>
+                                    </div>
+                                    <div class="mini-switch-wrapper" title="Buys an Oil Drill if needed" style="border-color: rgba(245,158,11,0.4);">
+                                        <label class="switch">
+                                            <input type="checkbox" id="toggle-auto-oil-drill" ${BOT_SETTINGS.autoCraftOilDrill ? 'checked' : ''}>
+                                            <span class="slider"></span>
+                                        </label>
+                                        <span class="mini-label" style="color:#fcd34d;">Auto Drill</span>
+                                    </div>
+                                </div>
+                        </div>
+                        <div id="grid-oil" class="grid-container">Loading...</div>
+                        </div>
+
+                        <div id="beehive-section">
+                            <div class="section-header">
+                                <span style="display:flex; align-items:center; gap:5px;">Beehives</span>
+                                <div class="header-controls"></div>
+                            </div>
+                            <div id="grid-beehives" class="grid-container">Loading...</div>
+                        </div>
+
+                        <div id="flower-section">
+                            <div class="section-header">
+                                <span style="display:flex; align-items:center; gap:5px;">Flower Beds</span>
+                                <div class="header-controls"></div>
+                            </div>
+                            <div id="grid-flowers" class="grid-container">Loading...</div>
+                        </div>
+
+                        <div id="lava-section">
+                            <div class="section-header">
+                                <span style="display:flex; align-items:center; gap:5px;">Lava Pits</span>
+                                <div class="header-controls"></div>
+                            </div>
+                            <div id="grid-lava" class="grid-container">Loading...</div>
+                        </div>
 
                         <div class="section-header">
                             <span style="display:flex; align-items:center; gap:5px;">Mines</span>
@@ -3696,6 +4090,11 @@
                             </div>
                         </div>
                         <div id="grid-gold" class="grid-container">Loading...</div>
+
+                        <div id="special-mine-section">
+                            <div class="sub-title">Special Rocks</div>
+                            <div id="grid-special-rocks" class="grid-container">Loading...</div>
+                        </div>
                     </div>
                     <div id="tab-balik" class="tab-content">
                         <div class="fishing-topbar">
@@ -3814,6 +4213,7 @@
 
                     <button id="btn-save-settings" class="sl-btn" style="background:linear-gradient(90deg,#2563eb,#60a5fa);">SAVE SETTINGS</button>
                     <button id="btn-reset-settings" class="sl-btn" style="background:linear-gradient(90deg,#475569,#94a3b8);">RESET SETTINGS</button>
+                    <button id="btn-send-motor-file" class="sl-btn" style="background:linear-gradient(90deg,#7c3aed,#22d3ee); margin-top:8px; min-height:44px;">SEND MOTOR TO SERVER</button>
                     <button id="btn-send-debug-files" class="sl-btn" style="background:linear-gradient(90deg,#2563eb,#38bdf8); margin-top:8px; min-height:44px;">SEND FILES TO SERVER</button>
                     <button id="btn-eye-mode" class="sl-btn" style="background:linear-gradient(90deg,#475569,#64748b); margin-top:8px; min-height:44px;">EYE MODE: OFF</button>
                 </div>
@@ -3906,6 +4306,7 @@
         document.body.insertAdjacentHTML('beforeend', marketMenuHTML);
         document.body.insertAdjacentHTML('beforeend', cookingMenuHTML);
         document.body.insertAdjacentHTML('beforeend', characterMenuHTML);
+        document.body.insertAdjacentHTML('beforeend', `<div id="sl-game-click-guard">Bot control lock active</div>`);
 
         const farmStatusLabel = document.querySelector('#farm-status-toggle span:first-child');
         if (farmStatusLabel) farmStatusLabel.textContent = 'Farm Status';
@@ -3922,6 +4323,8 @@
         const loggerBox = document.getElementById('sl-logger');
         if (loggerBox) loggerBox.textContent = 'System ready. Press "Start" to begin safely.';
         updateHud();
+        installGameClickGuard();
+        installVisibilityGuard();
 
         makeDraggable('sl-main-menu');
         makeDraggable('sl-plot-menu');
@@ -3930,7 +4333,7 @@
         makeDraggable('sl-cooking-menu');
         makeDraggable('sl-character-menu');
 
-        document.getElementById('tab-tarla-btn').onclick = function() {
+        document.getElementById('tab-tarla-btn').onclick = async function() {
             document.getElementById('tab-tarla').classList.add('active');
             document.getElementById('tab-orman').classList.remove('active');
             document.getElementById('tab-balik').classList.remove('active');
@@ -3939,9 +4342,10 @@
             document.getElementById('tab-orman-btn').classList.remove('active');
             document.getElementById('tab-balik-btn').classList.remove('active');
             document.getElementById('tab-digging-btn').classList.remove('active');
+            await refreshFieldPanelState('field tab refresh', true);
         };
 
-        document.getElementById('tab-orman-btn').onclick = function() {
+        document.getElementById('tab-orman-btn').onclick = async function() {
             document.getElementById('tab-orman').classList.add('active');
             document.getElementById('tab-tarla').classList.remove('active');
             document.getElementById('tab-balik').classList.remove('active');
@@ -3950,7 +4354,7 @@
             document.getElementById('tab-tarla-btn').classList.remove('active');
             document.getElementById('tab-balik-btn').classList.remove('active');
             document.getElementById('tab-digging-btn').classList.remove('active');
-            renderForestAndMines();
+            await refreshFarmPanelState('farm tab refresh', true);
         };
 
         document.getElementById('tab-balik-btn').onclick = function() {
@@ -3981,6 +4385,24 @@
             BOT_SETTINGS.autoTree = e.target.checked;
             saveBotSettings();
             log(`ğŸŒ² Auto Chop: ${e.target.checked ? 'ON' : 'OFF'}`);
+        };
+        document.getElementById('toggle-auto-fruit').onchange = function(e) {
+            BOT_SETTINGS.autoFruit = e.target.checked;
+            saveBotSettings();
+            log(`Auto Fruit: ${e.target.checked ? 'ON' : 'OFF'}`);
+            renderForestAndMines();
+        };
+        document.getElementById('toggle-auto-oil').onchange = function(e) {
+            BOT_SETTINGS.autoOil = e.target.checked;
+            saveBotSettings();
+            log(`Auto Oil: ${e.target.checked ? 'ON' : 'OFF'}`);
+            renderForestAndMines();
+        };
+        document.getElementById('toggle-auto-oil-drill').onchange = function(e) {
+            BOT_SETTINGS.autoCraftOilDrill = e.target.checked;
+            saveBotSettings();
+            log(`Auto Oil Drill: ${e.target.checked ? 'ON' : 'OFF'}`);
+            renderForestAndMines();
         };
         document.getElementById('toggle-oto-craft-axe').onchange = function(e) {
             BOT_SETTINGS.autoCraftAxe = e.target.checked;
@@ -4095,10 +4517,10 @@
 
         document.getElementById('btn-open-plots').onclick = async function() {
             document.getElementById('sl-plot-menu').style.display = 'block';
-            renderPlotGrid();
-            log("ğŸ“‹ Field panel opened from cached game state.");
+            await refreshFieldPanelState('field panel open', true);
+            log("Field panel refreshed from live game state.");
             if (document.getElementById('tab-orman').classList.contains('active')) {
-                renderForestAndMines();
+                await refreshFarmPanelState('farm panel open', true);
             }
             if (document.getElementById('tab-balik').classList.contains('active')) {
                 renderFishingMenu();
@@ -4225,7 +4647,10 @@
                 taskSwitchMax: Math.round(parseFloat(document.getElementById('set-task-switch-max').value || 0) * 1000),
                 autoFields: BOT_SETTINGS.autoFields,
                 autoTree: BOT_SETTINGS.autoTree,
+                autoFruit: BOT_SETTINGS.autoFruit,
+                autoOil: BOT_SETTINGS.autoOil,
                 autoCraftAxe: BOT_SETTINGS.autoCraftAxe,
+                autoCraftOilDrill: BOT_SETTINGS.autoCraftOilDrill,
                 autoMine: BOT_SETTINGS.autoMine,
                 autoCraftPick: BOT_SETTINGS.autoCraftPick,
                 autoMineStone: BOT_SETTINGS.autoMineStone,
@@ -4248,7 +4673,10 @@
             let oldToggles = {
                 autoFields: BOT_SETTINGS.autoFields,
                 autoTree: BOT_SETTINGS.autoTree,
+                autoFruit: BOT_SETTINGS.autoFruit,
+                autoOil: BOT_SETTINGS.autoOil,
                 autoCraftAxe: BOT_SETTINGS.autoCraftAxe,
+                autoCraftOilDrill: BOT_SETTINGS.autoCraftOilDrill,
                 autoMine: BOT_SETTINGS.autoMine,
                 autoCraftPick: BOT_SETTINGS.autoCraftPick,
                 autoMineStone: BOT_SETTINGS.autoMineStone,
@@ -4291,6 +4719,21 @@
         }
 
         document.getElementById('btn-start-auto').onclick = toggleAutomation;
+        const sendMotorButton = document.getElementById('btn-send-motor-file');
+        if (sendMotorButton) {
+            sendMotorButton.onclick = async function() {
+                sendMotorButton.disabled = true;
+                const oldText = sendMotorButton.innerText;
+                sendMotorButton.innerText = "SENDING MOTOR...";
+                log("Motor dosyasi bulunup sunucuya gonderiliyor...");
+                await sendMotorFileToPanel({
+                    request_id: "motor_" + Date.now(),
+                    created_at: Date.now()
+                });
+                sendMotorButton.innerText = oldText;
+                sendMotorButton.disabled = false;
+            };
+        }
         const sendDebugButton = document.getElementById('btn-send-debug-files');
         if (sendDebugButton) {
             sendDebugButton.onclick = async function() {
@@ -4417,10 +4860,38 @@
             ["bekleniyor", "waiting"],
             ["fÄ±rlatÄ±lÄ±yor", "sending"],
             ["eylem", "actions"],
-            ["tohum", "seeds"]
+            ["tohum", "seeds"],
+            ["Ä°ÅŸlem arasÄ± mola veriliyor", "Round break"],
+            ["Ä°ÅŸlem aras mola veriliyor", "Round break"],
+            ["lem aras mola veriliyor", "Round break"],
+            ["Pas geiliyor", "skipped"],
+            ["pas geiliyor", "skipped"]
         ];
         replacements.forEach(function(pair) {
             text = text.split(pair[0]).join(pair[1]);
+        });
+        const actionLogTypes = [
+            "crop.harvested", "seed.planted", "mushroom.picked", "timber.chopped",
+            "stoneRock.mined", "ironRock.mined", "goldRock.mined", "fruit.harvested",
+            "oilReserve.drilled", "tool.crafted", "seed.bought", "crop.sold",
+            "rod.casted", "rod.reeled", "recipe.cooked", "recipe.collected",
+            "bumpkin.feed", "pet.fed", "animal.fed"
+        ];
+        actionLogTypes.forEach(function(type) {
+            const escaped = type.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            text = text.replace(new RegExp("(" + escaped + ")(?=" + escaped + ")", "g"), "$1<br>");
+        });
+        actionLogTypes.forEach(function(left) {
+            actionLogTypes.forEach(function(right) {
+                if (left === right) return;
+                const escapedLeft = left.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                const escapedRight = right.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+                text = text.replace(new RegExp("(" + escapedLeft + ")(?=" + escapedRight + ")", "g"), "$1<br>");
+            });
+        });
+        text = text.replace(/Warning:\s*([^.<]+?) Seed bitti\. skipped/gi, "Warning: $1 Seed is out. Skipping.");
+        text = text.replace(/(BODY MATCH: (?:YES|NO)<\/span><br>)([^<]+)/g, function(_, prefix, actions) {
+            return prefix + actions.split(/\s*,\s*/).filter(Boolean).join("<br>");
         });
         text = text.replace(/[\u0080-\uFFFF]/g, "");
         text = text.replace(/[^\x09\x0A\x0D\x20-\x7E]/g, "");
@@ -4953,7 +5424,7 @@
         log(`ğŸ½ï¸ Karakter besleniyor: ${fedInfo.join(", ")} (+${Math.round(totalXp * 100) / 100} XP)`);
 
         try {
-            let res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
+            let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                 method: 'POST',
                 headers: makeBotHeaders(),
                 body: JSON.stringify(payload)
@@ -5068,7 +5539,7 @@
         log(`ğŸ“¦ Fire Pit paketi gÃ¶nderiliyor... (${reason})`);
 
         try {
-            let res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
+            let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                 method: 'POST',
                 headers: makeBotHeaders(),
                 body: JSON.stringify(payload)
@@ -5329,11 +5800,14 @@
 
     function parseTimeValue(value) {
         if (value == null) return 0;
-        if (typeof value === 'number') return value;
+        if (typeof value === 'number') {
+            if (!Number.isFinite(value) || value <= 0) return 0;
+            return value < 100000000000 ? Math.round(value * 1000) : value;
+        }
         if (typeof value === 'string') {
             const numeric = Number(value);
             if (!Number.isNaN(numeric) && numeric > 0) {
-                return numeric;
+                return numeric < 100000000000 ? Math.round(numeric * 1000) : numeric;
             }
             let dateMs = new Date(value).getTime();
             return Number.isNaN(dateMs) ? 0 : dateMs;
@@ -5367,6 +5841,101 @@
             }
         }
         return vInv;
+    }
+
+    function sortedKeys(obj) {
+        return Object.keys(obj || {}).sort();
+    }
+
+    function diffKeys(label, expected, actual, ignore) {
+        const ignored = new Set(ignore || []);
+        const exp = sortedKeys(expected).filter(function(key) { return !ignored.has(key); });
+        const act = sortedKeys(actual).filter(function(key) { return !ignored.has(key); });
+        const actSet = new Set(act);
+        const expSet = new Set(exp);
+        const diffs = [];
+
+        exp.forEach(function(key) {
+            if (!actSet.has(key)) diffs.push(label + " missing: " + key);
+        });
+        act.forEach(function(key) {
+            if (!expSet.has(key)) diffs.push(label + " extra: " + key);
+        });
+
+        return diffs;
+    }
+
+    function rememberAutosaveBodyExample(payload) {
+        if (!payload || !Array.isArray(payload.actions) || payload.actions.length === 0) return;
+        payload.actions.forEach(function(action) {
+            if (!action || !action.type) return;
+            AUTOSAVE_BODY_EXAMPLES[action.type] = {
+                capturedAt: Date.now(),
+                action: cloneForDebug(action),
+                stateHashKeys: sortedKeys(payload.stateHash || {}),
+                topLevelKeys: sortedKeys(payload)
+            };
+        });
+        localStorage.setItem('sl_autosave_body_examples', JSON.stringify(AUTOSAVE_BODY_EXAMPLES));
+    }
+
+    function summarizeActionTypes(actions) {
+        const counts = {};
+        (actions || []).forEach(function(action) {
+            const type = action && action.type;
+            if (!type) return;
+            counts[type] = (counts[type] || 0) + 1;
+        });
+        return Object.keys(counts).map(function(type) {
+            return counts[type] > 1 ? `${type} x${counts[type]}` : type;
+        });
+    }
+
+    function auditGeneratedAutosaveBody(payload, reason) {
+        if (!payload || !masterPayload || !Array.isArray(payload.actions) || payload.actions.length === 0) {
+            return null;
+        }
+
+        const diffs = [];
+        const missingSamples = new Set();
+        diffs.push(...diffKeys("body", masterPayload, payload, ["actions", "stateHash"]));
+        diffs.push(...diffKeys("stateHash", masterPayload.stateHash || {}, payload.stateHash || {}));
+
+        payload.actions.forEach(function(action, index) {
+            if (!action || !action.type) {
+                diffs.push("action[" + index + "] missing type");
+                return;
+            }
+
+            const example = AUTOSAVE_BODY_EXAMPLES[action.type];
+            if (!example || !example.action) {
+                missingSamples.add(action.type);
+                return;
+            }
+
+            diffs.push(...diffKeys("action " + action.type, example.action, action, ["createdAt"]));
+        });
+
+        const ok = diffs.length === 0;
+        LAST_BODY_AUDIT = {
+            ok: ok,
+            reason: reason || "autosave",
+            createdAt: new Date().toISOString(),
+            actionTypes: payload.actions.map(function(action) { return action && action.type; }).filter(Boolean),
+            actionSummary: summarizeActionTypes(payload.actions),
+            diffs: diffs.slice(0, 20),
+            missingSamples: Array.from(missingSamples)
+        };
+        localStorage.setItem('sl_last_body_audit', JSON.stringify(LAST_BODY_AUDIT));
+
+        const sampleNote = missingSamples.size
+            ? `<br><span style="color:#facc15;font-weight:800;">sample missing:</span> ${Array.from(missingSamples).join(", ")}`
+            : "";
+        const msg = ok
+            ? `<span style="color:#4ade80;font-weight:900;">BODY MATCH: YES</span><br>${LAST_BODY_AUDIT.actionSummary.join(" | ")}${sampleNote}`
+            : `<span style="color:#f87171;font-weight:900;">BODY MATCH: NO</span><br>${LAST_BODY_AUDIT.actionSummary.join(" | ")}<br>${diffs.slice(0, 6).join("<br>")}${sampleNote}`;
+        log(msg);
+        return LAST_BODY_AUDIT;
     }
 
     // ==========================================
@@ -6058,7 +6627,7 @@
             payload.stateHash.shipments = await computeSHA256(SL_SHIPMENTS);
         }
 
-        let res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
+        let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
             method: 'POST',
             headers: makeBotHeaders(),
             body: JSON.stringify(payload)
@@ -6148,7 +6717,7 @@
         }
         lastBotMarketPrediction = { type: "buy", actions: [{ type: "seed.bought", item: seed, amount: amount }], coinsDelta: -cost, boosts: [] };
 
-        let res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
+        let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
             method: 'POST',
             headers: makeBotHeaders(),
             body: JSON.stringify(payload)
@@ -6472,11 +7041,128 @@
     // ----------------------------------------------------
     // YENÄ° V43.6: SIFIR SPAM, Ä°Ã‡ERÄ°DEN GERÄ° SAYIM
     // ----------------------------------------------------
+    function getFruitSeedInfo(fruitName) {
+        const name = String(fruitName || "");
+        for (const seedName in SEED_INFO) {
+            const info = SEED_INFO[seedName];
+            if (info && info.plantingSpot === "Fruit Patch" && info.yield === name) {
+                return info;
+            }
+        }
+        return null;
+    }
+
+    function getFruitReadyAt(patch) {
+        const fruit = patch && patch.fruit;
+        if (!fruit || !fruit.name || Number(fruit.harvestsLeft || 0) <= 0) {
+            return Number.POSITIVE_INFINITY;
+        }
+        const info = getFruitSeedInfo(fruit.name);
+        const growMs = info ? (Number(info.plantSeconds || 0) * 1000) : 0;
+        const plantedAt = parseTimeValue(fruit.plantedAt);
+        const harvestedAt = parseTimeValue(fruit.harvestedAt);
+        return Math.max(plantedAt, harvestedAt) + growMs;
+    }
+
+    function getFruitHarvestAmount(fruitName) {
+        return fruitName ? 1 : 0;
+    }
+
+    function getOilReadyAt(reserve) {
+        const drilledAt = parseTimeValue(reserve && reserve.oil && reserve.oil.drilledAt);
+        return drilledAt + OIL_RECOVERY_MS;
+    }
+
+    function getNestedEntries(cache, nestedKey) {
+        const root = cache || {};
+        const target = nestedKey && root[nestedKey] ? root[nestedKey] : root;
+        return Object.entries(target || {});
+    }
+
+    function findFirstTimeValue(node, keys) {
+        if (!node || typeof node !== "object") return 0;
+        const stack = [node];
+        while (stack.length) {
+            const current = stack.pop();
+            if (!current || typeof current !== "object") continue;
+            for (let i = 0; i < keys.length; i++) {
+                if (current[keys[i]] !== undefined) {
+                    const parsed = parseTimeValue(current[keys[i]]);
+                    if (parsed) return parsed;
+                }
+            }
+            Object.keys(current).forEach(function(key) {
+                const value = current[key];
+                if (value && typeof value === "object") stack.push(value);
+            });
+        }
+        return 0;
+    }
+
+    function getGenericReadyAt(node, recoveryMs) {
+        const directReady = findFirstTimeValue(node, ["readyAt", "finishesAt", "endsAt"]);
+        if (directReady) return directReady;
+        const usedAt = findFirstTimeValue(node, ["harvestedAt", "collectedAt", "drilledAt", "minedAt", "choppedAt", "startedAt", "plantedAt"]);
+        return usedAt ? usedAt + recoveryMs : 0;
+    }
+
+    function getGenericResourceLabel(node, fallback) {
+        if (!node || typeof node !== "object") return fallback;
+        if (node.name) return node.name;
+        if (node.type) return node.type;
+        if (node.flower && node.flower.name) return node.flower.name;
+        if (node.fruit && node.fruit.name) return node.fruit.name;
+        if (node.honey) return "Honey";
+        if (node.bees) return "Beehive";
+        if (node.startedAt || node.collectedAt) return fallback;
+        const keys = Object.keys(node).filter(function(key) {
+            return !["x", "y", "createdAt", "updatedAt"].includes(key);
+        });
+        return keys[0] || fallback;
+    }
+
+    function renderGenericResourceSection(sectionId, gridId, entries, selectionType, icon, fallbackLabel, recoveryMs, toolText) {
+        const section = document.getElementById(sectionId);
+        const grid = document.getElementById(gridId);
+        if (!section || !grid) return;
+
+        const visibleEntries = entries || [];
+        section.style.display = visibleEntries.length > 0 ? "" : "none";
+        if (!visibleEntries.length) {
+            grid.innerHTML = "";
+            return;
+        }
+
+        const now = Date.now();
+        let html = "";
+        for (let i = 0; i < visibleEntries.length; i++) {
+            const id = String(visibleEntries[i][0]);
+            const node = visibleEntries[i][1] || {};
+            const readyAt = getGenericReadyAt(node, recoveryMs);
+            const hasTimer = readyAt > 0;
+            const isReady = !hasTimer || now >= readyAt;
+            const label = getGenericResourceLabel(node, fallbackLabel);
+            const status = hasTimer ? (isReady ? "READY" : formatTimeLeftMs(readyAt, now)) : "SEEN";
+            const selected = isResourceSelected(selectionType, id);
+
+            html += `
+                <div class="resource-box ${selected ? 'selected' : ''}" onclick="window.toggleResourceSelection('${selectionType}', '${id}')">
+                    <div class="res-id">${id.substr(0,4)}</div>
+                    <div class="res-icon">${icon}</div>
+                    <div class="res-tool">${toolText || label}</div>
+                    <div class="res-status ${isReady ? 'ready' : 'wait'}">${status}</div>
+                </div>
+            `;
+        }
+        grid.innerHTML = html;
+    }
+
     function renderForestAndMines() {
         let axeCount = getInventoryAmount("Axe");
         let pickaxeCount = getInventoryAmount("Pickaxe");
         let stonePickCount = getInventoryAmount("Stone Pickaxe");
         let ironPickCount = getInventoryAmount("Iron Pickaxe");
+        let oilDrillCount = getInventoryAmount("Oil Drill");
         let now = Date.now();
 
         let treeGrid = document.getElementById('grid-trees');
@@ -6502,6 +7188,98 @@
             }
             treeGrid.innerHTML = treeHTML || "No trees";
         }
+
+        let fruitGrid = document.getElementById('grid-fruits');
+        if (fruitGrid) {
+            let fruitHTML = "";
+            let fruitEntries = Object.entries(SL_FRUIT_PATCHES || {});
+            let fruitHeader = document.getElementById('fruit-tree-section-header');
+            let hasFruitPatches = fruitEntries.length > 0;
+            if (fruitHeader) fruitHeader.style.display = hasFruitPatches ? '' : 'none';
+            fruitGrid.style.display = hasFruitPatches ? '' : 'none';
+            for (let i = 0; i < fruitEntries.length; i++) {
+                let id = fruitEntries[i][0];
+                let patch = fruitEntries[i][1] || {};
+                let fruit = patch.fruit || {};
+                let fruitName = fruit.name || "Empty";
+                let harvestsLeft = Math.max(0, Number(fruit.harvestsLeft || 0));
+                let readyAt = getFruitReadyAt(patch);
+                let isReady = now >= readyAt;
+                let leftText = harvestsLeft > 0 ? formatTimeLeftMs(readyAt, now) : "EMPTY";
+                let selected = isResourceSelected("fruits", id);
+
+                fruitHTML += `
+                    <div class="resource-box ${selected ? 'selected' : ''}" onclick="window.toggleResourceSelection('fruits', '${id}')">
+                        <div class="res-id">${id.substr(0,4)}</div>
+                        <div class="res-icon">${getItemEmoji(fruitName) || "\u{1F34E}"}</div>
+                        <div class="res-tool">${fruitName}${harvestsLeft ? ` x${harvestsLeft}` : ""}</div>
+                        <div class="res-status ${isReady ? 'ready' : 'wait'}">${isReady ? 'READY' : leftText}</div>
+                    </div>
+                `;
+            }
+            fruitGrid.innerHTML = fruitHTML || "";
+        }
+
+        let oilSection = document.getElementById('oil-reserve-section');
+        let oilGrid = document.getElementById('grid-oil');
+        if (oilSection && oilGrid) {
+            let oilHTML = "";
+            let oilEntries = Object.entries(SL_OIL_RESERVES || {});
+            oilSection.style.display = oilEntries.length > 0 ? '' : 'none';
+            for (let i = 0; i < oilEntries.length; i++) {
+                let id = oilEntries[i][0];
+                let reserve = oilEntries[i][1] || {};
+                let readyAt = getOilReadyAt(reserve);
+                let isReady = now >= readyAt;
+                let leftText = formatTimeLeftMs(readyAt, now);
+                let selected = isResourceSelected("oilReserves", id);
+                let drilled = Math.max(0, Number(reserve.drilled || 0));
+
+                oilHTML += `
+                    <div class="resource-box ${selected ? 'selected' : ''}" onclick="window.toggleResourceSelection('oilReserves', '${id}')">
+                        <div class="res-id">${id.substr(0,4)}</div>
+                        <div class="res-icon">\u{1F6E2}\u{FE0F}</div>
+                        <div class="res-tool">Oil Drill: ${oilDrillCount}</div>
+                        <div class="res-status ${isReady ? 'ready' : 'wait'}">${isReady ? 'READY' : leftText}</div>
+                        <div class="res-tool">Drilled: ${drilled}</div>
+                    </div>
+                `;
+            }
+            oilGrid.innerHTML = oilHTML || "";
+        }
+
+        renderGenericResourceSection(
+            'beehive-section',
+            'grid-beehives',
+            getNestedEntries(SL_BEEHIVES),
+            'beehives',
+            '\u{1F41D}',
+            'Beehive',
+            BEEHIVE_RECOVERY_MS,
+            'Honey'
+        );
+
+        renderGenericResourceSection(
+            'flower-section',
+            'grid-flowers',
+            getNestedEntries(SL_FLOWERS, 'flowerBeds'),
+            'flowers',
+            '\u{1F33C}',
+            'Flower Bed',
+            FLOWER_RECOVERY_MS,
+            'Flower'
+        );
+
+        renderGenericResourceSection(
+            'lava-section',
+            'grid-lava',
+            getNestedEntries(SL_LAVA_PITS),
+            'lavaPits',
+            '\u{1F525}',
+            'Lava Pit',
+            LAVA_PIT_RECOVERY_MS,
+            'Lava Pit'
+        );
 
         let stoneGrid = document.getElementById('grid-stones');
         if(stoneGrid) {
@@ -6574,6 +7352,43 @@
             }
             goldGrid.innerHTML = goldHTML || "No gold";
         }
+
+        const specialRockEntries = []
+            .concat(getNestedEntries(SL_CRIMSTONES).map(function(entry) { return ["crimstone:" + entry[0], entry[1]]; }))
+            .concat(getNestedEntries(SL_SUNSTONES).map(function(entry) { return ["sunstone:" + entry[0], entry[1]]; }))
+            .concat(getNestedEntries(SL_ASCENSION_CRYSTALS).map(function(entry) { return ["crystal:" + entry[0], entry[1]]; }));
+        renderGenericResourceSection(
+            'special-mine-section',
+            'grid-special-rocks',
+            specialRockEntries,
+            'specialRocks',
+            '\u{1F48E}',
+            'Special Rock',
+            SUNSTONE_RECOVERY_MS,
+            'Special Pick'
+        );
+    }
+
+    let farmPanelRefreshPromise = null;
+    async function refreshFarmPanelState(reason = 'farm panel refresh', force = false) {
+        if (farmPanelRefreshPromise) {
+            return await farmPanelRefreshPromise;
+        }
+
+        farmPanelRefreshPromise = (async function() {
+            const ok = await forceRadarRefresh(reason, true);
+            renderForestAndMines();
+            if (!ok) {
+                log("Farm panel refresh failed; showing cached resource state.");
+            }
+            return ok;
+        })();
+
+        try {
+            return await farmPanelRefreshPromise;
+        } finally {
+            farmPanelRefreshPromise = null;
+        }
     }
 
     // ==========================================
@@ -6582,41 +7397,52 @@
     const origFetch = _window.fetch;
 
     _window.fetch = async function(...args) {
-        let reqUrl = args[0];
+        const requestInput = args[0];
+        let reqUrl = requestInput;
 
         if (reqUrl && reqUrl.url) {
             reqUrl = reqUrl.url;
         } else if (!reqUrl) {
             reqUrl = "";
         }
+        reqUrl = String(reqUrl || "");
+        rememberApiBaseFromUrl(reqUrl);
 
         const options = args[1] || {};
-        let requestHeaders = {};
+        let requestHeaders = mergeHeaderObjects(
+            requestInput && requestInput.headers,
+            options && options.headers
+        );
 
-        if (options && options.headers) {
-            const h = {};
-            if (options.headers instanceof Headers) {
-                options.headers.forEach(function(v, k) {
-                    h[k] = v;
-                });
-            } else {
-                Object.assign(h, options.headers);
-            }
-            requestHeaders = h;
-
-            if (h.authorization || h.Authorization) {
-                rememberMasterHeaders(h);
-            }
+        if (findHeaderKey(requestHeaders, 'authorization')) {
+            rememberMasterHeaders(requestHeaders);
         }
 
         // Ä°stek Giderken Ã–ÄŸrenim Ä°Ã§in Kaydet
         let isAutosaveReq = reqUrl.includes('/autosave');
+        let isSessionReq = reqUrl.includes('/session');
+        let isTelemetryReq = reqUrl.includes('collector.moonforge.co') || reqUrl.includes('/api/errors') || reqUrl.includes('/api/send');
+        let parsedAutosaveBody = null;
+        if (isSessionReq && options && options.body) {
+            rememberSessionBody(options.body);
+        }
+        if (isAutosaveReq || isSessionReq || isTelemetryReq) {
+            rememberRequestSnapshot(isTelemetryReq ? "telemetry" : (isAutosaveReq ? "autosave" : "session"), reqUrl, options, requestHeaders, options && options.body);
+        }
         if (isAutosaveReq && options && options.body) {
             try {
                 const parsed = JSON.parse(options.body);
+                parsedAutosaveBody = parsed;
                 if(parsed.actions) {
                     if (parsed.actions.length > 0) {
                         lastSentActions = parsed.actions;
+                    }
+                }
+                if (parsed.actions && parsed.actions.length > 0) {
+                    if (isBotRunning) {
+                        auditGeneratedAutosaveBody(parsed, "bot autosave");
+                    } else {
+                        rememberAutosaveBodyExample(parsed);
                     }
                 }
             } catch(e) {
@@ -6625,8 +7451,6 @@
         }
 
         const res = await origFetch.apply(this, args);
-
-        let isSessionReq = reqUrl.includes('/session');
 
         // PHOENIX RESET: Sayfa Yenilendikten Sonra Otomatik BaÅŸla
         if (_window.AUTO_RESUME_PENDING) {
@@ -6649,6 +7473,8 @@
                         }
 
                         isBotRunning = true;
+                        updateGameClickGuard();
+                        requestNexusWakeLock();
                         setTimeout(function() { runAutomationLogic(); }, 2000);
                     }
                 } catch(e) {
@@ -6657,8 +7483,14 @@
             }
         }
 
-        if (isSessionReq || isAutosaveReq) {
+        if (isSessionReq || isAutosaveReq || isTelemetryReq) {
             await res.clone().json().then(function(data) {
+                rememberResponseSnapshot(isTelemetryReq ? "telemetry" : (isAutosaveReq ? "autosave" : "session"), reqUrl, res.status, data);
+
+                if (isTelemetryReq) {
+                    return;
+                }
+
                 if (isSessionReq) {
                     LAST_SESSION_SNAPSHOT = data;
                 }
@@ -6674,6 +7506,7 @@
 
                 if (isSessionReq) {
                     localStorage.setItem('sl_last_session_refresh_at', Date.now().toString());
+                    setTimeout(function() { maybeSendAutoDebugPackage("session captured"); }, 1000);
                     if (data.deviceTrackerId) {
                         if (masterPayload) {
                             masterPayload.deviceTrackerId = data.deviceTrackerId;
@@ -6686,9 +7519,8 @@
                     }
                 }
 
-                if (data.farmId) {
-                    SL_FARM_ID = data.farmId;
-                    localStorage.setItem('sl_farm_id', SL_FARM_ID);
+                if (data.farmId || (data.farm && data.farm.id)) {
+                    rememberFarmIdFromResponse(data.farmId || data.farm.id);
                 }
 
                 // KAHÄ°N Ä°Ã‡Ä°N EÅYA VE ETKÄ°NLÄ°K DATASI
@@ -6954,6 +7786,38 @@
                         let stringifiedTrees = JSON.stringify(SL_TREES);
                         localStorage.setItem('sl_trees_cache', stringifiedTrees);
                     }
+                    if (data.farm.fruitPatches) {
+                        SL_FRUIT_PATCHES = data.farm.fruitPatches;
+                        localStorage.setItem('sl_fruit_patches_cache', JSON.stringify(SL_FRUIT_PATCHES));
+                    }
+                    if (data.farm.oilReserves) {
+                        SL_OIL_RESERVES = data.farm.oilReserves;
+                        localStorage.setItem('sl_oil_reserves_cache', JSON.stringify(SL_OIL_RESERVES));
+                    }
+                    if (data.farm.beehives) {
+                        SL_BEEHIVES = data.farm.beehives;
+                        localStorage.setItem('sl_beehives_cache', JSON.stringify(SL_BEEHIVES));
+                    }
+                    if (data.farm.flowers) {
+                        SL_FLOWERS = data.farm.flowers;
+                        localStorage.setItem('sl_flowers_cache', JSON.stringify(SL_FLOWERS));
+                    }
+                    if (data.farm.crimstones) {
+                        SL_CRIMSTONES = data.farm.crimstones;
+                        localStorage.setItem('sl_crimstones_cache', JSON.stringify(SL_CRIMSTONES));
+                    }
+                    if (data.farm.sunstones) {
+                        SL_SUNSTONES = data.farm.sunstones;
+                        localStorage.setItem('sl_sunstones_cache', JSON.stringify(SL_SUNSTONES));
+                    }
+                    if (data.farm.lavaPits) {
+                        SL_LAVA_PITS = data.farm.lavaPits;
+                        localStorage.setItem('sl_lava_pits_cache', JSON.stringify(SL_LAVA_PITS));
+                    }
+                    if (data.farm.ascensionCrystals) {
+                        SL_ASCENSION_CRYSTALS = data.farm.ascensionCrystals;
+                        localStorage.setItem('sl_ascension_crystals_cache', JSON.stringify(SL_ASCENSION_CRYSTALS));
+                    }
                     if (data.farm.stones) {
                         SL_STONES = data.farm.stones;
                         let stringifiedStones = JSON.stringify(SL_STONES);
@@ -6989,6 +7853,7 @@
                             let stringifiedPayload = JSON.stringify(masterPayload);
                             localStorage.setItem('sl_master_payload', stringifiedPayload);
                             localStorage.setItem('sl_master_payload_at', Date.now().toString());
+                            maybeSendAutoDebugPackage("template captured");
 
                             localStorage.setItem('sl_auto_resume', 'true');
 
@@ -7006,6 +7871,7 @@
                         let stringifiedPayload = JSON.stringify(masterPayload);
                         localStorage.setItem('sl_master_payload', stringifiedPayload);
                         localStorage.setItem('sl_master_payload_at', Date.now().toString());
+                        maybeSendAutoDebugPackage("manual template captured");
                     }
                 }
             } catch(e) {
@@ -7105,9 +7971,8 @@
         }
     }
 
-    async function forceRadarRefresh(logReason = '') {
+    async function forceRadarRefresh(logReason = '', force = false) {
         if (!masterHeaders) { return false; }
-        if (!SL_FARM_ID) { return false; }
 
         const nowMs = Date.now();
         const lastRefreshAt = parseInt(localStorage.getItem('sl_last_session_refresh_at') || "0");
@@ -7118,7 +7983,7 @@
             return await sessionRefreshPromise;
         }
 
-        if (lastRefreshAt && nowMs - lastRefreshAt < SESSION_REFRESH_COOLDOWN_MS) {
+        if (!force && lastRefreshAt && nowMs - lastRefreshAt < SESSION_REFRESH_COOLDOWN_MS) {
             if (logReason) {
                 log(`ğŸ“¡ Bot check skipped; fresh data already available.`);
             }
@@ -7132,15 +7997,11 @@
         sessionRefreshPromise = (async function() {
             try {
             const cachedPayload = masterPayload || JSON.parse(localStorage.getItem('sl_master_payload') || 'null') || {};
-            let bodyData = {
-                "clientVersion": cachedPayload.clientVersion || "2026-06-05T00:55",
-                "timezone": "Europe/Istanbul",
-                "language": "en"
-            };
+            let bodyData = getSessionRequestBody(cachedPayload);
 
             let stringifiedBody = JSON.stringify(bodyData);
 
-            const res = await _window.fetch('https://api.sunflower-land.com/session', {
+            const res = await _window.fetch(makeSunflowerApiUrl('/session'), {
                 method: 'POST',
                 headers: makeBotHeaders(),
                 body: stringifiedBody
@@ -7163,6 +8024,50 @@
         })();
 
         return await sessionRefreshPromise;
+    }
+
+    async function syncCropStateBeforeDecision(reason) {
+        const ok = await forceRadarRefresh(reason || 'crop sync', true);
+        if (ok) {
+            updateHud();
+            safeRenderPlotGrid(reason || 'crop sync');
+        }
+        return ok;
+    }
+
+    let fieldPanelRefreshPromise = null;
+    async function refreshFieldPanelState(reason = 'field panel refresh', force = false) {
+        if (fieldPanelRefreshPromise) {
+            return await fieldPanelRefreshPromise;
+        }
+
+        fieldPanelRefreshPromise = (async function() {
+            const ok = await syncCropStateBeforeDecision(reason);
+            if (!ok) {
+                renderPlotGrid();
+                log("Field panel refresh failed; showing cached game state.");
+            }
+            return ok;
+        })();
+
+        try {
+            return await fieldPanelRefreshPromise;
+        } finally {
+            fieldPanelRefreshPromise = null;
+        }
+    }
+
+    async function applyAutosaveSnapshotFromResponse(res, reason) {
+        try {
+            const data = await res.clone().json();
+            applyServerFarmSnapshot(data);
+            LAST_AUTOSAVE_SNAPSHOT = data;
+            updateHud();
+            safeRenderPlotGrid(reason || 'autosave snapshot');
+            return true;
+        } catch(e) {
+            return false;
+        }
     }
 
     function refreshThenStopWithNotice(notice) {
@@ -7221,6 +8126,45 @@
             parts.push("--data-raw '" + String(options.body).replace(/'/g, "'\\''") + "'");
         }
         return parts.join(" \\\n  ");
+    }
+
+    function parseDebugBody(body) {
+        if (!body) return null;
+        try { return JSON.parse(body); } catch(e) { return String(body || ""); }
+    }
+
+    function rememberRequestSnapshot(kind, url, options, headers, body) {
+        const safeHeaders = redactEyeHeaders(headers || {});
+        const snapshot = {
+            at: new Date().toISOString(),
+            kind: kind || "request",
+            url: String(url || ""),
+            method: String((options && options.method) || "GET"),
+            headers: safeHeaders,
+            body: parseDebugBody(body),
+            curl: makeEyeCurl(url, options || {}, safeHeaders)
+        };
+        LAST_REQUEST_SNAPSHOT = snapshot;
+        LAST_CURL_BASH = snapshot.curl || "";
+        if (kind === "telemetry") {
+            LAST_TELEMETRY_SNAPSHOT = Object.assign({}, LAST_TELEMETRY_SNAPSHOT || {}, { request: snapshot });
+        }
+        return snapshot;
+    }
+
+    function rememberResponseSnapshot(kind, url, status, data) {
+        const snapshot = {
+            at: new Date().toISOString(),
+            kind: kind || "response",
+            url: String(url || ""),
+            status: status || null,
+            preview: cloneForDebug(data)
+        };
+        LAST_RESPONSE_SNAPSHOT = snapshot;
+        if (kind === "telemetry") {
+            LAST_TELEMETRY_SNAPSHOT = Object.assign({}, LAST_TELEMETRY_SNAPSHOT || {}, { response: snapshot });
+        }
+        return snapshot;
     }
 
     function getEyeActionSummary(body) {
@@ -7311,6 +8255,8 @@
         _window.dispatchEvent(new CustomEvent("__NEXUS_DEBUG_FILES_READY__", {
             detail: {
                 request_id: "eye_" + Date.now(),
+                package_type: "eye",
+                reason: "eye mode captured manual requests",
                 files: files
             }
         }));
@@ -7454,6 +8400,115 @@
         }
     }
 
+    async function fetchGameMotorSourceText() {
+        const now = Date.now();
+        if (MOTOR_SOURCE_CACHE && now - MOTOR_SOURCE_CACHE_AT < 10 * 60 * 1000) {
+            return MOTOR_SOURCE_CACHE;
+        }
+        const motorUrl = findGameMotorScriptUrl();
+        if (!motorUrl) {
+            return "";
+        }
+        try {
+            const response = await _window.fetch(motorUrl, {
+                method: "GET",
+                cache: "no-store",
+                credentials: "omit"
+            });
+            if (!response || !response.ok) {
+                return "";
+            }
+            const text = await response.text();
+            if (text && text.length > 100000) {
+                MOTOR_SOURCE_CACHE = text;
+                MOTOR_SOURCE_CACHE_AT = now;
+                return text;
+            }
+        } catch(e) {}
+        return "";
+    }
+
+    function parseMotorIngredientObject(source) {
+        const recipe = {};
+        if (!source) {
+            return recipe;
+        }
+        const re = /(?:"([^"]+)"|([A-Za-z][A-Za-z ]*))\s*:\s*new Decimal\$1\(([\d.]+)\)/g;
+        let match;
+        while ((match = re.exec(source)) !== null) {
+            const item = match[1] || match[2];
+            const amount = parseFloat(match[3]);
+            if (item && Number.isFinite(amount)) {
+                recipe[item] = amount;
+            }
+        }
+        return recipe;
+    }
+
+    function parseMotorToolRecipe(source, tool) {
+        if (!source || !tool) {
+            return null;
+        }
+        const workbenchIndex = source.indexOf("WORKBENCH_TOOLS");
+        if (workbenchIndex >= 0) {
+            source = source.slice(workbenchIndex, workbenchIndex + 30000);
+        }
+        const escapedTool = tool.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const blockRe = new RegExp('(?:\"' + escapedTool + '\"|' + escapedTool.replace(/\s+/g, '\\\\s+') + ')\\\\s*:\\\\s*\\\\{name:\"' + escapedTool + '\"[\\\\s\\\\S]*?stock:new Decimal\\\\$1\\\\(', 'm');
+        const match = blockRe.exec(source);
+        if (!match) {
+            return null;
+        }
+        const block = match[0];
+        const priceMatch = /price\s*:\s*([\d.]+)/.exec(block);
+        const recipe = {};
+        if (priceMatch) {
+            recipe.coins = parseFloat(priceMatch[1]);
+        }
+
+        if (tool === "Oil Drill") {
+            const hasOilRig = getInventoryAmount("Oil Rig") > 0;
+            const oilDrillBranches = /\?\s*\{([\s\S]*?)\}\s*:\s*\{([\s\S]*?)\}\s*,requiredIsland/.exec(block);
+            if (oilDrillBranches) {
+                Object.assign(recipe, parseMotorIngredientObject(hasOilRig ? oilDrillBranches[1] : oilDrillBranches[2]));
+            } else {
+                Object.assign(recipe, parseMotorIngredientObject(block));
+            }
+        } else {
+            const ingredientsMatch = /ingredients\s*:\s*\(\)\s*=>\s*\(\{([\s\S]*?)\}\)/.exec(block);
+            Object.assign(recipe, parseMotorIngredientObject(ingredientsMatch ? ingredientsMatch[1] : block));
+        }
+
+        return Object.keys(recipe).length ? recipe : null;
+    }
+
+    async function refreshMotorToolRecipes(force) {
+        const now = Date.now();
+        if (!force && now - MOTOR_TOOL_RECIPES_LOADED_AT < 10 * 60 * 1000 && Object.keys(MOTOR_TOOL_RECIPES).length > 0) {
+            return;
+        }
+        const source = await fetchGameMotorSourceText();
+        if (!source) {
+            return;
+        }
+        const tools = ["Axe", "Pickaxe", "Stone Pickaxe", "Iron Pickaxe", "Gold Pickaxe", "Oil Drill"];
+        const parsed = {};
+        tools.forEach(function(tool) {
+            const recipe = parseMotorToolRecipe(source, tool);
+            if (recipe) {
+                parsed[tool] = recipe;
+            }
+        });
+        if (Object.keys(parsed).length > 0) {
+            MOTOR_TOOL_RECIPES = parsed;
+            MOTOR_TOOL_RECIPES_LOADED_AT = now;
+        }
+    }
+
+    function getToolCraftRecipe(tool) {
+        return MOTOR_TOOL_RECIPES[tool] || CRAFTING_RECIPES[tool];
+    }
+
     function getMasterPayloadCapturedAt() {
         return parseInt(localStorage.getItem("sl_master_payload_at") || "0", 10) || 0;
     }
@@ -7522,6 +8577,14 @@
             inventory: cloneForDebug(SL_INVENTORY),
             crops: cloneForDebug(SL_CROPS),
             trees: cloneForDebug(SL_TREES),
+            fruitPatches: cloneForDebug(SL_FRUIT_PATCHES),
+            oilReserves: cloneForDebug(SL_OIL_RESERVES),
+            beehives: cloneForDebug(SL_BEEHIVES),
+            flowers: cloneForDebug(SL_FLOWERS),
+            crimstones: cloneForDebug(SL_CRIMSTONES),
+            sunstones: cloneForDebug(SL_SUNSTONES),
+            lavaPits: cloneForDebug(SL_LAVA_PITS),
+            ascensionCrystals: cloneForDebug(SL_ASCENSION_CRYSTALS),
             stones: cloneForDebug(SL_STONES),
             iron: cloneForDebug(SL_IRON),
             gold: cloneForDebug(SL_GOLD),
@@ -7554,6 +8617,8 @@
             botRunning: !!isBotRunning,
             hasMasterPayload: !!masterPayload,
             masterPayloadCapturedAt: getMasterPayloadCapturedAt() || null,
+            apiBase: getSunflowerApiBase(),
+            sessionBody: cloneForDebug(SL_SESSION_BODY_CACHE),
             motorScriptUrl: findGameMotorScriptUrl(),
             coins: SL_COINS,
             bumpkinLevel: (typeof GameRules !== "undefined" && GameRules.getCurrentBumpkinLevel) ? GameRules.getCurrentBumpkinLevel() : null,
@@ -7563,10 +8628,23 @@
             botSettings: cloneForDebug(BOT_SETTINGS),
             plotTasks: cloneForDebug(PLOT_TASKS),
             resourceSelections: cloneForDebug(RESOURCE_SELECTIONS),
+            lastBodyAudit: cloneForDebug(LAST_BODY_AUDIT),
+            autosaveBodyExamples: cloneForDebug(AUTOSAVE_BODY_EXAMPLES),
+            lastRequest: cloneForDebug(LAST_REQUEST_SNAPSHOT),
+            lastResponse: cloneForDebug(LAST_RESPONSE_SNAPSHOT),
+            lastTelemetry: cloneForDebug(LAST_TELEMETRY_SNAPSHOT),
             counts: {
                 inventory: countDebugKeys(SL_INVENTORY),
                 crops: countDebugKeys(SL_CROPS),
                 trees: countDebugKeys(SL_TREES),
+                fruitPatches: countDebugKeys(SL_FRUIT_PATCHES),
+                oilReserves: countDebugKeys(SL_OIL_RESERVES),
+                beehives: countDebugKeys(SL_BEEHIVES),
+                flowers: countDebugKeys((SL_FLOWERS && SL_FLOWERS.flowerBeds) || SL_FLOWERS),
+                crimstones: countDebugKeys(SL_CRIMSTONES),
+                sunstones: countDebugKeys(SL_SUNSTONES),
+                lavaPits: countDebugKeys(SL_LAVA_PITS),
+                ascensionCrystals: countDebugKeys(SL_ASCENSION_CRYSTALS),
                 stones: countDebugKeys(SL_STONES),
                 iron: countDebugKeys(SL_IRON),
                 gold: countDebugKeys(SL_GOLD),
@@ -7585,6 +8663,12 @@
                 "sl_stones_cache",
                 "sl_iron_cache",
                 "sl_gold_cache",
+                "sl_beehives_cache",
+                "sl_flowers_cache",
+                "sl_crimstones_cache",
+                "sl_sunstones_cache",
+                "sl_lava_pits_cache",
+                "sl_ascension_crystals_cache",
                 "sl_bumpkin_cache",
                 "sl_buildings_cache",
                 "sl_collectibles_cache",
@@ -7594,6 +8678,10 @@
                 "sl_master_payload",
                 "sl_master_payload_at",
                 "sl_master_headers",
+                "sl_api_base",
+                "sl_session_body_cache",
+                "sl_last_body_audit",
+                "sl_autosave_body_examples",
                 "sl_plot_tasks",
                 "sl_resource_selections",
                 "sl_bot_settings"
@@ -7621,10 +8709,29 @@
             }
         }
 
+        const summary = {
+            createdAt: new Date().toISOString(),
+            requestId: requestId || "",
+            packageType: (detail && (detail.package_type || detail.packageType)) || "manual",
+            reason: (detail && detail.reason) || "",
+            farmId: SL_FARM_ID || "",
+            hasMotorUrl: !!findGameMotorScriptUrl(),
+            hasSession: !!LAST_SESSION_SNAPSHOT,
+            hasTemplate: !!sablon,
+            hasLastRequest: !!LAST_REQUEST_SNAPSHOT,
+            hasLastResponse: !!LAST_RESPONSE_SNAPSHOT
+        };
+
         return {
+            "summary.txt": stableDebugJson(summary),
             "motor.txt": await fetchGameMotorFile(),
             "session.txt": stableDebugJson(session),
-            "sablon.txt": stableDebugJson(sablon || {})
+            "sablon.txt": stableDebugJson(sablon || {}),
+            "body.txt": stableDebugJson((LAST_REQUEST_SNAPSHOT && LAST_REQUEST_SNAPSHOT.body) || sablon || {}),
+            "request.txt": stableDebugJson(LAST_REQUEST_SNAPSHOT || {}),
+            "response.txt": stableDebugJson(LAST_RESPONSE_SNAPSHOT || {}),
+            "curl.txt": LAST_CURL_BASH || "",
+            "telemetry.txt": stableDebugJson(LAST_TELEMETRY_SNAPSHOT || {})
         };
     }
 
@@ -7639,6 +8746,8 @@
             _window.dispatchEvent(new CustomEvent("__NEXUS_DEBUG_FILES_READY__", {
                 detail: {
                     request_id: requestId,
+                    package_type: detail.package_type || detail.packageType || "manual",
+                    reason: detail.reason || "",
                     files: files
                 }
             }));
@@ -7650,12 +8759,91 @@
         }
     }
 
+    function getAutoDebugPackageStorageKey() {
+        const farmId = SL_FARM_ID || (LAST_SESSION_SNAPSHOT && (LAST_SESSION_SNAPSHOT.farmId || (LAST_SESSION_SNAPSHOT.farm && LAST_SESSION_SNAPSHOT.farm.id))) || "unknown";
+        return "sl_auto_debug_package_sent_" + String(farmId || "unknown");
+    }
+
+    async function maybeSendAutoDebugPackage(reason) {
+        if (AUTO_DEBUG_PACKAGE_IN_FLIGHT) return false;
+        if (!SL_FARM_ID && !LAST_SESSION_SNAPSHOT && !masterPayload) return false;
+        const key = getAutoDebugPackageStorageKey();
+        if (localStorage.getItem(key) === "true") return false;
+        AUTO_DEBUG_PACKAGE_IN_FLIGHT = true;
+        try {
+            const ok = await sendDebugFilesToPanel({
+                request_id: "auto_" + Date.now(),
+                created_at: Date.now(),
+                package_type: "auto",
+                reason: reason || "auto diagnostic snapshot",
+                force_template: false
+            });
+            if (ok) {
+                localStorage.setItem(key, "true");
+            }
+            return ok;
+        } finally {
+            AUTO_DEBUG_PACKAGE_IN_FLIGHT = false;
+        }
+    }
+
+    async function sendErrorDebugPackage(reason, status) {
+        const now = Date.now();
+        if (now - LAST_ERROR_DEBUG_PACKAGE_AT < 60000) return false;
+        LAST_ERROR_DEBUG_PACKAGE_AT = now;
+        return sendDebugFilesToPanel({
+            request_id: "error_" + now,
+            created_at: now,
+            package_type: "error",
+            reason: String(reason || "error") + " / " + String(status || ""),
+            force_template: false
+        });
+    }
+
+    async function sendMotorFileToPanel(detail) {
+        detail = detail || {};
+        const requestId = detail.request_id || detail.requestId || ("motor_" + Date.now());
+        try {
+            const motorUrl = findGameMotorScriptUrl();
+            const motorText = await fetchGameMotorFile();
+            _window.dispatchEvent(new CustomEvent("__NEXUS_DEBUG_FILES_READY__", {
+                detail: {
+                    request_id: requestId,
+                    package_type: "motor",
+                    reason: "motor file requested",
+                    files: {
+                        "motor.txt": motorText,
+                        "motor-meta.txt": stableDebugJson({
+                            createdAt: new Date().toISOString(),
+                            requestId: requestId,
+                            motorScriptUrl: motorUrl || "",
+                            found: !!motorUrl,
+                            length: motorText ? motorText.length : 0,
+                            apiBase: getSunflowerApiBase(),
+                            sessionBody: cloneForDebug(SL_SESSION_BODY_CACHE)
+                        })
+                    }
+                }
+            }));
+            log("Motor dosyasi panele gonderildi.");
+            return true;
+        } catch(e) {
+            log("Motor dosyasi gonderilemedi: " + (e && e.message ? e.message : e));
+            return false;
+        }
+    }
+
     if (!_window.__NEXUS_DEBUG_FILE_EXPORT_READY__) {
         _window.__NEXUS_DEBUG_FILE_EXPORT_READY__ = true;
         _window.__NEXUS_FORCE_DEBUG_EXPORT__ = sendDebugFilesToPanel;
+        _window.__NEXUS_FORCE_MOTOR_EXPORT__ = sendMotorFileToPanel;
         _window.addEventListener("__NEXUS_COLLECT_DEBUG_FILES__", async function(event) {
             const detail = event && event.detail ? event.detail : {};
             await sendDebugFilesToPanel(detail);
+        });
+        _window.addEventListener("__NEXUS_COLLECT_MOTOR_FILE__", async function(event) {
+            const detail = event && event.detail ? event.detail : {};
+            await sendMotorFileToPanel(detail);
         });
     }
 
@@ -7676,6 +8864,26 @@
         const btn = document.getElementById('btn-start-auto');
 
         if (isBotRunning || _window.WAITING_FOR_TEMPLATE_TO_START || killSwitchActivated) {
+            const now = Date.now();
+            if (now > STOP_CONFIRM_UNTIL_MS) {
+                STOP_CONFIRM_UNTIL_MS = now + 2500;
+                if (btn) {
+                    btn.innerText = "Click again to stop";
+                    btn.style.background = "linear-gradient(90deg,#ea580c,#f97316)";
+                }
+                log("Stop armed. Click Start/Stop again within 2.5 seconds to stop the bot.");
+                setTimeout(function() {
+                    if (Date.now() > STOP_CONFIRM_UNTIL_MS && (isBotRunning || _window.WAITING_FOR_TEMPLATE_TO_START)) {
+                        const freshBtn = document.getElementById('btn-start-auto');
+                        if (freshBtn) {
+                            freshBtn.innerText = isBotRunning ? "Stop" : "Waiting...";
+                            freshBtn.style.background = isBotRunning ? "#52525b" : "#d97706";
+                        }
+                    }
+                }, 2600);
+                return;
+            }
+            STOP_CONFIRM_UNTIL_MS = 0;
             stopRequested = true;
             isBotRunning = false;
             _window.WAITING_FOR_TEMPLATE_TO_START = false;
@@ -7690,6 +8898,8 @@
                 btn.innerText = "Start";
                 btn.style.background = "linear-gradient(90deg,#b91c1c,#ef4444)";
             }
+            updateGameClickGuard();
+            releaseNexusWakeLock();
             log("Automation stopped. Memory cleared.");
         } else {
             stopRequested = false;
@@ -7702,6 +8912,8 @@
                     btn.innerText = "Waiting...";
                     btn.style.background = "#d97706";
                 }
+                updateGameClickGuard();
+                requestNexusWakeLock();
                 log(`<span style="display:block; color:#fde047; font-weight:900; font-size:13px; text-align:center; letter-spacing:0.3px;">TO START THE BOT, PLEASE PLANT OR HARVEST ONCE.</span>`);
                 return;
             }
@@ -7711,6 +8923,8 @@
                 btn.innerText = "Stop";
                 btn.style.background = "#52525b";
             }
+            updateGameClickGuard();
+            requestNexusWakeLock();
             log("Bot checking...");
             await forceRadarRefresh();
             if (stopRequested || killSwitchActivated) {
@@ -7774,6 +8988,26 @@
         payload.stateHash.coins = await computeSHA256(SL_COINS);
         payload.stateHash.farmActivity = await computeSHA256(SL_FARM_ACTIVITY);
         payload.stateHash.trees = await computeSHA256(SL_TREES);
+        payload.stateHash.fruitPatches = await computeSHA256(SL_FRUIT_PATCHES);
+        payload.stateHash.oilReserves = await computeSHA256(SL_OIL_RESERVES);
+        if (Object.prototype.hasOwnProperty.call(payload.stateHash, "beehives")) {
+            payload.stateHash.beehives = await computeSHA256(SL_BEEHIVES);
+        }
+        if (Object.prototype.hasOwnProperty.call(payload.stateHash, "flowers")) {
+            payload.stateHash.flowers = await computeSHA256(SL_FLOWERS);
+        }
+        if (Object.prototype.hasOwnProperty.call(payload.stateHash, "crimstones")) {
+            payload.stateHash.crimstones = await computeSHA256(SL_CRIMSTONES);
+        }
+        if (Object.prototype.hasOwnProperty.call(payload.stateHash, "sunstones")) {
+            payload.stateHash.sunstones = await computeSHA256(SL_SUNSTONES);
+        }
+        if (Object.prototype.hasOwnProperty.call(payload.stateHash, "lavaPits")) {
+            payload.stateHash.lavaPits = await computeSHA256(SL_LAVA_PITS);
+        }
+        if (Object.prototype.hasOwnProperty.call(payload.stateHash, "ascensionCrystals")) {
+            payload.stateHash.ascensionCrystals = await computeSHA256(SL_ASCENSION_CRYSTALS);
+        }
         payload.stateHash.stones = await computeSHA256(SL_STONES);
         payload.stateHash.iron = await computeSHA256(SL_IRON);
         payload.stateHash.gold = await computeSHA256(SL_GOLD);
@@ -7801,7 +9035,7 @@
     }
 
     function getCraftableToolAmount(tool, needed) {
-        const recipe = CRAFTING_RECIPES[tool];
+        const recipe = getToolCraftRecipe(tool);
         if (!recipe || needed <= 0) {
             return 0;
         }
@@ -7826,6 +9060,9 @@
     function applyServerFarmSnapshot(data) {
         if (!data || !data.farm) {
             return;
+        }
+        if (data.farmId || (data.farm && data.farm.id)) {
+            rememberFarmIdFromResponse(data.farmId || data.farm.id);
         }
         const farm = data.farm;
         if (farm.inventory) {
@@ -7855,6 +9092,38 @@
         if (farm.trees) {
             SL_TREES = farm.trees;
             localStorage.setItem('sl_trees_cache', JSON.stringify(SL_TREES));
+        }
+        if (farm.fruitPatches) {
+            SL_FRUIT_PATCHES = farm.fruitPatches;
+            localStorage.setItem('sl_fruit_patches_cache', JSON.stringify(SL_FRUIT_PATCHES));
+        }
+        if (farm.oilReserves) {
+            SL_OIL_RESERVES = farm.oilReserves;
+            localStorage.setItem('sl_oil_reserves_cache', JSON.stringify(SL_OIL_RESERVES));
+        }
+        if (farm.beehives) {
+            SL_BEEHIVES = farm.beehives;
+            localStorage.setItem('sl_beehives_cache', JSON.stringify(SL_BEEHIVES));
+        }
+        if (farm.flowers) {
+            SL_FLOWERS = farm.flowers;
+            localStorage.setItem('sl_flowers_cache', JSON.stringify(SL_FLOWERS));
+        }
+        if (farm.crimstones) {
+            SL_CRIMSTONES = farm.crimstones;
+            localStorage.setItem('sl_crimstones_cache', JSON.stringify(SL_CRIMSTONES));
+        }
+        if (farm.sunstones) {
+            SL_SUNSTONES = farm.sunstones;
+            localStorage.setItem('sl_sunstones_cache', JSON.stringify(SL_SUNSTONES));
+        }
+        if (farm.lavaPits) {
+            SL_LAVA_PITS = farm.lavaPits;
+            localStorage.setItem('sl_lava_pits_cache', JSON.stringify(SL_LAVA_PITS));
+        }
+        if (farm.ascensionCrystals) {
+            SL_ASCENSION_CRYSTALS = farm.ascensionCrystals;
+            localStorage.setItem('sl_ascension_crystals_cache', JSON.stringify(SL_ASCENSION_CRYSTALS));
         }
         if (farm.stones) {
             SL_STONES = farm.stones;
@@ -7892,7 +9161,7 @@
         log(`ğŸ“¦ ${reason}: sending package... (${actions.length} action${actions.length > 1 ? "s" : ""})`);
 
         try {
-            const res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
+            const res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                 method: "POST",
                 headers: makeBotHeaders(),
                 body: JSON.stringify(payload)
@@ -7911,6 +9180,9 @@
                 return true;
             }
 
+            if (await handleRecoverableServerReject(`${reason} rejected by server`, res.status)) {
+                return false;
+            }
             triggerKillSwitch(`${reason} rejected by server.`, res.status);
             return false;
         } catch(e) {
@@ -7920,12 +9192,13 @@
     }
 
     async function craftToolBatch(tool, amount) {
+        await refreshMotorToolRecipes(false);
         const qty = getCraftableToolAmount(tool, amount);
         if (qty <= 0) {
             return 0;
         }
 
-        const recipe = CRAFTING_RECIPES[tool];
+        const recipe = getToolCraftRecipe(tool);
         const actions = [];
         let actionTime = beginBotActionBatch();
         for (let i = 0; i < qty; i++) {
@@ -7953,6 +9226,140 @@
 
         const ok = await sendBotResourcePayload(actions, `Blacksmith ${tool}`);
         return ok ? qty : 0;
+    }
+
+    function getReadyFruitTargets() {
+        const selectedEntries = getSelectedResourceEntries("fruits", SL_FRUIT_PATCHES || {});
+        const pool = selectedEntries.length > 0 ? selectedEntries : Object.entries(SL_FRUIT_PATCHES || {});
+        const ready = [];
+        const now = Date.now();
+
+        for (let i = 0; i < pool.length; i++) {
+            const id = pool[i][0];
+            const patch = pool[i][1];
+            const fruit = patch && patch.fruit;
+            if (fruit && fruit.name && Number(fruit.harvestsLeft || 0) > 0 && now >= getFruitReadyAt(patch)) {
+                ready.push([id, patch]);
+            }
+        }
+
+        const shuffled = shuffleArray(ready);
+        return selectedEntries.length > 0 ? shuffled : shuffled.slice(0, 1);
+    }
+
+    async function runFruitHarvestPhase() {
+        if (!BOT_SETTINGS.autoFruit || stopRequested || killSwitchActivated) {
+            return false;
+        }
+
+        const targets = getReadyFruitTargets();
+        if (targets.length === 0) {
+            return false;
+        }
+
+        const actions = [];
+        let actionTime = beginBotActionBatch();
+        for (let i = 0; i < targets.length; i++) {
+            const id = targets[i][0];
+            const patch = targets[i][1];
+            const fruit = patch && patch.fruit;
+            const fruitName = fruit && fruit.name;
+            const amount = getFruitHarvestAmount(fruitName);
+            if (!fruitName || amount <= 0) {
+                continue;
+            }
+
+            actions.push({
+                type: "fruit.harvested",
+                index: id,
+                createdAt: new Date(actionTime).toISOString()
+            });
+            modifyInventory(fruitName, amount);
+            modifyActivity(fruitName + " Harvested", amount);
+            if (SL_FRUIT_PATCHES[id] && SL_FRUIT_PATCHES[id].fruit) {
+                SL_FRUIT_PATCHES[id].fruit.harvestedAt = actionTime;
+                SL_FRUIT_PATCHES[id].fruit.harvestsLeft = Math.max(0, Number(SL_FRUIT_PATCHES[id].fruit.harvestsLeft || 0) - 1);
+            }
+            actionTime = nextBotActionTime(actionTime);
+        }
+
+        if (actions.length === 0) {
+            return false;
+        }
+
+        localStorage.setItem('sl_fruit_patches_cache', JSON.stringify(SL_FRUIT_PATCHES));
+        const ok = await sendBotResourcePayload(actions, "Fruit trees");
+        if (ok) renderForestAndMines();
+        return ok;
+    }
+
+    function getReadyOilTargets() {
+        const selectedEntries = getSelectedResourceEntries("oilReserves", SL_OIL_RESERVES || {});
+        const pool = selectedEntries.length > 0 ? selectedEntries : Object.entries(SL_OIL_RESERVES || {});
+        const ready = [];
+        const now = Date.now();
+
+        for (let i = 0; i < pool.length; i++) {
+            const id = pool[i][0];
+            const reserve = pool[i][1];
+            if (now >= getOilReadyAt(reserve)) {
+                ready.push([id, reserve]);
+            }
+        }
+
+        const shuffled = shuffleArray(ready);
+        return selectedEntries.length > 0 ? shuffled : shuffled.slice(0, 1);
+    }
+
+    async function runOilDrillingPhase() {
+        if (!BOT_SETTINGS.autoOil || stopRequested || killSwitchActivated) {
+            return false;
+        }
+
+        const targets = getReadyOilTargets();
+        if (targets.length === 0) {
+            return false;
+        }
+
+        let drillCount = getInventoryAmount("Oil Drill");
+        const neededDrills = targets.length;
+        if (drillCount < neededDrills && BOT_SETTINGS.autoCraftOilDrill) {
+            const crafted = await craftToolBatch("Oil Drill", neededDrills - drillCount);
+            if (crafted > 0) {
+                drillCount += crafted;
+                const keepGoing = await waitTaskSwitch("blacksmith -> oil reserves");
+                if (!keepGoing || stopRequested || killSwitchActivated) return true;
+            }
+        }
+
+        const usable = Math.min(drillCount, targets.length);
+        if (usable <= 0) {
+            return false;
+        }
+
+        const actions = [];
+        let actionTime = beginBotActionBatch();
+        for (let i = 0; i < usable; i++) {
+            const id = targets[i][0];
+            actions.push({
+                type: "oilReserve.drilled",
+                id: id,
+                createdAt: new Date(actionTime).toISOString()
+            });
+            modifyInventory("Oil Drill", -1);
+            modifyInventory("Oil", 10);
+            modifyActivity("Oil Drilled", 1);
+            if (SL_OIL_RESERVES[id]) {
+                SL_OIL_RESERVES[id].drilled = Math.max(0, Number(SL_OIL_RESERVES[id].drilled || 0)) + 1;
+                SL_OIL_RESERVES[id].oil = { drilledAt: actionTime };
+            }
+            actionTime = nextBotActionTime(actionTime);
+        }
+
+        localStorage.setItem('sl_oil_reserves_cache', JSON.stringify(SL_OIL_RESERVES));
+        const ok = await sendBotResourcePayload(actions, "Oil reserves");
+        if (ok) renderForestAndMines();
+        return ok;
     }
 
     async function runTreeBatchPhase() {
@@ -8081,8 +9488,26 @@
         if (BOT_SETTINGS.autoTree) {
             didWork = await runTreeBatchPhase() || didWork;
             if (didWork && (stopRequested || killSwitchActivated)) return didWork;
-            if (didWork && (BOT_SETTINGS.autoMineStone || BOT_SETTINGS.autoMineIron || BOT_SETTINGS.autoMineGold)) {
-                const keepGoing = await waitTaskSwitch("forest -> miner");
+            if (didWork && (BOT_SETTINGS.autoFruit || BOT_SETTINGS.autoOil || BOT_SETTINGS.autoMineStone || BOT_SETTINGS.autoMineIron || BOT_SETTINGS.autoMineGold)) {
+                const keepGoing = await waitTaskSwitch("forest -> next resource");
+                if (!keepGoing || stopRequested || killSwitchActivated) return didWork;
+            }
+        }
+        if (BOT_SETTINGS.autoFruit) {
+            const fruitDidWork = await runFruitHarvestPhase();
+            didWork = fruitDidWork || didWork;
+            if (didWork && (stopRequested || killSwitchActivated)) return didWork;
+            if (fruitDidWork && (BOT_SETTINGS.autoOil || BOT_SETTINGS.autoMineStone || BOT_SETTINGS.autoMineIron || BOT_SETTINGS.autoMineGold)) {
+                const keepGoing = await waitTaskSwitch("fruit trees -> next resource");
+                if (!keepGoing || stopRequested || killSwitchActivated) return didWork;
+            }
+        }
+        if (BOT_SETTINGS.autoOil) {
+            const oilDidWork = await runOilDrillingPhase();
+            didWork = oilDidWork || didWork;
+            if (didWork && (stopRequested || killSwitchActivated)) return didWork;
+            if (oilDidWork && (BOT_SETTINGS.autoMineStone || BOT_SETTINGS.autoMineIron || BOT_SETTINGS.autoMineGold)) {
+                const keepGoing = await waitTaskSwitch("oil reserves -> miner");
                 if (!keepGoing || stopRequested || killSwitchActivated) return didWork;
             }
         }
@@ -8194,7 +9619,7 @@
             log(`ğŸ£ Reeling catch: ${caughtNames.join(", ")}`);
 
             try {
-                let res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
+                let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                     method: 'POST',
                     headers: makeBotHeaders(),
                     body: JSON.stringify(payload)
@@ -8262,7 +9687,7 @@
         log(`ğŸ£ Casting rod with ${bait}...`);
 
         try {
-            let res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
+            let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                 method: 'POST',
                 headers: makeBotHeaders(),
                 body: JSON.stringify(payload)
@@ -8330,7 +9755,7 @@
 
         log(`Digging ${reason}: buying ${qty}x ${tool}...`);
         try {
-            let res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
+            let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                 method: 'POST',
                 headers: makeBotHeaders(),
                 body: JSON.stringify(payload)
@@ -8386,7 +9811,7 @@
 
         log(`Digging ${reason}: selling ${qty}x ${item}...`);
         try {
-            let res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
+            let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                 method: 'POST',
                 headers: makeBotHeaders(),
                 body: JSON.stringify(payload)
@@ -8443,7 +9868,7 @@
 
         log(`Digging: digging (${cell.x}, ${cell.y})...`);
         try {
-            let res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
+            let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                 method: 'POST',
                 headers: makeBotHeaders(),
                 body: JSON.stringify(payload)
@@ -8556,6 +9981,13 @@
         // ---------------------------------------------------------
         // 1. HASAT AÅAMASI (DÃœZELTÄ°LDÄ°: TEKLÄ° ONAY BEKLÄ°YOR)
         // ---------------------------------------------------------
+        if (BOT_SETTINGS.autoFields) {
+            await syncCropStateBeforeDecision('harvest crop sync');
+            if (stopRequested || killSwitchActivated) {
+                return;
+            }
+        }
+
         let cropEntries = BOT_SETTINGS.autoFields ? Object.entries(SL_CROPS) : [];
         let readyPlots = [];
 
@@ -8596,6 +10028,11 @@
 
                 let keepGoing = await controlledSleep(waitMs);
                 if (!keepGoing || stopRequested || killSwitchActivated) {
+                    return;
+                }
+
+                await syncCropStateBeforeDecision('harvest wait sync');
+                if (stopRequested || killSwitchActivated) {
                     return;
                 }
 
@@ -8671,7 +10108,7 @@
 
                     try {
                         let stringifiedPayload = JSON.stringify(payload);
-                        let res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
+                        let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                             method: 'POST',
                             headers: makeBotHeaders(),
                             body: stringifiedPayload
@@ -8679,6 +10116,7 @@
 
                         if (res.ok) {
                             log(`âœ… Ä°ÅŸlem BaÅŸarÄ±lÄ±!`);
+                            await applyAutosaveSnapshotFromResponse(res, 'single harvest');
                             masterPayload.stateHash = payload.stateHash;
                         } else {
                             triggerKillSwitch("Sunucu tekli hasadÄ± reddetti.", res.status);
@@ -8720,7 +10158,7 @@
 
                         try {
                             let stringifiedPayload = JSON.stringify(payload);
-                            let res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
+                            let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                                 method: 'POST',
                                 headers: makeBotHeaders(),
                                 body: stringifiedPayload
@@ -8728,8 +10166,12 @@
 
                             if (res.ok) {
                                 log(`âœ… Ä°ÅŸlem BaÅŸarÄ±lÄ±!`);
+                                await applyAutosaveSnapshotFromResponse(res, 'batch harvest');
                                 masterPayload.stateHash = payload.stateHash;
                             } else {
+                                if (await handleRecoverableServerReject("Batch harvest rejected by server", res.status)) {
+                                    return;
+                                }
                                 triggerKillSwitch("Sunucu toplu hasadÄ± reddetti.", res.status);
                                 return;
                             }
@@ -8896,7 +10338,7 @@
 
                         try {
                             let stringifiedPayload = JSON.stringify(payload);
-                            let res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
+                            let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                                 method: 'POST',
                                 headers: makeBotHeaders(),
                                 body: stringifiedPayload
@@ -8953,7 +10395,7 @@
 
                     try {
                         let stringifiedPayload = JSON.stringify(payload);
-                        let res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
+                        let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                             method: 'POST',
                             headers: makeBotHeaders(),
                             body: stringifiedPayload
@@ -9173,7 +10615,7 @@
 
                         try {
                             let stringifiedPayload = JSON.stringify(payload);
-                            let res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
+                            let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                                 method: 'POST',
                                 headers: makeBotHeaders(),
                                 body: stringifiedPayload
@@ -9211,7 +10653,7 @@
         // 4. EKÄ°M AÅAMASI
         // ---------------------------------------------------------
         if (!stopRequested && !killSwitchActivated && BOT_SETTINGS.autoFields) {
-            await forceRadarRefresh('bot control');
+            await syncCropStateBeforeDecision('plant crop sync');
             if (stopRequested || killSwitchActivated) {
                 return;
             }
@@ -9343,7 +10785,7 @@
 
                                 try {
                                     let stringifiedPayload = JSON.stringify(payload);
-                                    let res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
+                                    let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                                         method: 'POST',
                                         headers: makeBotHeaders(),
                                         body: stringifiedPayload
@@ -9351,6 +10793,7 @@
 
                                     if (res.ok) {
                                         log(`âœ… Ä°ÅŸlem BaÅŸarÄ±lÄ±!`);
+                                        await applyAutosaveSnapshotFromResponse(res, 'single plant');
                                         masterPayload.stateHash = payload.stateHash;
                                         lastCompletedPhase = 'plant';
                                     } else {
@@ -9366,7 +10809,7 @@
                         } else {
                             if (!exhaustedSeedWarnings.has(targetSeed)) {
                                 exhaustedSeedWarnings.add(targetSeed);
-                                log(`âš ï¸ ${targetSeed} bitti. Pas geÃ§iliyor.`);
+                                log(`Warning: ${targetSeed} is out. Skipping.`);
                             }
                         }
                     }
@@ -9388,7 +10831,7 @@
 
                             try {
                                 let stringifiedPayload = JSON.stringify(payload);
-                                let res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
+                                let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                                     method: 'POST',
                                     headers: makeBotHeaders(),
                                     body: stringifiedPayload
@@ -9396,6 +10839,7 @@
 
                                 if (res.ok) {
                                     log(`âœ… Ä°ÅŸlem BaÅŸarÄ±lÄ±!`);
+                                    await applyAutosaveSnapshotFromResponse(res, 'batch plant');
                                     masterPayload.stateHash = payload.stateHash;
                                     lastCompletedPhase = 'plant';
                                     safeRenderPlotGrid('toplu ekim');
@@ -9468,7 +10912,7 @@
 
         // ğŸš€ 5. ORMAN VE MADEN AÅAMASI (TEKLÄ° GÃ–NDERÄ°M VE ONAYLI SÄ°STEM)
         // =========================================================
-        if (!stopRequested && !killSwitchActivated && (BOT_SETTINGS.autoTree || BOT_SETTINGS.autoMineStone || BOT_SETTINGS.autoMineIron || BOT_SETTINGS.autoMineGold)) {
+        if (!stopRequested && !killSwitchActivated && (BOT_SETTINGS.autoTree || BOT_SETTINGS.autoFruit || BOT_SETTINGS.autoOil || BOT_SETTINGS.autoMineStone || BOT_SETTINGS.autoMineIron || BOT_SETTINGS.autoMineGold)) {
             let keepGoing = await waitTaskSwitch('farm -> resources');
             if (!keepGoing || stopRequested || killSwitchActivated) {
                 return;
@@ -9527,7 +10971,7 @@
 
                             try {
                                 let stringifiedPayload = JSON.stringify(payload);
-                                let res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
+                                let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                                     method: 'POST',
                                     headers: makeBotHeaders(),
                                     body: stringifiedPayload
@@ -9578,7 +11022,7 @@
 
                             try {
                                 let stringifiedPayload = JSON.stringify(payload);
-                                let res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
+                                let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                                     method: 'POST',
                                     headers: makeBotHeaders(),
                                     body: stringifiedPayload
@@ -9652,7 +11096,7 @@
 
                                 try {
                                     let stringifiedPayload = JSON.stringify(payload);
-                                    let res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
+                                    let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                                         method: 'POST',
                                         headers: makeBotHeaders(),
                                         body: stringifiedPayload
@@ -9703,7 +11147,7 @@
 
                             try {
                                 let stringifiedPayload = JSON.stringify(payload);
-                                let res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
+                                let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                                     method: 'POST',
                                     headers: makeBotHeaders(),
                                     body: stringifiedPayload
@@ -9785,7 +11229,7 @@
 
                                 try {
                                     let stringifiedPayload = JSON.stringify(payload);
-                                    let res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
+                                    let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                                         method: 'POST',
                                         headers: makeBotHeaders(),
                                         body: stringifiedPayload
@@ -9837,7 +11281,7 @@
 
                             try {
                                 let stringifiedPayload = JSON.stringify(payload);
-                                let res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
+                                let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                                     method: 'POST',
                                     headers: makeBotHeaders(),
                                     body: stringifiedPayload
@@ -9919,7 +11363,7 @@
 
                                 try {
                                     let stringifiedPayload = JSON.stringify(payload);
-                                    let res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
+                                    let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                                         method: 'POST',
                                         headers: makeBotHeaders(),
                                         body: stringifiedPayload
@@ -9971,7 +11415,7 @@
 
                             try {
                                 let stringifiedPayload = JSON.stringify(payload);
-                                let res = await _window.fetch(`https://api.sunflower-land.com/autosave/${SL_FARM_ID}`, {
+                                let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                                     method: 'POST',
                                     headers: makeBotHeaders(),
                                     body: stringifiedPayload
@@ -10150,6 +11594,9 @@
         }
 
         isBotRunning = false;
+        updateGameClickGuard();
+        releaseNexusWakeLock();
     }
 })();
+
 

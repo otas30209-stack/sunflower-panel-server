@@ -804,7 +804,7 @@ def save_debug_files(data):
     save_json(DEBUG_FILES_FILE, data if isinstance(data, dict) else {})
 
 
-def make_debug_package(license_id, uid, request_id, files, package_type='manual'):
+def make_debug_package(license_id, uid, request_id, files, package_type='manual', reason=''):
     now = datetime.now().isoformat()
     return {
         'package_id': secrets.token_hex(8),
@@ -814,6 +814,7 @@ def make_debug_package(license_id, uid, request_id, files, package_type='manual'
         'updated_at': now,
         'request_id': str(request_id or '').strip(),
         'package_type': str(package_type or 'manual').strip() or 'manual',
+        'reason': str(reason or '').strip()[:500],
         'files': files if isinstance(files, dict) else {},
     }
 
@@ -837,6 +838,7 @@ def normalize_debug_entry(license_id, data):
                 'updated_at': data.get('updated_at') or data.get('created_at') or '',
                 'request_id': str(data.get('request_id') or '').strip(),
                 'package_type': str(data.get('package_type') or 'manual').strip() or 'manual',
+                'reason': str(data.get('reason') or '').strip(),
                 'files': data.get('files') or {},
             })
     packages.sort(key=lambda pkg: str(pkg.get('updated_at') or pkg.get('created_at') or ''), reverse=True)
@@ -849,6 +851,7 @@ def normalize_debug_entry(license_id, data):
         'request_id': latest.get('request_id') or data.get('request_id') or '',
         'package_id': latest.get('package_id') or data.get('package_id') or '',
         'package_type': latest.get('package_type') or data.get('package_type') or '',
+        'reason': latest.get('reason') or data.get('reason') or '',
         'files': latest.get('files') or data.get('files') or {},
         'history': packages,
         'requested_at': data.get('requested_at') or '',
@@ -1490,8 +1493,14 @@ def api_debug_files_upload():
     if not clean_files:
         return jsonify({'success': False, 'error': 'Dosya yok'}), 400
     request_id = str(data.get('request_id') or '').strip()
-    package_type = 'eye' if request_id.startswith('eye_') or any(str(name).startswith('goz_') for name in clean_files.keys()) else 'manual'
-    package = make_debug_package(license_id, uid, request_id, clean_files, package_type)
+    raw_package_type = str(data.get('package_type') or '').strip().lower()
+    allowed_package_types = {'manual', 'eye', 'auto', 'error', 'motor', 'refresh'}
+    if raw_package_type in allowed_package_types:
+        package_type = raw_package_type
+    else:
+        package_type = 'eye' if request_id.startswith('eye_') or any(str(name).startswith('goz_') for name in clean_files.keys()) else 'manual'
+    reason = str(data.get('reason') or '').strip()[:500]
+    package = make_debug_package(license_id, uid, request_id, clean_files, package_type, reason)
     debug_files = load_debug_files()
     entry = normalize_debug_entry(license_id, debug_files.get(license_id) or {})
     history = entry.get('history') or []
@@ -1503,6 +1512,7 @@ def api_debug_files_upload():
         'request_id': package['request_id'],
         'package_id': package['package_id'],
         'package_type': package['package_type'],
+        'reason': package.get('reason') or '',
         'files': clean_files,
         'history': history,
     })
@@ -2107,6 +2117,28 @@ def admin_debug_files_request():
     return jsonify({'success': True, 'request_id': request_id})
 
 
+@app.post('/admin/debug-files/request-all')
+def admin_debug_files_request_all():
+    if not check_admin(request):
+        return jsonify({'success': False, 'error': 'yetkisiz'}), 403
+    licenses = load_licenses()
+    debug_files = load_debug_files()
+    request_id = 'refresh_' + secrets.token_hex(8)
+    count = 0
+    now = datetime.now().isoformat()
+    for license_id, row in licenses.items():
+        row = dict(row or {})
+        if not row.get('active', True) or str(row.get('status') or 'active').lower() != 'active':
+            continue
+        queue_client_command(f'collect_debug_files:{request_id}', license_id)
+        existing = normalize_debug_entry(license_id, debug_files.get(license_id) or {})
+        existing.update({'license_id': license_id, 'requested_at': now, 'request_id': request_id})
+        debug_files[license_id] = existing
+        count += 1
+    save_debug_files(debug_files)
+    return jsonify({'success': True, 'request_id': request_id, 'queued': count})
+
+
 @app.get('/admin/debug-files/<license_id>')
 def admin_debug_files_get(license_id):
     if not check_admin(request):
@@ -2137,6 +2169,7 @@ def admin_debug_files_delete(license_id):
                 'request_id': latest.get('request_id') or '',
                 'package_id': latest.get('package_id') or '',
                 'package_type': latest.get('package_type') or '',
+                'reason': latest.get('reason') or '',
                 'files': latest.get('files') or {},
                 'history': history,
             })
@@ -2175,6 +2208,7 @@ def admin_debug_files_list():
                 'created_at': package.get('created_at') or '',
                 'updated_at': package.get('updated_at') or package.get('created_at') or '',
                 'request_id': package.get('request_id') or '',
+                'reason': package.get('reason') or '',
                 'file_names': list(files.keys()),
                 'sizes': {name: len(str(value or '')) for name, value in files.items()}
             })
