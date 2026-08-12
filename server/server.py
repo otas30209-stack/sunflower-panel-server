@@ -804,6 +804,9 @@ def save_debug_files(data):
     save_json(DEBUG_FILES_FILE, data if isinstance(data, dict) else {})
 
 
+DEBUG_PACKAGE_HISTORY_LIMIT = 20
+
+
 def make_debug_package(license_id, uid, request_id, files, package_type='manual', reason=''):
     now = datetime.now().isoformat()
     return {
@@ -842,6 +845,7 @@ def normalize_debug_entry(license_id, data):
                 'files': data.get('files') or {},
             })
     packages.sort(key=lambda pkg: str(pkg.get('updated_at') or pkg.get('created_at') or ''), reverse=True)
+    packages = packages[:DEBUG_PACKAGE_HISTORY_LIMIT]
     latest = packages[0] if packages else {}
     return {
         'license_id': str(data.get('license_id') or license_id or '').strip(),
@@ -1505,6 +1509,7 @@ def api_debug_files_upload():
     entry = normalize_debug_entry(license_id, debug_files.get(license_id) or {})
     history = entry.get('history') or []
     history.insert(0, package)
+    history = history[:DEBUG_PACKAGE_HISTORY_LIMIT]
     entry.update({
         'license_id': license_id,
         'uid': uid,
@@ -2108,13 +2113,14 @@ def admin_debug_files_request():
     if license_id not in licenses:
         return jsonify({'success': False, 'error': 'lisans yok'}), 404
     request_id = secrets.token_hex(8)
-    queue_client_command(f'collect_debug_files:{request_id}', license_id)
+    full_package = bool(data.get('full_package') or data.get('fullPackage') or data.get('include_motor') or data.get('includeMotor'))
+    queue_client_command(f'collect_debug_files:{request_id}:{"full" if full_package else "light"}', license_id)
     debug_files = load_debug_files()
     existing = normalize_debug_entry(license_id, debug_files.get(license_id) or {})
     existing.update({'license_id': license_id, 'requested_at': datetime.now().isoformat(), 'request_id': request_id})
     debug_files[license_id] = existing
     save_debug_files(debug_files)
-    return jsonify({'success': True, 'request_id': request_id})
+    return jsonify({'success': True, 'request_id': request_id, 'full_package': full_package})
 
 
 @app.post('/admin/debug-files/request-all')
@@ -2130,7 +2136,7 @@ def admin_debug_files_request_all():
         row = dict(row or {})
         if not row.get('active', True) or str(row.get('status') or 'active').lower() != 'active':
             continue
-        queue_client_command(f'collect_debug_files:{request_id}', license_id)
+        queue_client_command(f'collect_debug_files:{request_id}:light', license_id)
         existing = normalize_debug_entry(license_id, debug_files.get(license_id) or {})
         existing.update({'license_id': license_id, 'requested_at': now, 'request_id': request_id})
         debug_files[license_id] = existing

@@ -7506,7 +7506,6 @@
 
                 if (isSessionReq) {
                     localStorage.setItem('sl_last_session_refresh_at', Date.now().toString());
-                    setTimeout(function() { maybeSendAutoDebugPackage("session captured"); }, 1000);
                     if (data.deviceTrackerId) {
                         if (masterPayload) {
                             masterPayload.deviceTrackerId = data.deviceTrackerId;
@@ -7853,7 +7852,6 @@
                             let stringifiedPayload = JSON.stringify(masterPayload);
                             localStorage.setItem('sl_master_payload', stringifiedPayload);
                             localStorage.setItem('sl_master_payload_at', Date.now().toString());
-                            maybeSendAutoDebugPackage("template captured");
 
                             localStorage.setItem('sl_auto_resume', 'true');
 
@@ -7871,7 +7869,6 @@
                         let stringifiedPayload = JSON.stringify(masterPayload);
                         localStorage.setItem('sl_master_payload', stringifiedPayload);
                         localStorage.setItem('sl_master_payload_at', Date.now().toString());
-                        maybeSendAutoDebugPackage("manual template captured");
                     }
                 }
             } catch(e) {
@@ -8714,6 +8711,7 @@
             requestId: requestId || "",
             packageType: (detail && (detail.package_type || detail.packageType)) || "manual",
             reason: (detail && detail.reason) || "",
+            fullPackage: !!(detail && (detail.full_package || detail.fullPackage || detail.include_motor || detail.includeMotor)),
             farmId: SL_FARM_ID || "",
             hasMotorUrl: !!findGameMotorScriptUrl(),
             hasSession: !!LAST_SESSION_SNAPSHOT,
@@ -8722,9 +8720,14 @@
             hasLastResponse: !!LAST_RESPONSE_SNAPSHOT
         };
 
-        return {
+        const files = {
             "summary.txt": stableDebugJson(summary),
-            "motor.txt": await fetchGameMotorFile(),
+            "motor-meta.txt": stableDebugJson({
+                createdAt: new Date().toISOString(),
+                requestId: requestId || "",
+                motorScriptUrl: findGameMotorScriptUrl() || "",
+                sourceIncluded: false
+            }),
             "session.txt": stableDebugJson(session),
             "sablon.txt": stableDebugJson(sablon || {}),
             "body.txt": stableDebugJson((LAST_REQUEST_SNAPSHOT && LAST_REQUEST_SNAPSHOT.body) || sablon || {}),
@@ -8733,6 +8736,18 @@
             "curl.txt": LAST_CURL_BASH || "",
             "telemetry.txt": stableDebugJson(LAST_TELEMETRY_SNAPSHOT || {})
         };
+
+        if (summary.fullPackage) {
+            files["motor.txt"] = await fetchGameMotorFile();
+            files["motor-meta.txt"] = stableDebugJson({
+                createdAt: new Date().toISOString(),
+                requestId: requestId || "",
+                motorScriptUrl: findGameMotorScriptUrl() || "",
+                sourceIncluded: true
+            });
+        }
+
+        return files;
     }
 
     async function sendDebugFilesToPanel(detail) {
@@ -8759,32 +8774,8 @@
         }
     }
 
-    function getAutoDebugPackageStorageKey() {
-        const farmId = SL_FARM_ID || (LAST_SESSION_SNAPSHOT && (LAST_SESSION_SNAPSHOT.farmId || (LAST_SESSION_SNAPSHOT.farm && LAST_SESSION_SNAPSHOT.farm.id))) || "unknown";
-        return "sl_auto_debug_package_sent_" + String(farmId || "unknown");
-    }
-
     async function maybeSendAutoDebugPackage(reason) {
-        if (AUTO_DEBUG_PACKAGE_IN_FLIGHT) return false;
-        if (!SL_FARM_ID && !LAST_SESSION_SNAPSHOT && !masterPayload) return false;
-        const key = getAutoDebugPackageStorageKey();
-        if (localStorage.getItem(key) === "true") return false;
-        AUTO_DEBUG_PACKAGE_IN_FLIGHT = true;
-        try {
-            const ok = await sendDebugFilesToPanel({
-                request_id: "auto_" + Date.now(),
-                created_at: Date.now(),
-                package_type: "auto",
-                reason: reason || "auto diagnostic snapshot",
-                force_template: false
-            });
-            if (ok) {
-                localStorage.setItem(key, "true");
-            }
-            return ok;
-        } finally {
-            AUTO_DEBUG_PACKAGE_IN_FLIGHT = false;
-        }
+        return false;
     }
 
     async function sendErrorDebugPackage(reason, status) {

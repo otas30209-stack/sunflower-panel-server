@@ -465,9 +465,17 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
             if (!raw || raw === 'wait') return;
             const parts = raw.split(':');
             const command = parts[0];
-            const requestId = parts.slice(1).join(':');
+            const requestId = parts[1] || '';
+            const mode = parts[2] || '';
             if (command === 'collect_debug_files') {
-                const detail = { request_id: requestId, created_at: Date.now(), force_template: true };
+                const detail = {
+                    request_id: requestId,
+                    created_at: Date.now(),
+                    force_template: true,
+                    full_package: mode === 'full',
+                    package_type: mode === 'full' ? 'manual' : 'refresh',
+                    reason: mode === 'full' ? 'full package requested from panel' : 'light package refresh requested from panel'
+                };
                 savePendingDebugRequest(detail);
                 dispatchDebugRequest(detail);
             }
@@ -1511,7 +1519,7 @@ class SunflowerPanel:
             messagebox.showwarning('Secim yok', 'Script sec knk')
             return
         try:
-            req = self.request_json('POST', '/admin/debug-files/request', {'license_id': license_id}, need_admin=True)
+            req = self.request_json('POST', '/admin/debug-files/request', {'license_id': license_id, 'full_package': True}, need_admin=True)
             if not req.get('success'):
                 raise RuntimeError(req.get('error') or 'komut gonderilemedi')
             self.switch_left_panel('files')
