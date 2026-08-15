@@ -36,6 +36,7 @@
     let SL_COLLECTIBLES = JSON.parse(localStorage.getItem('sl_collectibles_cache') || '{}');
     let SL_HOME = JSON.parse(localStorage.getItem('sl_home_cache') || '{"collectibles":{}}');
     let SL_INTERIOR = JSON.parse(localStorage.getItem('sl_interior_cache') || '{"ground":{"collectibles":{}}}');
+    let SL_FACTION = JSON.parse(localStorage.getItem('sl_faction_cache') || '{}');
     let SL_AOE = JSON.parse(localStorage.getItem('sl_aoe_cache') || '{}');
     let SL_BUDS = JSON.parse(localStorage.getItem('sl_buds_cache') || '{}');
     let SL_BUFFS = JSON.parse(localStorage.getItem('sl_buffs_cache') || '{}');
@@ -2237,7 +2238,7 @@
     }
 
     function normalizeMarketSettings(raw) {
-        const base = { sell: {}, buy: {} };
+        const base = { sell: {}, buy: {}, faction: { autoAll: false, requests: {} } };
         if (!raw || typeof raw !== 'object') {
             return base;
         }
@@ -2269,6 +2270,20 @@
                 }
             });
         }
+        if (raw.faction && typeof raw.faction === 'object') {
+            base.faction.autoAll = !!raw.faction.autoAll;
+            const requests = raw.faction.requests && typeof raw.faction.requests === 'object' ? raw.faction.requests : {};
+            Object.entries(requests).forEach(function([item, cfg]) {
+                if (cfg === true) {
+                    base.faction.requests[item] = { active: true, target: 1 };
+                } else {
+                    base.faction.requests[item] = {
+                        active: !!cfg?.active,
+                        target: Math.max(1, parseInt(cfg?.target ?? 1) || 1)
+                    };
+                }
+            });
+        }
         return base;
     }
 
@@ -2276,6 +2291,7 @@
     let MARKET_SETTINGS = normalizeMarketSettings(parsedMarketSettings);
     let selectedSellCrop = localStorage.getItem('sl_selected_sell_crop') || "";
     let selectedBuySeed = localStorage.getItem('sl_selected_buy_seed') || "";
+    let selectedFactionItem = localStorage.getItem('sl_selected_faction_item') || "";
 
     const FIRE_PIT_RECIPES = {
         "Furikake Sprinkle": { building: "Fire Pit", experience: 1000, cookingSeconds: 0, ingredients: { "Fish Flake": 1, "Seaweed": 1 } },
@@ -4256,9 +4272,11 @@
                     <div class="market-tabs">
                         <button class="market-tab-btn active" id="tab-sell-btn">Sell</button>
                         <button class="market-tab-btn" id="tab-buy-btn">Buy</button>
+                        <button class="market-tab-btn" id="tab-faction-btn">Faction</button>
                     </div>
                     <div id="tab-sell" class="market-tab-content active"></div>
                     <div id="tab-buy" class="market-tab-content"></div>
+                    <div id="tab-faction" class="market-tab-content"></div>
                 </div>
             </div>
         `;
@@ -4737,6 +4755,7 @@
 
         document.getElementById('tab-sell-btn').onclick = function() { switchTab('sell'); };
         document.getElementById('tab-buy-btn').onclick = function() { switchTab('buy'); };
+        document.getElementById('tab-faction-btn').onclick = function() { switchTab('faction'); };
 
         document.getElementById('sl-market-menu').addEventListener('input', handleMarketSettingsInput);
         document.getElementById('sl-market-menu').addEventListener('change', handleMarketSettingsInput);
@@ -6319,13 +6338,17 @@
     function switchTab(tabName) {
         let sellTab = document.getElementById('tab-sell');
         let buyTab = document.getElementById('tab-buy');
+        let factionTab = document.getElementById('tab-faction');
         let sellBtn = document.getElementById('tab-sell-btn');
         let buyBtn = document.getElementById('tab-buy-btn');
+        let factionBtn = document.getElementById('tab-faction-btn');
 
         if(sellTab) sellTab.classList.remove('active');
         if(buyTab) buyTab.classList.remove('active');
+        if(factionTab) factionTab.classList.remove('active');
         if(sellBtn) sellBtn.classList.remove('active');
         if(buyBtn) buyBtn.classList.remove('active');
+        if(factionBtn) factionBtn.classList.remove('active');
 
         let targetTab = document.getElementById(`tab-${tabName}`);
         let targetBtn = document.getElementById(`tab-${tabName}-btn`);
@@ -6337,7 +6360,8 @@
     function renderMarketTabs() {
         const sellTab = document.getElementById('tab-sell');
         if(!sellTab) return;
-        warmNexusIconsFromClientAssets(KNOWN_CROPS.concat(ALL_KNOWN_SEEDS));
+        const factionRequests = getFactionKitchenRequests();
+        warmNexusIconsFromClientAssets(KNOWN_CROPS.concat(ALL_KNOWN_SEEDS).concat(factionRequests.map(function(req) { return req.item; })));
 
         let saleBonusRows = KNOWN_CROPS.map(function(crop) {
             let info = getSpecialEventSaleInfo(crop, Date.now());
@@ -6518,6 +6542,141 @@
                 <div style="border:1px solid rgba(148,163,184,0.18);background:linear-gradient(180deg,rgba(15,23,42,0.96),rgba(30,41,59,0.88));padding:11px;border-radius:12px;min-height:390px;max-height:460px;overflow-y:auto;">${seedGrid}</div>
                 <div style="border:1px solid rgba(148,163,184,0.18);background:linear-gradient(180deg,rgba(15,23,42,0.96),rgba(30,41,59,0.88));padding:12px;border-radius:12px;min-height:390px;">${detail}</div>
             </div>`;
+
+        renderFactionMarketTab(factionRequests);
+    }
+
+    function getTodayFactionKitchenKey() {
+        return String(new Date().getDay());
+    }
+
+    function getFactionKitchenRequests() {
+        const requests = SL_FACTION && SL_FACTION.kitchen && Array.isArray(SL_FACTION.kitchen.requests)
+            ? SL_FACTION.kitchen.requests
+            : [];
+        const todayKey = getTodayFactionKitchenKey();
+        return requests.map(function(req, index) {
+            const item = req && req.item ? String(req.item) : "";
+            const amount = Math.max(0, parseInt(req && req.amount) || 0);
+            const daily = req && req.dailyFulfilled && typeof req.dailyFulfilled === 'object' ? req.dailyFulfilled : {};
+            const fulfilledToday = Math.max(0, parseInt(daily[todayKey] || 0) || 0);
+            const fulfilledTotal = Object.values(daily).reduce(function(sum, val) {
+                return sum + (Math.max(0, parseInt(val) || 0));
+            }, 0);
+            const have = readDecimal(SL_INVENTORY[item], 0);
+            const remaining = Math.max(0, amount - fulfilledToday);
+            const missing = Math.max(0, remaining - have);
+            const seed = KNOWN_CROPS.includes(item) ? item + " Seed" : "";
+            return { index: index, item: item, amount: amount, fulfilledToday: fulfilledToday, fulfilledTotal: fulfilledTotal, remaining: remaining, have: have, missing: missing, seed: seed };
+        }).filter(function(req) {
+            return !!req.item;
+        });
+    }
+
+    function renderFactionMarketTab(requests) {
+        const factionTab = document.getElementById('tab-faction');
+        if (!factionTab) {
+            return;
+        }
+
+        const list = requests || getFactionKitchenRequests();
+        if (selectedFactionItem && !list.some(function(req) { return req.item === selectedFactionItem; })) {
+            selectedFactionItem = "";
+            localStorage.removeItem('sl_selected_faction_item');
+        }
+
+        const autoAllChecked = MARKET_SETTINGS.faction && MARKET_SETTINGS.faction.autoAll ? 'checked' : '';
+        const header = `
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">
+                <div>
+                    <div style="font-size:12px;font-weight:900;color:#fde68a;">Faction Kitchen</div>
+                    <div style="font-size:10px;color:#a1a1aa;">Requests read from live game response.</div>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <button type="button" onclick="applyAllFactionNeedsToMarket()" style="background:linear-gradient(90deg,#f59e0b,#facc15);color:#111827;border:1px solid rgba(251,191,36,0.6);border-radius:8px;padding:8px 10px;font-size:10px;font-weight:900;cursor:pointer;">Add All Needs</button>
+                    <div class="mini-switch-wrapper" style="padding:7px 9px;background:rgba(20,83,45,0.22);border-color:rgba(74,222,128,0.35);">
+                        <span class="mini-label" style="font-size:10px;color:#bbf7d0;">Auto All</span>
+                        <label class="switch">
+                            <input type="checkbox" id="faction-auto-all" ${autoAllChecked}>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>`;
+
+        if (list.length === 0) {
+            factionTab.innerHTML = header + `<div style="padding:22px;text-align:center;color:#fca5a5;border:1px solid rgba(248,113,113,0.25);border-radius:10px;background:rgba(127,29,29,0.14);font-size:12px;">No faction kitchen request found yet. Open the faction kitchen once or run a live action so the response cache updates.</div>`;
+            bindFactionMarketHandlers();
+            return;
+        }
+
+        let grid = `<div style="font-size:10px;color:#bfdbfe;margin-bottom:8px;display:flex;justify-content:space-between;"><span>Kitchen Requests</span><span>${list.length} items</span></div><div style="display:grid;grid-template-columns:repeat(5,54px);gap:7px;">`;
+        list.forEach(function(req) {
+            const cfg = (MARKET_SETTINGS.faction && MARKET_SETTINGS.faction.requests && MARKET_SETTINGS.faction.requests[req.item]) || { active: false, target: req.amount || 1 };
+            const active = MARKET_SETTINGS.faction?.autoAll || cfg.active;
+            const selected = selectedFactionItem === req.item;
+            const safeItem = req.item.replace(/'/g, "\\'");
+            grid += `
+                <button type="button" onclick="selectFactionItem('${safeItem}')" title="${req.item}" style="position:relative;width:54px;height:54px;border-radius:8px;border:2px solid ${selected ? '#dbeafe' : active ? '#22c55e' : req.missing > 0 ? '#f59e0b' : 'rgba(71,85,105,0.75)'};background:${selected ? 'linear-gradient(180deg,rgba(37,99,235,0.45),rgba(15,23,42,0.8))' : 'linear-gradient(180deg,rgba(30,41,59,0.94),rgba(15,23,42,0.98))'};box-shadow:${selected ? '0 0 0 2px #1d4ed8' : 'none'};cursor:pointer;">
+                    ${getItemIconHtml(req.item, 30)}
+                    <span style="position:absolute;top:-7px;left:7px;min-width:24px;padding:1px 3px;border-radius:3px;background:${req.missing > 0 ? '#f59e0b' : '#22c55e'};color:#111827;font-size:10px;font-weight:900;border:1px solid #1e293b;">${req.have}/${req.remaining}</span>
+                </button>`;
+        });
+        grid += `</div>`;
+
+        let detail = `<div style="height:100%;display:flex;align-items:center;justify-content:center;color:#fef3c7;font-size:12px;text-align:center;">Select a kitchen request</div>`;
+        const selectedReq = list.find(function(req) { return req.item === selectedFactionItem; }) || list[0];
+        if (!selectedFactionItem && selectedReq) {
+            selectedFactionItem = selectedReq.item;
+        }
+        if (selectedReq) {
+            const cfg = (MARKET_SETTINGS.faction && MARKET_SETTINGS.faction.requests && MARKET_SETTINGS.faction.requests[selectedReq.item]) || { active: false, target: selectedReq.amount || 1 };
+            const activeChecked = (MARKET_SETTINGS.faction?.autoAll || cfg.active) ? 'checked' : '';
+            const seedLine = selectedReq.seed
+                ? `<div style="text-align:center;color:#bfdbfe;">Seed helper: ${selectedReq.seed}</div>`
+                : `<div style="text-align:center;color:#fca5a5;">No seed helper for this item.</div>`;
+            detail = `
+                <div style="display:flex;flex-direction:column;gap:9px;color:#e5e7eb;font-size:12px;">
+                    <div style="font-size:16px;font-weight:900;text-align:center;color:#f8fafc;">${selectedReq.item}</div>
+                    <div style="display:flex;align-items:center;justify-content:center;height:48px;">${getItemIconHtml(selectedReq.item, 42)}</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;text-align:center;">
+                        <div style="background:rgba(15,23,42,0.8);border:1px solid rgba(148,163,184,0.22);border-radius:8px;padding:7px;"><b>${selectedReq.remaining}</b><br><span style="font-size:10px;color:#a1a1aa;">Needed</span></div>
+                        <div style="background:rgba(15,23,42,0.8);border:1px solid rgba(148,163,184,0.22);border-radius:8px;padding:7px;"><b>${selectedReq.have}</b><br><span style="font-size:10px;color:#a1a1aa;">Owned</span></div>
+                        <div style="background:rgba(15,23,42,0.8);border:1px solid rgba(148,163,184,0.22);border-radius:8px;padding:7px;color:${selectedReq.missing > 0 ? '#fbbf24' : '#86efac'};"><b>${selectedReq.missing}</b><br><span style="font-size:10px;color:#a1a1aa;">Missing</span></div>
+                    </div>
+                    ${seedLine}
+                    <div style="display:grid;grid-template-columns:auto 1fr;gap:7px;align-items:center;">
+                        <span>Target</span><input type="number" class="faction-target" data-item="${selectedReq.item}" value="${Math.max(1, parseInt(cfg.target || selectedReq.amount) || selectedReq.amount || 1)}" min="1" max="999">
+                    </div>
+                    <div class="mini-switch-wrapper" style="justify-content:space-between;padding:7px 9px;background:rgba(30,64,175,0.20);border-color:rgba(96,165,250,0.35);">
+                        <span class="mini-label" style="font-size:10px;color:#bfdbfe;">Auto Buy Needed Seed</span>
+                        <label class="switch">
+                            <input type="checkbox" class="faction-active" data-item="${selectedReq.item}" ${activeChecked}>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <button type="button" onclick="applyFactionNeedToMarket('${selectedReq.item.replace(/'/g, "\\'")}')" style="background:linear-gradient(90deg,#f59e0b,#facc15);color:#111827;border:1px solid rgba(251,191,36,0.6);border-radius:8px;padding:9px 12px;font-weight:900;cursor:${selectedReq.seed ? 'pointer' : 'not-allowed'};" ${selectedReq.seed ? '' : 'disabled'}>Add Need To Buy List</button>
+                </div>`;
+        }
+
+        factionTab.innerHTML = header + `
+            <div style="display:grid;grid-template-columns:292px minmax(230px,1fr);gap:12px;align-items:stretch;">
+                <div style="border:1px solid rgba(148,163,184,0.18);background:linear-gradient(180deg,rgba(15,23,42,0.96),rgba(30,41,59,0.88));padding:11px;border-radius:12px;min-height:390px;max-height:460px;overflow-y:auto;">${grid}</div>
+                <div style="border:1px solid rgba(148,163,184,0.18);background:linear-gradient(180deg,rgba(15,23,42,0.96),rgba(30,41,59,0.88));padding:12px;border-radius:12px;min-height:390px;">${detail}</div>
+            </div>`;
+        bindFactionMarketHandlers();
+    }
+
+    function bindFactionMarketHandlers() {
+        const autoAll = document.getElementById('faction-auto-all');
+        if (autoAll) {
+            autoAll.onchange = function() {
+                MARKET_SETTINGS.faction = MARKET_SETTINGS.faction || { autoAll: false, requests: {} };
+                MARKET_SETTINGS.faction.autoAll = !!autoAll.checked;
+                saveMarketSettings();
+                renderMarketTabs();
+            };
+        }
     }
 
     function safeRenderPlotGrid(reason = '') {
@@ -6534,9 +6693,9 @@
         const target = e?.target;
         if (!target) return;
 
-        if (target.matches('.sell-active') || target.matches('.sell-min') || target.matches('.buy-active') || target.matches('.buy-min') || target.matches('.buy-max') || target.matches('.buy-ignore-stock-limit') || target.matches('.buy-auto-shipment')) {
+        if (target.matches('.sell-active') || target.matches('.sell-min') || target.matches('.buy-active') || target.matches('.buy-min') || target.matches('.buy-max') || target.matches('.buy-ignore-stock-limit') || target.matches('.buy-auto-shipment') || target.matches('.faction-active') || target.matches('.faction-target')) {
             saveMarketSettings();
-            if (target.matches('.sell-active') || target.matches('.buy-active') || target.matches('.buy-ignore-stock-limit') || target.matches('.buy-auto-shipment')) {
+            if (target.matches('.sell-active') || target.matches('.buy-active') || target.matches('.buy-ignore-stock-limit') || target.matches('.buy-auto-shipment') || target.matches('.faction-active')) {
                 renderMarketTabs();
             }
         }
@@ -6605,7 +6764,36 @@
             }
         });
 
-        let newMarketSettings = { sell: sellObj, buy: buyObj };
+        const factionObj = {
+            autoAll: !!(MARKET_SETTINGS.faction && MARKET_SETTINGS.faction.autoAll),
+            requests: {}
+        };
+        getFactionKitchenRequests().forEach(function(req) {
+            let currentCfg = (MARKET_SETTINGS.faction && MARKET_SETTINGS.faction.requests && MARKET_SETTINGS.faction.requests[req.item]) || { active: false, target: req.amount || 1 };
+            let activeEl = document.querySelector(`.faction-active[data-item="${req.item}"]`);
+            let active = activeEl ? !!activeEl.checked : !!currentCfg.active;
+            let targetEl = document.querySelector(`.faction-target[data-item="${req.item}"]`);
+            let target = Math.max(1, parseInt(targetEl ? targetEl.value : (currentCfg.target || req.amount || 1)) || (req.amount || 1));
+            if (active || target !== (req.amount || 1)) {
+                factionObj.requests[req.item] = { active: active, target: target };
+            }
+            const shouldAutoBuy = (factionObj.autoAll || active) && req.seed;
+            if (shouldAutoBuy) {
+                const missing = Math.max(0, target - req.have, req.missing);
+                if (missing > 0) {
+                    const existing = buyObj[req.seed] || MARKET_SETTINGS.buy[req.seed] || { active: false, min: 1, max: missing, ignoreStockLimit: false, autoShipmentRestock: false };
+                    buyObj[req.seed] = {
+                        active: true,
+                        min: Math.max(1, Math.min(parseInt(existing.min || 1) || 1, missing)),
+                        max: Math.max(missing, parseInt(existing.max || missing) || missing),
+                        ignoreStockLimit: !!existing.ignoreStockLimit,
+                        autoShipmentRestock: !!existing.autoShipmentRestock
+                    };
+                }
+            }
+        });
+
+        let newMarketSettings = { sell: sellObj, buy: buyObj, faction: factionObj };
         MARKET_SETTINGS = normalizeMarketSettings(newMarketSettings);
 
         let stringifiedData = JSON.stringify(MARKET_SETTINGS);
@@ -6659,6 +6847,63 @@
         } else {
             localStorage.removeItem('sl_selected_buy_seed');
         }
+        renderMarketTabs();
+    };
+
+    _window.selectFactionItem = function(item) {
+        selectedFactionItem = selectedFactionItem === item ? "" : item;
+        if (selectedFactionItem) {
+            localStorage.setItem('sl_selected_faction_item', selectedFactionItem);
+        } else {
+            localStorage.removeItem('sl_selected_faction_item');
+        }
+        renderMarketTabs();
+    };
+
+    _window.applyFactionNeedToMarket = function(item) {
+        const req = getFactionKitchenRequests().find(function(entry) { return entry.item === item; });
+        if (!req || !req.seed) {
+            log("Faction request has no seed helper: " + item);
+            return;
+        }
+        const targetCfg = MARKET_SETTINGS.faction && MARKET_SETTINGS.faction.requests ? MARKET_SETTINGS.faction.requests[item] : null;
+        const target = Math.max(1, parseInt(targetCfg && targetCfg.target ? targetCfg.target : req.remaining) || req.remaining || 1);
+        const missing = Math.max(req.missing, target - req.have, 1);
+        const existing = MARKET_SETTINGS.buy[req.seed] || { active: false, min: 10, max: 20, ignoreStockLimit: false, autoShipmentRestock: false };
+        MARKET_SETTINGS.buy[req.seed] = {
+            active: true,
+            min: Math.max(1, Math.min(parseInt(existing.min || 1) || 1, missing)),
+            max: Math.max(missing, parseInt(existing.max || missing) || missing),
+            ignoreStockLimit: !!existing.ignoreStockLimit,
+            autoShipmentRestock: !!existing.autoShipmentRestock
+        };
+        saveMarketSettingsToStorage();
+        selectedBuySeed = req.seed;
+        localStorage.setItem('sl_selected_buy_seed', selectedBuySeed);
+        log(`Faction need added to Buy list: ${req.seed} target ${MARKET_SETTINGS.buy[req.seed].max}`);
+        renderMarketTabs();
+    };
+
+    _window.applyAllFactionNeedsToMarket = function() {
+        const requests = getFactionKitchenRequests().filter(function(req) {
+            return req.seed && req.missing > 0;
+        });
+        if (requests.length === 0) {
+            log("Faction kitchen has no seed-backed missing request.");
+            return;
+        }
+        requests.forEach(function(req) {
+            const existing = MARKET_SETTINGS.buy[req.seed] || { active: false, min: 1, max: req.missing, ignoreStockLimit: false, autoShipmentRestock: false };
+            MARKET_SETTINGS.buy[req.seed] = {
+                active: true,
+                min: Math.max(1, Math.min(parseInt(existing.min || 1) || 1, req.missing)),
+                max: Math.max(req.missing, parseInt(existing.max || req.missing) || req.missing),
+                ignoreStockLimit: !!existing.ignoreStockLimit,
+                autoShipmentRestock: !!existing.autoShipmentRestock
+            };
+        });
+        saveMarketSettingsToStorage();
+        log(`Faction needs added to Buy list: ${requests.length} item${requests.length > 1 ? "s" : ""}`);
         renderMarketTabs();
     };
 
@@ -7810,6 +8055,10 @@
                     if (data.farm.shipments) {
                         SL_SHIPMENTS = data.farm.shipments;
                         localStorage.setItem('sl_shipments_cache', JSON.stringify(SL_SHIPMENTS));
+                    }
+                    if (data.farm.faction) {
+                        SL_FACTION = data.farm.faction;
+                        localStorage.setItem('sl_faction_cache', JSON.stringify(SL_FACTION));
                     }
                     if (data.farm.buildings) {
                         SL_BUILDINGS = data.farm.buildings;
