@@ -2142,7 +2142,7 @@
     _window.toggleResourceSelection = toggleResourceSelection;
 
     function isNexusUiTarget(target) {
-        return !!(target && target.closest && target.closest('.sl-window, #sl-mini-launcher, #nexus-seed-modal, #nexus-number-modal, #sl-game-click-guard'));
+        return !!(target && target.closest && target.closest('.sl-window, #sl-mini-launcher, #seed-modal, #nexus-seed-modal, #nexus-number-modal, #sl-game-click-guard'));
     }
 
     function isGameClickGuardActive() {
@@ -4248,6 +4248,7 @@
 
         let seedModalHTML = `
             <div id="seed-modal">
+                <button id="btn-close-seed-modal" class="close-btn" style="position:absolute;right:8px;top:8px;width:24px;height:24px;">X</button>
                 <div id="seed-list"></div>
             </div>
         `;
@@ -4580,6 +4581,10 @@
             saveBotSettings();
             log(`Collect Mushrooms: ${e.target.checked ? 'ON' : 'OFF'}`);
             renderMushroomPanel();
+        };
+
+        document.getElementById('btn-close-seed-modal').onclick = function() {
+            closeSeedSelection();
         };
 
         document.getElementById('toggle-auto-fields').onchange = function(e) {
@@ -6363,6 +6368,15 @@
         modalElement.style.display = 'block';
     }
 
+    function closeSeedSelection() {
+        let modalElement = document.getElementById('seed-modal');
+        if (modalElement) {
+            modalElement.style.display = 'none';
+        }
+    }
+
+    _window.closeSeedSelection = closeSeedSelection;
+
     _window.setPlotTask = function(id, seed) {
         if (seed) {
             PLOT_TASKS[id] = seed;
@@ -6373,8 +6387,7 @@
         let stringifiedTasks = JSON.stringify(PLOT_TASKS);
         localStorage.setItem('sl_plot_tasks', stringifiedTasks);
 
-        let modalElement = document.getElementById('seed-modal');
-        modalElement.style.display = 'none';
+        closeSeedSelection();
 
         renderPlotGrid();
     };
@@ -9573,6 +9586,24 @@
         return actions;
     }
 
+    async function sendReadyMushroomPackage(reason) {
+        if (!BOT_SETTINGS.autoMushroom || stopRequested || killSwitchActivated) {
+            return false;
+        }
+
+        const actions = getReadyMushroomActions(Date.now() + randInt(650, 1400));
+        if (actions.length === 0) {
+            return false;
+        }
+
+        log(`Collect Mushrooms package prepared after ${reason || "farm action"}... (${actions.length})`);
+        const ok = await sendBotResourcePayload(actions, "Mushrooms");
+        if (!ok) {
+            log("Mushrooms package skipped after live state refresh.");
+        }
+        return ok;
+    }
+
     async function refreshCoreAccountingHashes(payload) {
         payload.stateHash.inventory = await computeSHA256(SL_INVENTORY);
         payload.stateHash.stock = await computeSHA256(SL_STOCK);
@@ -10758,6 +10789,7 @@
                             log(`âœ… Ä°ÅŸlem BaÅŸarÄ±lÄ±!`);
                             await applyAutosaveSnapshotFromResponse(res, 'single harvest');
                             masterPayload.stateHash = payload.stateHash;
+                            await sendReadyMushroomPackage("single harvest");
                         } else {
                             triggerKillSwitch("Sunucu tekli hasadÄ± reddetti.", res.status);
                             return;
@@ -10797,6 +10829,7 @@
                                 log(`âœ… Ä°ÅŸlem BaÅŸarÄ±lÄ±!`);
                                 await applyAutosaveSnapshotFromResponse(res, 'batch harvest');
                                 masterPayload.stateHash = payload.stateHash;
+                                await sendReadyMushroomPackage("batch harvest");
                             } else {
                                 if (await handleRecoverableServerReject("Batch harvest rejected by server", res.status)) {
                                     return;
@@ -10811,6 +10844,10 @@
                     }
                 }
             }
+        }
+
+        if (readyPlots.length > 0) {
+            endBotStateMutation();
         }
 
         if (actionPerformed && !stopRequested && !killSwitchActivated) {
@@ -11277,7 +11314,6 @@
                     }
                 }
             }
-            endBotStateMutation();
         }
 
         if (!stopRequested && !killSwitchActivated) {
