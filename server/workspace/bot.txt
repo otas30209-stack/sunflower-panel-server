@@ -64,6 +64,7 @@
     let stopRequested = false;
     let killSwitchActivated = false;
     let hasLoggedQuarantine = false;
+    let lastAutomationDiagnosticAt = 0;
 
     _window.WAITING_FOR_TEMPLATE_TO_START = false;
     _window.AUTO_RESUME_PENDING = localStorage.getItem('sl_auto_resume') === 'true';
@@ -9963,6 +9964,46 @@
         return selectedEntries.length > 0 ? shuffled : shuffled.slice(0, 1);
     }
 
+    function logAutomationDiagnostic(reason, safePlots) {
+        const now = Date.now();
+        if (now - lastAutomationDiagnosticAt < 20000) {
+            return;
+        }
+        lastAutomationDiagnosticAt = now;
+
+        const safe = Array.isArray(safePlots) ? safePlots : [];
+        const cropEntries = BOT_SETTINGS.autoFields ? Object.entries(SL_CROPS || {}) : [];
+        let emptyCount = 0;
+        let readyCount = 0;
+        let growingCount = 0;
+
+        for (let i = 0; i < cropEntries.length; i++) {
+            const id = cropEntries[i][0];
+            if (!safe.includes(id)) {
+                continue;
+            }
+            const status = getCropStatus(cropEntries[i][1]);
+            if (status === "EMPTY") emptyCount++;
+            if (status === "READY") readyCount++;
+            if (status === "GROWING") growingCount++;
+        }
+
+        const manualTaskCount = Object.keys(PLOT_TASKS || {}).length;
+        const cropPlanCount = getCropPlanEntries().length;
+        const readyTrees = BOT_SETTINGS.autoTree ? getReadyResourceTargets("trees", SL_TREES, TREE_RECOVERY_MS, "wood").length : 0;
+        const readyFruits = BOT_SETTINGS.autoFruit ? getReadyFruitTargets().length : 0;
+        const readyStones = BOT_SETTINGS.autoMineStone ? getReadyResourceTargets("stones", SL_STONES, STONE_RECOVERY_MS, "stone").length : 0;
+        const readyIron = BOT_SETTINGS.autoMineIron ? getReadyResourceTargets("iron", SL_IRON, IRON_RECOVERY_MS, "stone").length : 0;
+        const readyGold = BOT_SETTINGS.autoMineGold ? getReadyResourceTargets("gold", SL_GOLD, GOLD_RECOVERY_MS, "stone").length : 0;
+
+        log(
+            `Idle check (${reason}): Auto Fields ${BOT_SETTINGS.autoFields ? "ON" : "OFF"}, ` +
+            `Auto Plant ${isCropPlanActive() ? "ON" : "OFF"}, safe ${safe.length}, ready ${readyCount}, ` +
+            `empty ${emptyCount}, growing ${growingCount}, manual tasks ${manualTaskCount}, plan items ${cropPlanCount}, ` +
+            `resources ready T/F/S/I/G ${readyTrees}/${readyFruits}/${readyStones}/${readyIron}/${readyGold}.`
+        );
+    }
+
     function getCraftableToolAmount(tool, needed) {
         const recipe = getToolCraftRecipe(tool);
         if (!recipe || needed <= 0) {
@@ -12507,6 +12548,8 @@
                         break;
                     }
                 }
+
+                logAutomationDiagnostic("idle", safePlots);
 
                 if (hasReadyHarvest || hasSellWaiting || hasPlantableTask) {
                     await controlledSleep(randInt(1800, 3200));
