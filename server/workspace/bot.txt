@@ -14,7 +14,7 @@
     'use strict';
 
     const _window = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
-    const NEXUS_BOT_BUILD = "2026-08-16.1818";
+    const NEXUS_BOT_BUILD = "2026-08-16.1826";
 
     // ==========================================
     // ğŸ““ BÃœYÃœK MUHASEBE DEFTERÄ° (THE GRAND LEDGER)
@@ -9375,13 +9375,31 @@
         if (workbenchIndex >= 0) {
             source = source.slice(workbenchIndex, workbenchIndex + 30000);
         }
-        const escapedTool = tool.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        const blockRe = new RegExp('(?:\"' + escapedTool + '\"|' + escapedTool.replace(/\s+/g, '\\\\s+') + ')\\\\s*:\\\\s*\\\\{name:\"' + escapedTool + '\"[\\\\s\\\\S]*?stock:new Decimal\\\\$1\\\\(', 'm');
-        const match = blockRe.exec(source);
-        if (!match) {
+
+        const nameMarker = 'name:"' + tool + '"';
+        let nameIndex = source.indexOf(nameMarker);
+        if (nameIndex < 0) {
+            nameIndex = source.indexOf('name: "' + tool + '"');
+        }
+        if (nameIndex < 0) {
             return null;
         }
-        const block = match[0];
+
+        let blockStart = source.lastIndexOf("{", nameIndex);
+        if (blockStart < 0) {
+            blockStart = Math.max(0, nameIndex - 400);
+        }
+        let blockEnd = source.indexOf("stock:new Decimal$1(", nameIndex);
+        if (blockEnd < 0) {
+            blockEnd = source.indexOf("stock: new Decimal$1(", nameIndex);
+        }
+        if (blockEnd < 0) {
+            blockEnd = Math.min(source.length, nameIndex + 5000);
+        } else {
+            blockEnd = Math.min(source.length, blockEnd + 1500);
+        }
+
+        const block = source.slice(blockStart, blockEnd);
         const priceMatch = /price\s*:\s*([\d.]+)/.exec(block);
         const recipe = {};
         if (priceMatch) {
