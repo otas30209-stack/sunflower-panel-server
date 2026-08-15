@@ -83,6 +83,8 @@
     })();
     let sessionRefreshPromise = null;
     const SESSION_REFRESH_COOLDOWN_MS = 8000;
+    let BOT_STATE_MUTATION_LOCK = 0;
+    let BOT_STATE_MUTATION_LOCK_UNTIL = 0;
     let SL_API_BASE = localStorage.getItem('sl_api_base') || 'https://api.sunflower-land.com';
     let SL_SESSION_BODY_CACHE = (function() {
         try {
@@ -113,6 +115,32 @@
 
     function beginBotActionBatch() {
         return nextBotActionTime(BOT_ACTION_CLOCK_MS);
+    }
+
+    function beginBotStateMutation(timeoutMs = 120000) {
+        BOT_STATE_MUTATION_LOCK++;
+        BOT_STATE_MUTATION_LOCK_UNTIL = Math.max(BOT_STATE_MUTATION_LOCK_UNTIL, Date.now() + timeoutMs);
+        setTimeout(function() {
+            if (Date.now() >= BOT_STATE_MUTATION_LOCK_UNTIL) {
+                BOT_STATE_MUTATION_LOCK = 0;
+                BOT_STATE_MUTATION_LOCK_UNTIL = 0;
+            }
+        }, timeoutMs + 250);
+    }
+
+    function endBotStateMutation() {
+        BOT_STATE_MUTATION_LOCK = Math.max(0, BOT_STATE_MUTATION_LOCK - 1);
+        if (BOT_STATE_MUTATION_LOCK === 0) {
+            BOT_STATE_MUTATION_LOCK_UNTIL = 0;
+        }
+    }
+
+    function isBotStateMutationLocked() {
+        if (BOT_STATE_MUTATION_LOCK > 0 && Date.now() >= BOT_STATE_MUTATION_LOCK_UNTIL) {
+            BOT_STATE_MUTATION_LOCK = 0;
+            BOT_STATE_MUTATION_LOCK_UNTIL = 0;
+        }
+        return BOT_STATE_MUTATION_LOCK > 0;
     }
 
     function getResourceReadyAt(node, baseMs, resourceKey) {
@@ -8050,6 +8078,9 @@
 
                 if (isSessionReq) {
                     LAST_SESSION_SNAPSHOT = data;
+                    if (isBotStateMutationLocked()) {
+                        return;
+                    }
                 }
 
                 if (isAutosaveReq) {
@@ -8531,6 +8562,12 @@
 
     async function forceRadarRefresh(logReason = '', force = false) {
         if (!masterHeaders) { return false; }
+        if (isBotStateMutationLocked()) {
+            if (logReason) {
+                log("Bot check postponed while a package is being prepared.");
+            }
+            return true;
+        }
 
         const nowMs = Date.now();
         const lastRefreshAt = parseInt(localStorage.getItem('sl_last_session_refresh_at') || "0");
@@ -10663,6 +10700,7 @@
             let stringifiedMaster = JSON.stringify(masterPayload);
             let payload = JSON.parse(stringifiedMaster);
             payload.actions = [];
+            beginBotStateMutation(120000);
 
             for (let i = 0; i < readyPlots.length; i++) {
                 if (stopRequested || killSwitchActivated) {
@@ -11239,6 +11277,7 @@
                     }
                 }
             }
+            endBotStateMutation();
         }
 
         if (!stopRequested && !killSwitchActivated) {
@@ -11284,6 +11323,7 @@
                 let plantCount = 0;
                 let lastPlantedSeed = null;
                 let isPlantBatch = true;
+                beginBotStateMutation(180000);
 
                 for (let i = 0; i < emptyPlots.length; i++) {
                     if (stopRequested || killSwitchActivated) {
@@ -11466,6 +11506,7 @@
                         }
                     }
                 }
+                endBotStateMutation();
             }
         }
 
