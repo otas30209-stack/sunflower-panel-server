@@ -1429,6 +1429,28 @@
 
     let rawPlotTasks = localStorage.getItem('sl_plot_tasks');
     let PLOT_TASKS = JSON.parse(rawPlotTasks || "{}");
+    const DEFAULT_CROP_PLAN_SETTINGS = { active: false, autoSell: false, items: {} };
+    function normalizeCropPlanSettings(raw) {
+        const base = { active: false, autoSell: false, items: {} };
+        if (!raw || typeof raw !== 'object') {
+            return base;
+        }
+        base.active = !!raw.active;
+        base.autoSell = !!raw.autoSell;
+        const items = raw.items && typeof raw.items === 'object' ? raw.items : {};
+        Object.entries(items).forEach(function([seed, cfg]) {
+            const target = Math.max(0, parseInt(cfg && cfg.target !== undefined ? cfg.target : cfg) || 0);
+            if (target > 0 && ALL_KNOWN_SEEDS.includes(seed)) {
+                base.items[seed] = { target: target };
+            }
+        });
+        return base;
+    }
+    let CROP_PLAN_SETTINGS = normalizeCropPlanSettings(JSON.parse(localStorage.getItem('sl_crop_plan_settings') || 'null'));
+    function saveCropPlanSettings() {
+        localStorage.setItem('sl_crop_plan_settings', JSON.stringify(CROP_PLAN_SETTINGS));
+    }
+    let CROP_PLAN_MENU_OPEN = localStorage.getItem('sl_crop_plan_menu_open') === 'true';
     let RESOURCE_SELECTIONS = JSON.parse(localStorage.getItem('sl_resource_selections') || '{"trees":{},"stones":{},"iron":{},"gold":{},"fruits":{},"oilReserves":{},"beehives":{},"flowers":{},"lavaPits":{},"specialRocks":{}}');
     let WATER_PANEL_OPEN = localStorage.getItem('sl_water_panel_open') === 'true';
     let MUSHROOM_PANEL_OPEN = localStorage.getItem('sl_mushroom_panel_open') === 'true';
@@ -3988,12 +4010,15 @@
                         <div class="panel-kicker" style="color:#86efac;">Field Matrix & Quarantine</div>
                         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
                             <div class="panel-title" style="margin-bottom:0;">Smart Field Assignment</div>
-                            <div class="mini-switch-wrapper" title="Enable crop harvest and planting automation" style="margin:0;border-color:rgba(134,239,172,0.35);background:rgba(6,78,59,0.28);">
-                                <span class="mini-label" style="color:#bbf7d0;">Auto Fields</span>
-                                <label class="switch">
-                                    <input type="checkbox" id="toggle-auto-fields" ${BOT_SETTINGS.autoFields ? 'checked' : ''}>
-                                    <span class="slider"></span>
-                                </label>
+                            <div style="display:flex;align-items:center;gap:7px;">
+                                <button id="btn-crop-plan" class="mini-switch-wrapper" title="Open automatic crop plan" style="margin:0;border-color:rgba(250,204,21,0.45);background:rgba(113,63,18,0.32);cursor:pointer;color:#fde68a;">Auto Plant</button>
+                                <div class="mini-switch-wrapper" title="Enable crop harvest and planting automation" style="margin:0;border-color:rgba(134,239,172,0.35);background:rgba(6,78,59,0.28);">
+                                    <span class="mini-label" style="color:#bbf7d0;">Auto Fields</span>
+                                    <label class="switch">
+                                        <input type="checkbox" id="toggle-auto-fields" ${BOT_SETTINGS.autoFields ? 'checked' : ''}>
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
                             </div>
                         </div>
                         <div class="panel-sub">Fields beyond water capacity stay locked for safety.</div>
@@ -4253,6 +4278,18 @@
             </div>
         `;
 
+        let cropPlanMenuHTML = `
+            <div id="sl-crop-plan-menu" class="sl-window" style="display:${CROP_PLAN_MENU_OPEN ? 'block' : 'none'}; left:420px; top:92px; width:360px;">
+                <div class="win-header" style="background:linear-gradient(90deg, rgba(22,163,74,0.96), rgba(234,179,8,0.9)); color:white;">
+                    <span>NEXUS AUTO PLANT</span>
+                    <button id="btn-close-crop-plan" class="close-btn">X</button>
+                </div>
+                <div class="win-content">
+                    <div id="crop-plan-body"></div>
+                </div>
+            </div>
+        `;
+
         let numberModalHTML = `
             <div id="nexus-number-modal">
                 <div class="nexus-number-box">
@@ -4394,6 +4431,7 @@
         document.body.insertAdjacentHTML('beforeend', mainMenuHTML);
         document.body.insertAdjacentHTML('beforeend', plotMenuHTML);
         document.body.insertAdjacentHTML('beforeend', seedModalHTML);
+        document.body.insertAdjacentHTML('beforeend', cropPlanMenuHTML);
         document.body.insertAdjacentHTML('beforeend', numberModalHTML);
         document.body.insertAdjacentHTML('beforeend', settingsMenuHTML);
         document.body.insertAdjacentHTML('beforeend', marketMenuHTML);
@@ -4585,6 +4623,14 @@
 
         document.getElementById('btn-close-seed-modal').onclick = function() {
             closeSeedSelection();
+        };
+
+        document.getElementById('btn-crop-plan').onclick = function() {
+            toggleCropPlanMenu();
+        };
+
+        document.getElementById('btn-close-crop-plan').onclick = function() {
+            closeCropPlanMenu();
         };
 
         document.getElementById('toggle-auto-fields').onchange = function(e) {
@@ -6181,12 +6227,252 @@
         renderMushroomPanel();
     };
 
+    function getUsableFieldIds() {
+        const plotFilters = getSafeAndQuarantinedPlots();
+        return Object.entries(SL_CROPS || {}).filter(function(entry) {
+            return plotFilters.safe.includes(entry[0]);
+        }).map(function(entry) {
+            return entry[0];
+        });
+    }
+
+    function getEmptyUsableFieldIds() {
+        const plotFilters = getSafeAndQuarantinedPlots();
+        return Object.entries(SL_CROPS || {}).filter(function(entry) {
+            return plotFilters.safe.includes(entry[0]) && getCropStatus(entry[1]) === "EMPTY";
+        }).map(function(entry) {
+            return entry[0];
+        });
+    }
+
+    function isCropPlanActive() {
+        return !!(CROP_PLAN_SETTINGS && CROP_PLAN_SETTINGS.active);
+    }
+
+    function getCropPlanEntries() {
+        const visibleSeeds = GameRules.getVisibleMarketSeeds();
+        return Object.entries(CROP_PLAN_SETTINGS.items || {}).filter(function(entry) {
+            const seed = entry[0];
+            const cfg = entry[1] || {};
+            return visibleSeeds.includes(seed) && Math.max(0, parseInt(cfg.target || 0) || 0) > 0 && GameRules.isSeedInCurrentSeason(seed) && GameRules.canBuySeed(seed);
+        }).map(function(entry) {
+            return { seed: entry[0], target: Math.max(0, parseInt(entry[1].target || 0) || 0) };
+        });
+    }
+
+    function getCropPlanTargetTotal() {
+        return getCropPlanEntries().reduce(function(sum, entry) {
+            return sum + entry.target;
+        }, 0);
+    }
+
+    function randomizeCropPlanTarget(target, maxAllowed) {
+        const base = Math.max(0, parseInt(target || 0) || 0);
+        if (base <= 0) {
+            return 0;
+        }
+        const wiggle = Math.min(2, Math.max(1, Math.floor(base * 0.25)));
+        const randomized = Math.max(1, base + randInt(-wiggle, wiggle));
+        return Math.min(Math.max(0, parseInt(maxAllowed || randomized) || randomized), randomized);
+    }
+
+    function buildCropPlanPlantQueue(emptyCount) {
+        if (!isCropPlanActive()) {
+            return [];
+        }
+        let remaining = Math.max(0, parseInt(emptyCount || 0) || 0);
+        const entries = shuffleArray(getCropPlanEntries());
+        const queue = [];
+
+        entries.forEach(function(entry, idx) {
+            if (remaining <= 0) {
+                return;
+            }
+            const isLast = idx === entries.length - 1;
+            let count = isLast ? Math.min(remaining, entry.target) : randomizeCropPlanTarget(entry.target, remaining);
+            count = Math.min(remaining, count);
+            for (let i = 0; i < count; i++) {
+                queue.push(entry.seed);
+            }
+            remaining -= count;
+        });
+
+        return shuffleArray(queue);
+    }
+
+    function getCropPlanBuyTargets() {
+        if (!isCropPlanActive()) {
+            return [];
+        }
+        return getCropPlanEntries().map(function(entry) {
+            const current = Math.floor(getInventoryAmount(entry.seed));
+            const shortage = Math.max(0, entry.target - current);
+            if (shortage <= 0) {
+                return null;
+            }
+            const extra = randInt(0, Math.max(2, Math.ceil(entry.target * 0.35)));
+            const target = Math.max(entry.target, current + shortage + extra);
+            return { seed: entry.seed, target: target };
+        }).filter(Boolean);
+    }
+
+    function mergeCropPlanBuyTargets(entries) {
+        if (!isCropPlanActive()) {
+            return entries;
+        }
+        const map = {};
+        (entries || []).forEach(function(entry) {
+            map[entry[0]] = { ...(entry[1] || {}) };
+        });
+        getCropPlanBuyTargets().forEach(function(item) {
+            const existing = map[item.seed] || { active: false, min: 1, max: item.target, ignoreStockLimit: false, autoShipmentRestock: false };
+            const min = Math.max(1, item.target);
+            const max = Math.max(item.target, parseInt(existing.max || item.target) || item.target);
+            map[item.seed] = {
+                active: true,
+                min: min,
+                max: max,
+                ignoreStockLimit: !!existing.ignoreStockLimit,
+                autoShipmentRestock: !!existing.autoShipmentRestock
+            };
+        });
+        return Object.entries(map);
+    }
+
+    function mergeCropPlanSellTargets(entries) {
+        if (!isCropPlanActive() || !CROP_PLAN_SETTINGS.autoSell) {
+            return entries;
+        }
+        const map = {};
+        (entries || []).forEach(function(entry) {
+            map[entry[0]] = { ...(entry[1] || {}) };
+        });
+        getCropPlanEntries().forEach(function(entry) {
+            const crop = entry.seed.replace(" Seed", "");
+            const existing = map[crop] || { active: false, minEnabled: false, min: 1 };
+            map[crop] = {
+                active: true,
+                minEnabled: !!existing.minEnabled,
+                min: Math.max(1, parseInt(existing.min || 1) || 1)
+            };
+        });
+        return Object.entries(map);
+    }
+
+    function renderCropPlanMenu() {
+        const body = document.getElementById('crop-plan-body');
+        if (!body) return;
+        const usableCount = getUsableFieldIds().length;
+        const emptyCount = getEmptyUsableFieldIds().length;
+        const totalTarget = getCropPlanTargetTotal();
+        const visibleSeeds = GameRules.getVisibleMarketSeeds();
+        warmNexusIconsFromClientAssets(visibleSeeds);
+
+        let rows = visibleSeeds.map(function(seed) {
+            const cfg = CROP_PLAN_SETTINGS.items[seed] || { target: 0 };
+            const target = Math.max(0, parseInt(cfg.target || 0) || 0);
+            const seedInfo = getMarketSeedDetails(seed);
+            const levelLocked = GameRules.getCurrentBumpkinLevel() < (seedInfo.bumpkinLevel || 1);
+            const seasonBad = !GameRules.isSeedInCurrentSeason(seed);
+            const disabled = levelLocked || seasonBad;
+            return `
+                <div style="display:grid;grid-template-columns:1fr 72px;gap:8px;align-items:center;padding:7px 8px;border:1px solid ${target > 0 ? 'rgba(34,197,94,0.45)' : 'rgba(148,163,184,0.16)'};border-radius:8px;background:${target > 0 ? 'rgba(6,78,59,0.34)' : 'rgba(15,23,42,0.78)'};opacity:${disabled ? '0.5' : '1'};">
+                    <div style="min-width:0;display:flex;align-items:center;gap:7px;color:#e5e7eb;font-size:11px;font-weight:900;">
+                        ${getItemIconHtml(seed, 22)}
+                        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${seed}</span>
+                        <span style="margin-left:auto;color:#93c5fd;font-size:10px;">${Math.floor(getInventoryAmount(seed))}</span>
+                    </div>
+                    <input class="crop-plan-target" data-seed="${seed}" type="number" min="0" max="${usableCount}" value="${target}" ${disabled ? 'disabled' : ''} style="width:100%;box-sizing:border-box;background:rgba(2,6,23,0.96);border:1px solid rgba(250,204,21,0.36);border-radius:8px;color:#f8fafc;padding:7px;font-weight:900;text-align:center;">
+                </div>`;
+        }).join("");
+
+        body.innerHTML = `
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;">
+                <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                    <span class="capacity-pill" style="background:#064e3b;color:#bbf7d0;">Usable ${usableCount}</span>
+                    <span class="capacity-pill" style="background:#1e3a8a;color:#bfdbfe;">Empty ${emptyCount}</span>
+                    <span class="capacity-pill" style="background:${totalTarget > usableCount ? '#7f1d1d' : '#713f12'};color:${totalTarget > usableCount ? '#fecaca' : '#fde68a'};">Plan ${totalTarget}</span>
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+                <div class="mini-switch-wrapper" style="justify-content:space-between;padding:8px;background:rgba(20,83,45,0.25);border-color:rgba(74,222,128,0.35);">
+                    <span class="mini-label" style="color:#bbf7d0;">Auto Plan</span>
+                    <label class="switch"><input type="checkbox" id="toggle-crop-plan-active" ${CROP_PLAN_SETTINGS.active ? 'checked' : ''}><span class="slider"></span></label>
+                </div>
+                <div class="mini-switch-wrapper" style="justify-content:space-between;padding:8px;background:rgba(127,29,29,0.24);border-color:rgba(248,113,113,0.35);">
+                    <span class="mini-label" style="color:#fecaca;">Auto Sell</span>
+                    <label class="switch"><input type="checkbox" id="toggle-crop-plan-sell" ${CROP_PLAN_SETTINGS.autoSell ? 'checked' : ''}><span class="slider"></span></label>
+                </div>
+            </div>
+            <div style="font-size:10px;color:#94a3b8;line-height:1.4;margin-bottom:8px;">When Auto Plan is on, empty fields use this plan instead of manual field seed choices.</div>
+            <div style="display:grid;gap:6px;max-height:430px;overflow-y:auto;padding-right:3px;">${rows}</div>
+        `;
+
+        const activeToggle = document.getElementById('toggle-crop-plan-active');
+        if (activeToggle) {
+            activeToggle.onchange = function(e) {
+                CROP_PLAN_SETTINGS.active = !!e.target.checked;
+                saveCropPlanSettings();
+                renderCropPlanMenu();
+                renderPlotGrid();
+            };
+        }
+        const sellToggle = document.getElementById('toggle-crop-plan-sell');
+        if (sellToggle) {
+            sellToggle.onchange = function(e) {
+                CROP_PLAN_SETTINGS.autoSell = !!e.target.checked;
+                saveCropPlanSettings();
+                renderCropPlanMenu();
+            };
+        }
+        document.querySelectorAll('.crop-plan-target').forEach(function(input) {
+            input.oninput = function(e) {
+                const seed = e.target.dataset.seed;
+                const target = Math.max(0, parseInt(e.target.value || 0) || 0);
+                if (target > 0) {
+                    CROP_PLAN_SETTINGS.items[seed] = { target: target };
+                } else {
+                    delete CROP_PLAN_SETTINGS.items[seed];
+                }
+                saveCropPlanSettings();
+            };
+            input.onchange = function() {
+                renderCropPlanMenu();
+                renderPlotGrid();
+            };
+        });
+    }
+
+    _window.toggleCropPlanMenu = function() {
+        CROP_PLAN_MENU_OPEN = !CROP_PLAN_MENU_OPEN;
+        localStorage.setItem('sl_crop_plan_menu_open', CROP_PLAN_MENU_OPEN ? 'true' : 'false');
+        const menu = document.getElementById('sl-crop-plan-menu');
+        if (menu) {
+            menu.style.display = CROP_PLAN_MENU_OPEN ? 'block' : 'none';
+        }
+        if (CROP_PLAN_MENU_OPEN) {
+            renderCropPlanMenu();
+        }
+    };
+
+    _window.closeCropPlanMenu = function() {
+        CROP_PLAN_MENU_OPEN = false;
+        localStorage.setItem('sl_crop_plan_menu_open', 'false');
+        const menu = document.getElementById('sl-crop-plan-menu');
+        if (menu) {
+            menu.style.display = 'none';
+        }
+    };
+
     function renderPlotGrid() {
         const grid = document.getElementById('plot-grid');
         if(!grid) return;
 
         renderWaterCapacityPanel();
         renderMushroomPanel();
+        if (CROP_PLAN_MENU_OPEN) {
+            renderCropPlanMenu();
+        }
         grid.innerHTML = "";
         const entries = Object.entries(SL_CROPS || {});
 
@@ -6211,7 +6497,8 @@
         let quarantinedPlots = plotFilters.quarantined;
 
         entries.forEach(function([id, plot]) {
-            const task = PLOT_TASKS[id];
+            const manualTask = PLOT_TASKS[id];
+            const task = isCropPlanActive() ? null : manualTask;
             const isQuarantined = quarantinedPlots.includes(id);
             const div = document.createElement('div');
 
@@ -6238,9 +6525,11 @@
             else if (status === "EMPTY") {
                 statusText = "EMPTY";
                 statusColor = "#a1a1aa";
-                hintText = "Choose a seed";
+                hintText = isCropPlanActive() ? "Auto plan ready" : "Choose a seed";
                 if (task) {
                     icon = getItemEmoji(task.replace(" Seed", ""));
+                } else if (isCropPlanActive()) {
+                    icon = "\u{1F331}";
                 } else {
                     icon = "\u{1F7EB}";
                 }
@@ -6297,6 +6586,8 @@
                 taskText = "Limit Locked";
             } else if (task) {
                 taskText = task.replace(" Seed", "");
+            } else if (isCropPlanActive() && status === "EMPTY") {
+                taskText = "Auto Plan";
             } else {
                 taskText = 'Empty';
             }
@@ -10869,7 +11160,7 @@
             }
         }
 
-        let sellEntriesArr = Object.entries(MARKET_SETTINGS.sell || {});
+        let sellEntriesArr = mergeCropPlanSellTargets(Object.entries(MARKET_SETTINGS.sell || {}));
         let hasSellTargets = false;
         for (let i = 0; i < sellEntriesArr.length; i++) {
             if (sellEntriesArr[i][1] && sellEntriesArr[i][1].active) {
@@ -10878,7 +11169,7 @@
             }
         }
 
-        let buyEntriesArr = Object.entries(MARKET_SETTINGS.buy || {});
+        let buyEntriesArr = mergeCropPlanBuyTargets(Object.entries(MARKET_SETTINGS.buy || {}));
         let hasBuyTargets = false;
         for (let i = 0; i < buyEntriesArr.length; i++) {
             if (buyEntriesArr[i][1] && buyEntriesArr[i][1].active) {
@@ -10889,7 +11180,8 @@
         let hasToolTargets = getActiveMarketToolTargets().length > 0;
 
         let plotTaskKeys = Object.keys(PLOT_TASKS || {});
-        let hasPlotTasks = BOT_SETTINGS.autoFields && plotTaskKeys.length > 0;
+        let hasCropPlanTasks = isCropPlanActive() && getCropPlanEntries().length > 0;
+        let hasPlotTasks = BOT_SETTINGS.autoFields && (plotTaskKeys.length > 0 || hasCropPlanTasks);
 
         if (!stopRequested && !killSwitchActivated) {
             if (actionPerformed) {
@@ -11350,6 +11642,7 @@
                 }
             }
             emptyPlots = shuffleArray(emptyPlots);
+            const cropPlanPlantQueue = buildCropPlanPlantQueue(emptyPlots.length);
 
             if (emptyPlots.length > 0) {
                 let stringifiedMaster = JSON.stringify(masterPayload);
@@ -11367,7 +11660,7 @@
                     }
 
                     let plotId = emptyPlots[i];
-                    let targetSeed = PLOT_TASKS[plotId];
+                    let targetSeed = isCropPlanActive() ? cropPlanPlantQueue.shift() : PLOT_TASKS[plotId];
 
                     if (targetSeed) {
                         if (!GameRules.isSeedInCurrentSeason(targetSeed)) {
