@@ -8141,10 +8141,11 @@
             body: parseDebugBody(body),
             curl: makeEyeCurl(url, options || {}, safeHeaders)
         };
-        LAST_REQUEST_SNAPSHOT = snapshot;
-        LAST_CURL_BASH = snapshot.curl || "";
         if (kind === "telemetry") {
             LAST_TELEMETRY_SNAPSHOT = Object.assign({}, LAST_TELEMETRY_SNAPSHOT || {}, { request: snapshot });
+        } else {
+            LAST_REQUEST_SNAPSHOT = snapshot;
+            LAST_CURL_BASH = snapshot.curl || "";
         }
         return snapshot;
     }
@@ -8157,9 +8158,10 @@
             status: status || null,
             preview: cloneForDebug(data)
         };
-        LAST_RESPONSE_SNAPSHOT = snapshot;
         if (kind === "telemetry") {
             LAST_TELEMETRY_SNAPSHOT = Object.assign({}, LAST_TELEMETRY_SNAPSHOT || {}, { response: snapshot });
+        } else {
+            LAST_RESPONSE_SNAPSHOT = snapshot;
         }
         return snapshot;
     }
@@ -10788,6 +10790,9 @@
                                         masterPayload.stateHash = payload.stateHash;
                                         lastCompletedPhase = 'plant';
                                     } else {
+                                        if (await handleRecoverableServerReject("Single plant rejected by server", res.status)) {
+                                            return;
+                                        }
                                         triggerKillSwitch("Sunucu tekli ekimi reddetti.", res.status);
                                         return;
                                     }
@@ -10835,6 +10840,9 @@
                                     lastCompletedPhase = 'plant';
                                     safeRenderPlotGrid('toplu ekim');
                                 } else {
+                                    if (await handleRecoverableServerReject("Batch plant rejected by server", res.status)) {
+                                        return;
+                                    }
                                     triggerKillSwitch("Sunucu toplu ekimi reddetti.", res.status);
                                     return;
                                 }
