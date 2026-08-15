@@ -14,6 +14,7 @@
     'use strict';
 
     const _window = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
+    const NEXUS_BOT_BUILD = "2026-08-16.1809";
 
     // ==========================================
     // ğŸ““ BÃœYÃœK MUHASEBE DEFTERÄ° (THE GRAND LEDGER)
@@ -8369,6 +8370,7 @@
                         _window.AUTO_RESUME_PENDING = false;
                         localStorage.removeItem('sl_auto_resume');
 
+                        log("Nexus bot build: " + NEXUS_BOT_BUILD);
                         log("âœ… BOT CHECKING... Automation is starting.");
 
                         let btn = document.getElementById('btn-start-auto');
@@ -9837,6 +9839,7 @@
             }
             updateGameClickGuard();
             requestNexusWakeLock();
+            log("Nexus bot build: " + NEXUS_BOT_BUILD);
             log("Bot checking...");
             await forceRadarRefresh();
             if (stopRequested || killSwitchActivated) {
@@ -11247,7 +11250,13 @@
                 }
             }
 
-            let cookedSomething = await runCookingAutomationPhase();
+            let cookedSomething = false;
+            try {
+                cookedSomething = await runCookingAutomationPhase();
+            } catch(e) {
+                log("Cooking phase skipped due to error: " + (e && e.message ? e.message : e));
+                cookedSomething = false;
+            }
             if (cookedSomething) {
                 actionPerformed = true;
                 lastCompletedPhase = 'firepit';
@@ -11720,6 +11729,7 @@
         // 4. EKÄ°M AÅAMASI
         // ---------------------------------------------------------
         if (!stopRequested && !killSwitchActivated && BOT_SETTINGS.autoFields) {
+            log("Plant phase reached.");
             await syncCropStateBeforeDecision('plant crop sync');
             if (stopRequested || killSwitchActivated) {
                 return;
