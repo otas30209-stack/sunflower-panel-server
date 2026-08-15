@@ -1429,13 +1429,14 @@
 
     let rawPlotTasks = localStorage.getItem('sl_plot_tasks');
     let PLOT_TASKS = JSON.parse(rawPlotTasks || "{}");
-    const DEFAULT_CROP_PLAN_SETTINGS = { active: false, autoSell: false, items: {} };
+    const DEFAULT_CROP_PLAN_SETTINGS = { active: false, autoBuy: true, autoSell: false, items: {} };
     function normalizeCropPlanSettings(raw) {
-        const base = { active: false, autoSell: false, items: {} };
+        const base = { active: false, autoBuy: true, autoSell: false, items: {} };
         if (!raw || typeof raw !== 'object') {
             return base;
         }
         base.active = !!raw.active;
+        base.autoBuy = raw.autoBuy === undefined ? true : !!raw.autoBuy;
         base.autoSell = !!raw.autoSell;
         const items = raw.items && typeof raw.items === 'object' ? raw.items : {};
         Object.entries(items).forEach(function([seed, cfg]) {
@@ -6317,7 +6318,7 @@
     }
 
     function mergeCropPlanBuyTargets(entries) {
-        if (!isCropPlanActive()) {
+        if (!isCropPlanActive() || !CROP_PLAN_SETTINGS.autoBuy) {
             return entries;
         }
         const map = {};
@@ -6394,17 +6395,21 @@
                     <span class="capacity-pill" style="background:${totalTarget > usableCount ? '#7f1d1d' : '#713f12'};color:${totalTarget > usableCount ? '#fecaca' : '#fde68a'};">Plan ${totalTarget}</span>
                 </div>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;">
                 <div class="mini-switch-wrapper" style="justify-content:space-between;padding:8px;background:rgba(20,83,45,0.25);border-color:rgba(74,222,128,0.35);">
-                    <span class="mini-label" style="color:#bbf7d0;">Auto Plan</span>
+                    <span class="mini-label" style="color:#bbf7d0;">Menu Active</span>
                     <label class="switch"><input type="checkbox" id="toggle-crop-plan-active" ${CROP_PLAN_SETTINGS.active ? 'checked' : ''}><span class="slider"></span></label>
+                </div>
+                <div class="mini-switch-wrapper" style="justify-content:space-between;padding:8px;background:rgba(30,64,175,0.24);border-color:rgba(96,165,250,0.35);">
+                    <span class="mini-label" style="color:#bfdbfe;">Auto Buy</span>
+                    <label class="switch"><input type="checkbox" id="toggle-crop-plan-buy" ${CROP_PLAN_SETTINGS.autoBuy ? 'checked' : ''}><span class="slider"></span></label>
                 </div>
                 <div class="mini-switch-wrapper" style="justify-content:space-between;padding:8px;background:rgba(127,29,29,0.24);border-color:rgba(248,113,113,0.35);">
                     <span class="mini-label" style="color:#fecaca;">Auto Sell</span>
                     <label class="switch"><input type="checkbox" id="toggle-crop-plan-sell" ${CROP_PLAN_SETTINGS.autoSell ? 'checked' : ''}><span class="slider"></span></label>
                 </div>
             </div>
-            <div style="font-size:10px;color:#94a3b8;line-height:1.4;margin-bottom:8px;">When Auto Plan is on, empty fields use this plan instead of manual field seed choices.</div>
+            <div style="font-size:10px;color:#94a3b8;line-height:1.4;margin-bottom:8px;">When Menu Active is on, empty fields use this plan instead of manual field seed choices.</div>
             <div style="display:grid;gap:6px;max-height:430px;overflow-y:auto;padding-right:3px;">${rows}</div>
         `;
 
@@ -6415,6 +6420,14 @@
                 saveCropPlanSettings();
                 renderCropPlanMenu();
                 renderPlotGrid();
+            };
+        }
+        const buyToggle = document.getElementById('toggle-crop-plan-buy');
+        if (buyToggle) {
+            buyToggle.onchange = function(e) {
+                CROP_PLAN_SETTINGS.autoBuy = !!e.target.checked;
+                saveCropPlanSettings();
+                renderCropPlanMenu();
             };
         }
         const sellToggle = document.getElementById('toggle-crop-plan-sell');
