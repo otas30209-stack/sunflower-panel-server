@@ -10663,7 +10663,6 @@
             let stringifiedMaster = JSON.stringify(masterPayload);
             let payload = JSON.parse(stringifiedMaster);
             payload.actions = [];
-            let mushroomActions = [];
 
             for (let i = 0; i < readyPlots.length; i++) {
                 if (stopRequested || killSwitchActivated) {
@@ -10739,23 +10738,12 @@
             }
 
             if (isHarvestBatch) {
-                if (!stopRequested && !killSwitchActivated) {
-                    mushroomActions = getReadyMushroomActions(Date.now() + randInt(450, 1300));
-                    if (mushroomActions.length > 0) {
-                        payload.actions = payload.actions.concat(mushroomActions);
-                        log(`Collect Mushrooms added after harvest actions... (${mushroomActions.length})`);
-                    }
-                }
-
                 if (payload.actions.length > 0) {
                     if (!stopRequested && !killSwitchActivated) {
                         payload.stateHash.inventory = await computeSHA256(SL_INVENTORY);
                         payload.stateHash.farmActivity = await computeSHA256(SL_FARM_ACTIVITY);
                         payload.stateHash.crops = await computeSHA256(SL_CROPS);
                         await refreshVolatileStateHashes(payload);
-                        if (payload.stateHash.mushrooms || mushroomActions.length > 0) {
-                            payload.stateHash.mushrooms = await computeSHA256(SL_MUSHROOMS);
-                        }
 
                         log(`ğŸ“¦ [Toplu Paket] Hasat sepeti fÄ±rlatÄ±lÄ±yor... (${payload.actions.length} eylem)`);
 
