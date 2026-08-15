@@ -1615,6 +1615,7 @@
             (FISHING_BAITS || []).forEach(function(name) { names[name] = true; });
             Object.keys(FISH_FEED_ITEMS || {}).forEach(function(name) { names[name] = true; });
             Object.keys(FIRE_PIT_RECIPES || {}).forEach(function(name) { names[name] = true; });
+            Object.keys(DELI_RECIPES || {}).forEach(function(name) { names[name] = true; });
             Object.keys(TREASURE_TOOL_RULES || {}).forEach(function(name) { names[name] = true; });
             Object.keys(DIGGING_SELL_PRICES || {}).forEach(function(name) { names[name] = true; });
             Object.keys(NEXUS_ICON_ASSET_HINTS).forEach(function(name) { names[name] = true; });
@@ -2297,18 +2298,43 @@
         "Rhubarb Tart": { building: "Fire Pit", experience: 5, cookingSeconds: 60, ingredients: { "Rhubarb": 3 } }
     };
 
+    const DELI_RECIPES = {
+        "Blueberry Jam": { building: "Deli", experience: 500, cookingSeconds: 43200, ingredients: { "Blueberry": 5 } },
+        "Fermented Carrots": { building: "Deli", experience: 250, cookingSeconds: 86400, ingredients: { "Carrot": 20 } },
+        "Sauerkraut": { building: "Deli", experience: 500, cookingSeconds: 86400, ingredients: { "Cabbage": 20 } },
+        "Fancy Fries": { building: "Deli", experience: 1000, cookingSeconds: 86400, ingredients: { "Sunflower": 500, "Potato": 500 } },
+        "Fermented Fish": { building: "Deli", experience: 3000, cookingSeconds: 86400, ingredients: { "Tuna": 6 } },
+        "Shroom Syrup": { building: "Deli", experience: 10000, cookingSeconds: 10, ingredients: { "Magic Mushroom": 3, "Honey": 20 } },
+        "Cheese": { building: "Deli", experience: 1, cookingSeconds: 1200, ingredients: { "Milk": 3 } },
+        "Blue Cheese": { building: "Deli", experience: 6000, cookingSeconds: 10800, ingredients: { "Cheese": 2, "Blueberry": 10 } },
+        "Honey Cheddar": { building: "Deli", experience: 15000, cookingSeconds: 43200, ingredients: { "Cheese": 3, "Honey": 5 } }
+    };
+
+    const COOKING_CATALOGS = {
+        firepit: FIRE_PIT_RECIPES,
+        deli: DELI_RECIPES
+    };
+
+    function getCookingCatalog(tab) {
+        return COOKING_CATALOGS[tab] || FIRE_PIT_RECIPES;
+    }
+
+    function getCookingRecipe(recipeName) {
+        return FIRE_PIT_RECIPES[recipeName] || DELI_RECIPES[recipeName] || null;
+    }
+
     function normalizeCookingSettings(raw) {
-        const base = { auto: false, smartReserve: false, selected: {} };
+        const base = { auto: false, smartReserve: false, tab: "firepit", selected: {} };
         if (!raw || typeof raw !== 'object') {
             return base;
         }
         const selected = {};
         Object.keys(raw.selected || {}).forEach(function(name) {
-            if (FIRE_PIT_RECIPES[name]) {
+            if (getCookingRecipe(name)) {
                 selected[name] = !!raw.selected[name];
             }
         });
-        return { auto: !!raw.auto, smartReserve: !!raw.smartReserve, selected: selected };
+        return { auto: !!raw.auto, smartReserve: !!raw.smartReserve, tab: raw.tab === "deli" ? "deli" : "firepit", selected: selected };
     }
 
     let parsedCookingSettings = JSON.parse(localStorage.getItem('sl_cooking_settings') || '{"auto":false,"selected":{}}');
@@ -2322,7 +2348,7 @@
         }
         const selected = {};
         Object.keys(raw.selected || {}).forEach(function(name) {
-            if (FIRE_PIT_RECIPES[name] || FISH_FEED_ITEMS[name]) {
+            if (getCookingRecipe(name) || FISH_FEED_ITEMS[name]) {
                 selected[name] = !!raw.selected[name];
             }
         });
@@ -4264,6 +4290,10 @@
                             <span class="mini-label">Smart</span>
                         </div>
                     </div>
+                    <div class="tabs" style="margin:10px 0 12px 0;">
+                        <button id="cooking-tab-firepit" class="tab-btn ${COOKING_SETTINGS.tab !== 'deli' ? 'active' : ''}">Fire Pit</button>
+                        <button id="cooking-tab-deli" class="tab-btn ${COOKING_SETTINGS.tab === 'deli' ? 'active' : ''}">Deli</button>
+                    </div>
                     <div id="fire-pit-recipes" class="cook-grid"></div>
                 </div>
             </div>
@@ -4553,6 +4583,16 @@
             COOKING_SETTINGS.smartReserve = e.target.checked;
             saveCookingSettingsToStorage();
             log(`Fire Pit smart reserve: ${e.target.checked ? 'ON' : 'OFF'}`);
+            renderCookingMenu();
+        };
+        document.getElementById('cooking-tab-firepit').onclick = function() {
+            COOKING_SETTINGS.tab = "firepit";
+            saveCookingSettingsToStorage();
+            renderCookingMenu();
+        };
+        document.getElementById('cooking-tab-deli').onclick = function() {
+            COOKING_SETTINGS.tab = "deli";
+            saveCookingSettingsToStorage();
             renderCookingMenu();
         };
 
@@ -5068,7 +5108,7 @@
     }
 
     function getRecipeRequirements(recipeName) {
-        const recipe = FIRE_PIT_RECIPES[recipeName];
+        const recipe = getCookingRecipe(recipeName);
         if (!recipe) {
             return {};
         }
@@ -5092,23 +5132,31 @@
         return true;
     }
 
-    function getFirePitBuilding() {
-        const pits = SL_BUILDINGS && SL_BUILDINGS["Fire Pit"];
-        if (!Array.isArray(pits)) {
+    function getCookingBuilding(buildingName) {
+        const buildings = SL_BUILDINGS && SL_BUILDINGS[buildingName];
+        if (!Array.isArray(buildings)) {
             return null;
         }
-        for (let i = 0; i < pits.length; i++) {
-            if (pits[i] && pits[i].coordinates && !pits[i].removedAt) {
-                return pits[i];
+        for (let i = 0; i < buildings.length; i++) {
+            if (buildings[i] && buildings[i].coordinates && !buildings[i].removedAt) {
+                return buildings[i];
             }
         }
-        return pits[0] || null;
+        return buildings[0] || null;
+    }
+
+    function getFirePitBuilding() {
+        return getCookingBuilding("Fire Pit");
     }
 
     function getCookingOilBoost(recipeName, building) {
-        const recipe = FIRE_PIT_RECIPES[recipeName];
+        const recipe = getCookingRecipe(recipeName);
         if (!recipe || !building) {
             return { timeToCook: recipe ? recipe.cookingSeconds : 0, oilConsumed: 0, percent: 0 };
+        }
+
+        if (recipe.building !== "Fire Pit") {
+            return { timeToCook: recipe.cookingSeconds, oilConsumed: 0, percent: 0 };
         }
 
         const oilNeed = recipe.cookingSeconds / 86400;
@@ -5133,9 +5181,9 @@
     }
 
     function getCookPlan(recipeName, building, createdAtMs) {
-        const recipe = FIRE_PIT_RECIPES[recipeName];
+        const recipe = getCookingRecipe(recipeName);
         const oil = getCookingOilBoost(recipeName, building);
-        const time = GameRules.getCookingTime(recipeName, oil.timeToCook, "Fire Pit", createdAtMs);
+        const time = GameRules.getCookingTime(recipeName, oil.timeToCook, recipe ? recipe.building : "Fire Pit", createdAtMs);
         return {
             recipe: recipe,
             oilConsumed: oil.oilConsumed,
@@ -5150,16 +5198,24 @@
         if (!root) {
             return;
         }
-        warmNexusIconsFromClientAssets(Object.keys(FIRE_PIT_RECIPES || {}));
+        const activeTab = COOKING_SETTINGS.tab === "deli" ? "deli" : "firepit";
+        const catalog = getCookingCatalog(activeTab);
+        const buildingName = activeTab === "deli" ? "Deli" : "Fire Pit";
+        warmNexusIconsFromClientAssets(Object.keys(catalog || {}));
 
-        const building = getFirePitBuilding();
+        const building = getCookingBuilding(buildingName);
         const hasFirePit = !!building;
         const crafting = hasFirePit && Array.isArray(building.crafting) ? building.crafting : [];
         const selectedCount = Object.values(COOKING_SETTINGS.selected || {}).filter(Boolean).length;
         let html = "";
 
-        Object.keys(FIRE_PIT_RECIPES).forEach(function(name) {
-            const recipe = FIRE_PIT_RECIPES[name];
+        const firepitTab = document.getElementById('cooking-tab-firepit');
+        const deliTab = document.getElementById('cooking-tab-deli');
+        if (firepitTab) firepitTab.classList.toggle('active', activeTab !== "deli");
+        if (deliTab) deliTab.classList.toggle('active', activeTab === "deli");
+
+        Object.keys(catalog).forEach(function(name) {
+            const recipe = catalog[name];
             const selected = !!COOKING_SETTINGS.selected[name];
             let progressHtml = "";
             const activeCraft = crafting.find(function(item) {
@@ -5199,7 +5255,7 @@
             `;
         });
 
-        root.innerHTML = html || `<div class="panel-sub">Tarif bulunamadi.</div>`;
+        root.innerHTML = html || `<div class="panel-sub">${buildingName} recipe not found.</div>`;
         const cards = root.querySelectorAll('.cook-card');
         cards.forEach(function(card) {
             card.onclick = function() {
@@ -5224,18 +5280,18 @@
 
     function getSelectedCookRecipes() {
         return Object.keys(COOKING_SETTINGS.selected || {}).filter(function(name) {
-            return COOKING_SETTINGS.selected[name] && FIRE_PIT_RECIPES[name];
+            return COOKING_SETTINGS.selected[name] && getCookingRecipe(name);
         });
     }
 
     function getSelectedFeedFoods() {
         return Object.keys(CHARACTER_SETTINGS.selected || {}).filter(function(name) {
-            return CHARACTER_SETTINGS.selected[name] && (FIRE_PIT_RECIPES[name] || FISH_FEED_ITEMS[name]);
+            return CHARACTER_SETTINGS.selected[name] && (getCookingRecipe(name) || FISH_FEED_ITEMS[name]);
         });
     }
 
     function calculateFoodXp(foodName, createdAtMs = Date.now()) {
-        const recipe = FIRE_PIT_RECIPES[foodName] || FISH_FEED_ITEMS[foodName];
+        const recipe = getCookingRecipe(foodName) || FISH_FEED_ITEMS[foodName];
         if (!recipe) {
             return { xp: 0, boosts: [] };
         }
@@ -5293,7 +5349,7 @@
         if (isFishTab) {
             warmFishIconsFromClientAssets();
         }
-        const catalog = isFishTab ? FISH_FEED_ITEMS : FIRE_PIT_RECIPES;
+        const catalog = isFishTab ? FISH_FEED_ITEMS : Object.assign({}, FIRE_PIT_RECIPES, DELI_RECIPES);
         warmNexusIconsFromClientAssets(Object.keys(catalog || {}));
         Object.keys(catalog).forEach(function(name) {
             const recipe = catalog[name];
@@ -5489,23 +5545,27 @@
             return false;
         }
 
-        const building = getFirePitBuilding();
-        if (!building || !building.id) {
-            return false;
-        }
+        for (let b = 0; b < ["Fire Pit", "Deli"].length; b++) {
+            const buildingName = ["Fire Pit", "Deli"][b];
+            const building = getCookingBuilding(buildingName);
+            if (!building || !building.id) {
+                continue;
+            }
 
-        if (getReadyCraftingIndexes(building).length > 0) {
-            return true;
-        }
-
-        const currentCrafting = Array.isArray(building.crafting) ? building.crafting : [];
-        if (currentCrafting.length >= 1) {
-            return false;
-        }
-
-        for (let i = 0; i < selected.length; i++) {
-            if (canCookRecipe(selected[i])) {
+            if (getReadyCraftingIndexes(building).length > 0) {
                 return true;
+            }
+
+            const currentCrafting = Array.isArray(building.crafting) ? building.crafting : [];
+            if (currentCrafting.length >= 1) {
+                continue;
+            }
+
+            for (let i = 0; i < selected.length; i++) {
+                const recipe = getCookingRecipe(selected[i]);
+                if (recipe && recipe.building === buildingName && canCookRecipe(selected[i])) {
+                    return true;
+                }
             }
         }
 
@@ -5518,7 +5578,7 @@
         return await controlledSleep(delay);
     }
 
-    async function sendCookingPayload(actions, reason) {
+    async function sendCookingPayload(actions, reason, buildingName) {
         if (!actions || actions.length === 0) {
             return false;
         }
@@ -5536,7 +5596,7 @@
         }
         await refreshVolatileStateHashes(payload);
 
-        log(`ğŸ“¦ Fire Pit paketi gÃ¶nderiliyor... (${reason})`);
+        log(`${buildingName || "Cooking"} package sending... (${reason})`);
 
         try {
             let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
@@ -5546,16 +5606,19 @@
             });
 
             if (res.ok) {
-                log(`âœ… Fire Pit iÅŸlemi baÅŸarÄ±lÄ±.`);
+                log(`${buildingName || "Cooking"} operation successful.`);
                 masterPayload.stateHash = payload.stateHash;
                 renderCookingMenu();
                 return true;
             }
 
-            triggerKillSwitch("Sunucu Fire Pit iÅŸlemini reddetti.", res.status);
+            if (await handleRecoverableServerReject((buildingName || "Cooking") + " rejected by server", res.status)) {
+                return false;
+            }
+            triggerKillSwitch("Server rejected " + (buildingName || "cooking") + " operation.", res.status);
             return false;
         } catch(e) {
-            triggerKillSwitch("AÄŸ baÄŸlantÄ±sÄ± koptu (Fire Pit).", "NETWORK");
+            triggerKillSwitch("Network failed during " + (buildingName || "cooking") + ".", "NETWORK");
             return false;
         }
     }
@@ -5570,115 +5633,119 @@
             return false;
         }
 
-        const building = getFirePitBuilding();
-        if (!building || !building.id) {
-            return false;
-        }
-
         let performed = false;
-        let readyIndexes = getReadyCraftingIndexes(building);
-        if (readyIndexes.length > 0) {
-            if (GameRules.hasSkill("Fiery Jackpot") || GameRules.isWearableActive("Master Chef's Cleaver")) {
-                triggerKillSwitch("Fire Pit toplamada sans bonusu aktif. PRNG muhasebesi port edilmeden durduruldu.", "COOK_PRNG_GUARD");
-                return false;
+        const buildingNames = ["Fire Pit", "Deli"];
+        for (let b = 0; b < buildingNames.length; b++) {
+            const buildingName = buildingNames[b];
+            const building = getCookingBuilding(buildingName);
+            if (!building || !building.id) {
+                continue;
             }
 
-            let dateIso = new Date().toISOString();
-            let actions = [{
-                type: "recipes.collected",
-                building: "Fire Pit",
-                buildingId: building.id,
-                createdAt: dateIso
-            }];
+            let readyIndexes = getReadyCraftingIndexes(building);
+            if (readyIndexes.length > 0) {
+                if (buildingName === "Fire Pit" && (GameRules.hasSkill("Fiery Jackpot") || GameRules.isWearableActive("Master Chef's Cleaver"))) {
+                    triggerKillSwitch("Fire Pit collect has chance bonus active. Stopped until PRNG accounting is ported.", "COOK_PRNG_GUARD");
+                    return performed;
+                }
 
-            let remaining = [];
-            let crafting = Array.isArray(building.crafting) ? building.crafting : [];
-            for (let i = 0; i < crafting.length; i++) {
-                let item = crafting[i];
-                const readyAt = parseTimeValue(item && item.readyAt);
-                if (item && readyAt > 0 && readyAt <= Date.now()) {
-                    let amount = 1;
-                    if (item.skills && item.skills["Double Nom"]) {
-                        amount += 1;
+                let dateIso = new Date().toISOString();
+                let actions = [{
+                    type: "recipes.collected",
+                    building: buildingName,
+                    buildingId: building.id,
+                    createdAt: dateIso
+                }];
+
+                let remaining = [];
+                let crafting = Array.isArray(building.crafting) ? building.crafting : [];
+                for (let i = 0; i < crafting.length; i++) {
+                    let item = crafting[i];
+                    const readyAt = parseTimeValue(item && item.readyAt);
+                    if (item && readyAt > 0 && readyAt <= Date.now()) {
+                        let amount = 1;
+                        if (item.skills && item.skills["Double Nom"]) {
+                            amount += 1;
+                        }
+                        modifyInventory(item.name, amount);
+                        modifyActivity(item.name + " Cooked", 1);
+                        const recipe = getCookingRecipe(item.name);
+                        if (recipe && SL_BUMPKIN) {
+                            SL_BUMPKIN.experience = Number(SL_BUMPKIN.experience || 0) + (Number(recipe.experience || 0) * amount);
+                        }
+                    } else if (item) {
+                        remaining.push(item);
                     }
-                    modifyInventory(item.name, amount);
-                    modifyActivity(item.name + " Cooked", 1);
-                    const recipe = FIRE_PIT_RECIPES[item.name];
-                    if (recipe && SL_BUMPKIN) {
-                        SL_BUMPKIN.experience = Number(SL_BUMPKIN.experience || 0) + (Number(recipe.experience || 0) * amount);
-                    }
-                } else if (item) {
-                    remaining.push(item);
+                }
+                building.crafting = remaining;
+                localStorage.setItem('sl_buildings_cache', JSON.stringify(SL_BUILDINGS));
+                localStorage.setItem('sl_bumpkin_cache', JSON.stringify(SL_BUMPKIN));
+
+                let ok = await sendCookingPayload(actions, "collect", buildingName);
+                if (!ok) {
+                    return performed;
+                }
+                performed = true;
+            }
+
+            if (stopRequested || killSwitchActivated) {
+                return performed;
+            }
+
+            const currentCrafting = Array.isArray(building.crafting) ? building.crafting : [];
+            const maxSlots = 1;
+            if (currentCrafting.length >= maxSlots) {
+                continue;
+            }
+
+            if (performed) {
+                let keepGoing = await waitCookingPacketGap('collect -> cook');
+                if (!keepGoing || stopRequested || killSwitchActivated) {
+                    return performed;
                 }
             }
-            building.crafting = remaining;
-            localStorage.setItem('sl_buildings_cache', JSON.stringify(SL_BUILDINGS));
-            localStorage.setItem('sl_bumpkin_cache', JSON.stringify(SL_BUMPKIN));
 
-            let ok = await sendCookingPayload(actions, "collect");
-            if (!ok) {
-                return false;
+            for (let i = 0; i < selected.length; i++) {
+                const recipeName = selected[i];
+                const recipe = getCookingRecipe(recipeName);
+                if (!recipe || recipe.building !== buildingName || recipe.cookingSeconds === 0) {
+                    continue;
+                }
+                if (!canCookRecipe(recipeName)) {
+                    continue;
+                }
+
+                let createdAtMs = Date.now();
+                let dateIso = new Date(createdAtMs).toISOString();
+                let plan = getCookPlan(recipeName, building, createdAtMs);
+                let action = {
+                    type: "recipe.cooked",
+                    item: recipeName,
+                    buildingId: building.id,
+                    createdAt: dateIso
+                };
+
+                applyCookingIngredients(recipeName);
+                building.crafting = Array.isArray(building.crafting) ? building.crafting : [];
+                building.crafting.push({
+                    name: recipeName,
+                    boost: plan.oilConsumed > 0 ? { Oil: plan.oilConsumed } : {},
+                    skills: { "Double Nom": GameRules.hasSkill("Double Nom") },
+                    readyAt: plan.readyAt
+                });
+                if (plan.oilConsumed > 0) {
+                    building.oil = Math.max(0, Number(building.oil || 0) - plan.oilConsumed);
+                }
+                localStorage.setItem('sl_buildings_cache', JSON.stringify(SL_BUILDINGS));
+
+                log(`${buildingName}: ${recipeName} cooking. Ready in: ${formatDuration(plan.seconds)}`);
+                let ok = await sendCookingPayload([action], "cook", buildingName);
+                if (!ok) {
+                    return performed;
+                }
+                performed = true;
+                break;
             }
-            performed = true;
-        }
-
-        if (stopRequested || killSwitchActivated) {
-            return performed;
-        }
-
-        const currentCrafting = Array.isArray(building.crafting) ? building.crafting : [];
-        const maxSlots = 1;
-        if (currentCrafting.length >= maxSlots) {
-            return performed;
-        }
-
-        if (performed) {
-            let keepGoing = await waitCookingPacketGap('collect â†’ cook');
-            if (!keepGoing || stopRequested || killSwitchActivated) {
-                return performed;
-            }
-        }
-
-        for (let i = 0; i < selected.length; i++) {
-            const recipeName = selected[i];
-            const recipe = FIRE_PIT_RECIPES[recipeName];
-            if (!recipe || recipe.cookingSeconds === 0) {
-                continue;
-            }
-            if (!canCookRecipe(recipeName)) {
-                continue;
-            }
-
-            let createdAtMs = Date.now();
-            let dateIso = new Date(createdAtMs).toISOString();
-            let plan = getCookPlan(recipeName, building, createdAtMs);
-            let action = {
-                type: "recipe.cooked",
-                item: recipeName,
-                buildingId: building.id,
-                createdAt: dateIso
-            };
-
-            applyCookingIngredients(recipeName);
-            building.crafting = Array.isArray(building.crafting) ? building.crafting : [];
-            building.crafting.push({
-                name: recipeName,
-                boost: { Oil: plan.oilConsumed },
-                skills: { "Double Nom": GameRules.hasSkill("Double Nom") },
-                readyAt: plan.readyAt
-            });
-            if (plan.oilConsumed > 0) {
-                building.oil = Math.max(0, Number(building.oil || 0) - plan.oilConsumed);
-            }
-            localStorage.setItem('sl_buildings_cache', JSON.stringify(SL_BUILDINGS));
-
-            log(`${recipeName} cooking. Ready in: ${formatDuration(plan.seconds)}`);
-            let ok = await sendCookingPayload([action], "cook");
-            if (!ok) {
-                return performed;
-            }
-            performed = true;
-            break;
         }
 
         return performed;
