@@ -11737,6 +11737,30 @@
             }
             emptyPlots = shuffleArray(emptyPlots);
             const cropPlanPlantQueue = buildCropPlanPlantQueue(emptyPlots.length);
+            let plantableNow = 0;
+            let plantNoStock = 0;
+            let plantBadSeason = 0;
+            let plantBadLevel = 0;
+            let plantNoTask = 0;
+            for (let i = 0; i < emptyPlots.length; i++) {
+                const scanPlotId = emptyPlots[i];
+                const scanSeed = isCropPlanActive() ? cropPlanPlantQueue[i] : PLOT_TASKS[scanPlotId];
+                if (!scanSeed) {
+                    plantNoTask++;
+                } else if (!GameRules.isSeedInCurrentSeason(scanSeed)) {
+                    plantBadSeason++;
+                } else if (!GameRules.canBuySeed(scanSeed)) {
+                    plantBadLevel++;
+                } else if (getInventoryAmount(scanSeed) < 1) {
+                    plantNoStock++;
+                } else {
+                    plantableNow++;
+                }
+            }
+            if (emptyPlots.length > 0) {
+                log(`Plant scan: empty ${emptyPlots.length}, plantable ${plantableNow}, no stock ${plantNoStock}, bad season ${plantBadSeason}, bad level ${plantBadLevel}, no task ${plantNoTask}.`);
+            }
+            const cropPlanPlantWorkQueue = cropPlanPlantQueue.slice();
 
             if (emptyPlots.length > 0) {
                 let stringifiedMaster = JSON.stringify(masterPayload);
@@ -11754,7 +11778,7 @@
                     }
 
                     let plotId = emptyPlots[i];
-                    let targetSeed = isCropPlanActive() ? cropPlanPlantQueue.shift() : PLOT_TASKS[plotId];
+                    let targetSeed = isCropPlanActive() ? cropPlanPlantWorkQueue.shift() : PLOT_TASKS[plotId];
 
                     if (targetSeed) {
                         if (!GameRules.isSeedInCurrentSeason(targetSeed)) {
@@ -11989,6 +12013,7 @@
         // ğŸš€ 5. ORMAN VE MADEN AÅAMASI (TEKLÄ° GÃ–NDERÄ°M VE ONAYLI SÄ°STEM)
         // =========================================================
         if (!stopRequested && !killSwitchActivated && (BOT_SETTINGS.autoTree || BOT_SETTINGS.autoFruit || BOT_SETTINGS.autoOil || BOT_SETTINGS.autoMineStone || BOT_SETTINGS.autoMineIron || BOT_SETTINGS.autoMineGold)) {
+            log(`Resource scan: trees ${BOT_SETTINGS.autoTree ? getReadyResourceTargets("trees", SL_TREES, TREE_RECOVERY_MS, "wood").length : 0}, fruit ${BOT_SETTINGS.autoFruit ? getReadyFruitTargets().length : 0}, stone ${BOT_SETTINGS.autoMineStone ? getReadyResourceTargets("stones", SL_STONES, STONE_RECOVERY_MS, "stone").length : 0}, iron ${BOT_SETTINGS.autoMineIron ? getReadyResourceTargets("iron", SL_IRON, IRON_RECOVERY_MS, "stone").length : 0}, gold ${BOT_SETTINGS.autoMineGold ? getReadyResourceTargets("gold", SL_GOLD, GOLD_RECOVERY_MS, "stone").length : 0}.`);
             let keepGoing = await waitTaskSwitch('farm -> resources');
             if (!keepGoing || stopRequested || killSwitchActivated) {
                 return;
