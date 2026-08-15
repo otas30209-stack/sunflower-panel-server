@@ -7917,8 +7917,8 @@
     // ----------------------------------------------------
     function getFruitSeedInfo(fruitName) {
         const name = String(fruitName || "");
-        for (const seedName in SEED_INFO) {
-            const info = SEED_INFO[seedName];
+        for (const seedName in EXTRA_MARKET_SEED_DETAILS) {
+            const info = getMarketSeedDetails(seedName);
             if (info && info.plantingSpot === "Fruit Patch" && info.yield === name) {
                 return info;
             }
@@ -7932,10 +7932,13 @@
             return Number.POSITIVE_INFINITY;
         }
         const info = getFruitSeedInfo(fruit.name);
-        const growMs = info ? (Number(info.plantSeconds || 0) * 1000) : 0;
         const plantedAt = parseTimeValue(fruit.plantedAt);
         const harvestedAt = parseTimeValue(fruit.harvestedAt);
-        return Math.max(plantedAt, harvestedAt) + growMs;
+        const startedAt = harvestedAt || plantedAt;
+        const growMs = fruit.baseDurationMs !== undefined
+            ? Number(fruit.baseDurationMs || 0)
+            : (info ? (Number(info.plantSeconds || 0) * 1000) : 0);
+        return startedAt + growMs;
     }
 
     function getFruitHarvestAmount(fruitName) {
