@@ -7122,39 +7122,53 @@
     }
 
     function renderGenericResourceSection(sectionId, gridId, entries, selectionType, icon, fallbackLabel, recoveryMs, toolText) {
-        const section = document.getElementById(sectionId);
-        const grid = document.getElementById(gridId);
-        if (!section || !grid) return;
+        try {
+            const section = document.getElementById(sectionId);
+            const grid = document.getElementById(gridId);
+            if (!section || !grid) return;
 
-        const visibleEntries = entries || [];
-        section.style.display = visibleEntries.length > 0 ? "" : "none";
-        if (!visibleEntries.length) {
-            grid.innerHTML = "";
-            return;
+            const visibleEntries = entries || [];
+            section.style.display = visibleEntries.length > 0 ? "" : "none";
+            if (!visibleEntries.length) {
+                grid.innerHTML = "";
+                return;
+            }
+
+            const now = Date.now();
+            let html = "";
+            for (let i = 0; i < visibleEntries.length; i++) {
+                const id = String(visibleEntries[i][0]);
+                const node = visibleEntries[i][1] || {};
+                const readyAt = getGenericReadyAt(node, recoveryMs);
+                const hasTimer = readyAt > 0;
+                const isReady = !hasTimer || now >= readyAt;
+                const label = getGenericResourceLabel(node, fallbackLabel);
+                const status = hasTimer ? (isReady ? "READY" : formatTimeLeftMs(readyAt, now)) : "SEEN";
+                const selected = isResourceSelected(selectionType, id);
+
+                html += `
+                    <div class="resource-box ${selected ? 'selected' : ''}" onclick="window.toggleResourceSelection('${selectionType}', '${id}')">
+                        <div class="res-id">${id.substr(0,4)}</div>
+                        <div class="res-icon">${icon}</div>
+                        <div class="res-tool">${toolText || label}</div>
+                        <div class="res-status ${isReady ? 'ready' : 'wait'}">${status}</div>
+                    </div>
+                `;
+            }
+            grid.innerHTML = html;
+        } catch(e) {
+            const grid = document.getElementById(gridId);
+            if (grid) grid.innerHTML = "Render error: " + (e && e.message ? e.message : e);
         }
+    }
 
-        const now = Date.now();
-        let html = "";
-        for (let i = 0; i < visibleEntries.length; i++) {
-            const id = String(visibleEntries[i][0]);
-            const node = visibleEntries[i][1] || {};
-            const readyAt = getGenericReadyAt(node, recoveryMs);
-            const hasTimer = readyAt > 0;
-            const isReady = !hasTimer || now >= readyAt;
-            const label = getGenericResourceLabel(node, fallbackLabel);
-            const status = hasTimer ? (isReady ? "READY" : formatTimeLeftMs(readyAt, now)) : "SEEN";
-            const selected = isResourceSelected(selectionType, id);
-
-            html += `
-                <div class="resource-box ${selected ? 'selected' : ''}" onclick="window.toggleResourceSelection('${selectionType}', '${id}')">
-                    <div class="res-id">${id.substr(0,4)}</div>
-                    <div class="res-icon">${icon}</div>
-                    <div class="res-tool">${toolText || label}</div>
-                    <div class="res-status ${isReady ? 'ready' : 'wait'}">${status}</div>
-                </div>
-            `;
+    function renderResourcePanelPart(name, fn) {
+        try {
+            fn();
+        } catch(e) {
+            console.warn("[Nexus] resource panel render failed:", name, e);
+            log("Farm panel render warning (" + name + "): " + (e && e.message ? e.message : e));
         }
-        grid.innerHTML = html;
     }
 
     function renderForestAndMines() {
@@ -7189,6 +7203,7 @@
             treeGrid.innerHTML = treeHTML || "No trees";
         }
 
+        renderResourcePanelPart("fruit trees", function() {
         let fruitGrid = document.getElementById('grid-fruits');
         if (fruitGrid) {
             let fruitHTML = "";
@@ -7219,7 +7234,9 @@
             }
             fruitGrid.innerHTML = fruitHTML || "";
         }
+        });
 
+        renderResourcePanelPart("oil reserves", function() {
         let oilSection = document.getElementById('oil-reserve-section');
         let oilGrid = document.getElementById('grid-oil');
         if (oilSection && oilGrid) {
@@ -7247,7 +7264,9 @@
             }
             oilGrid.innerHTML = oilHTML || "";
         }
+        });
 
+        renderResourcePanelPart("extra farm resources", function() {
         renderGenericResourceSection(
             'beehive-section',
             'grid-beehives',
@@ -7280,7 +7299,9 @@
             LAVA_PIT_RECOVERY_MS,
             'Lava Pit'
         );
+        });
 
+        renderResourcePanelPart("normal stones", function() {
         let stoneGrid = document.getElementById('grid-stones');
         if(stoneGrid) {
             let stoneHTML = "";
@@ -7304,7 +7325,9 @@
             }
             stoneGrid.innerHTML = stoneHTML || "No stones";
         }
+        });
 
+        renderResourcePanelPart("iron ores", function() {
         let ironGrid = document.getElementById('grid-iron');
         if(ironGrid) {
             let ironHTML = "";
@@ -7328,7 +7351,9 @@
             }
             ironGrid.innerHTML = ironHTML || "No iron";
         }
+        });
 
+        renderResourcePanelPart("gold ores", function() {
         let goldGrid = document.getElementById('grid-gold');
         if(goldGrid) {
             let goldHTML = "";
@@ -7352,7 +7377,9 @@
             }
             goldGrid.innerHTML = goldHTML || "No gold";
         }
+        });
 
+        renderResourcePanelPart("special rocks", function() {
         const specialRockEntries = []
             .concat(getNestedEntries(SL_CRIMSTONES).map(function(entry) { return ["crimstone:" + entry[0], entry[1]]; }))
             .concat(getNestedEntries(SL_SUNSTONES).map(function(entry) { return ["sunstone:" + entry[0], entry[1]]; }))
@@ -7367,6 +7394,7 @@
             SUNSTONE_RECOVERY_MS,
             'Special Pick'
         );
+        });
     }
 
     let farmPanelRefreshPromise = null;
