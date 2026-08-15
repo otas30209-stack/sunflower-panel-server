@@ -10976,6 +10976,8 @@
         let safePlots = plotFilters.safe;
         let quarantinedPlots = plotFilters.quarantined;
 
+        logAutomationDiagnostic("start", safePlots);
+
         if (quarantinedPlots.length > 0 && !hasLoggedQuarantine) {
             log(`<span style="color:#f87171; font-weight:bold;">ğŸš§ Quarantine protocol: ${quarantinedPlots.length} unsafe field(s) detected and locked.</span>`);
             hasLoggedQuarantine = true;
