@@ -9964,6 +9964,37 @@
         return selectedEntries.length > 0 ? shuffled : shuffled.slice(0, 1);
     }
 
+    function repairStalePlotTasksForCurrentFarm(safePlots) {
+        const safe = Array.isArray(safePlots) ? safePlots : [];
+        const cropIds = Object.keys(SL_CROPS || {});
+        const cropIdSet = new Set(cropIds);
+        const taskEntries = Object.entries(PLOT_TASKS || {}).filter(function(entry) {
+            return !!entry[1];
+        });
+        if (!safe.length || !taskEntries.length) {
+            return;
+        }
+
+        const matching = taskEntries.filter(function(entry) {
+            return cropIdSet.has(entry[0]);
+        });
+        if (matching.length > 0) {
+            return;
+        }
+
+        const seeds = taskEntries.map(function(entry) {
+            return entry[1];
+        });
+        const repaired = {};
+        for (let i = 0; i < safe.length && i < seeds.length; i++) {
+            repaired[safe[i]] = seeds[i];
+        }
+
+        PLOT_TASKS = repaired;
+        localStorage.setItem('sl_plot_tasks', JSON.stringify(PLOT_TASKS));
+        log(`Manual field selections were from another farm. Rebound ${Object.keys(PLOT_TASKS).length} selections to this farm.`);
+    }
+
     function logAutomationDiagnostic(reason, safePlots) {
         const now = Date.now();
         if (now - lastAutomationDiagnosticAt < 20000) {
@@ -9989,6 +10020,9 @@
         }
 
         const manualTaskCount = Object.keys(PLOT_TASKS || {}).length;
+        const matchingManualTasks = Object.keys(PLOT_TASKS || {}).filter(function(id) {
+            return Object.prototype.hasOwnProperty.call(SL_CROPS || {}, id);
+        }).length;
         const cropPlanCount = getCropPlanEntries().length;
         const readyTrees = BOT_SETTINGS.autoTree ? getReadyResourceTargets("trees", SL_TREES, TREE_RECOVERY_MS, "wood").length : 0;
         const readyFruits = BOT_SETTINGS.autoFruit ? getReadyFruitTargets().length : 0;
@@ -9999,7 +10033,7 @@
         log(
             `Idle check (${reason}): Auto Fields ${BOT_SETTINGS.autoFields ? "ON" : "OFF"}, ` +
             `Auto Plant ${isCropPlanActive() ? "ON" : "OFF"}, safe ${safe.length}, ready ${readyCount}, ` +
-            `empty ${emptyCount}, growing ${growingCount}, manual tasks ${manualTaskCount}, plan items ${cropPlanCount}, ` +
+            `empty ${emptyCount}, growing ${growingCount}, manual tasks ${manualTaskCount}/${matchingManualTasks} matched, plan items ${cropPlanCount}, ` +
             `resources ready T/F/S/I/G ${readyTrees}/${readyFruits}/${readyStones}/${readyIron}/${readyGold}.`
         );
     }
@@ -10976,6 +11010,7 @@
         let safePlots = plotFilters.safe;
         let quarantinedPlots = plotFilters.quarantined;
 
+        repairStalePlotTasksForCurrentFarm(safePlots);
         logAutomationDiagnostic("start", safePlots);
 
         if (quarantinedPlots.length > 0 && !hasLoggedQuarantine) {
