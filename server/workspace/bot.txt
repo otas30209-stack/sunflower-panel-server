@@ -14,7 +14,7 @@
     'use strict';
 
     const _window = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
-    const NEXUS_BOT_BUILD = "2026-08-16.1836";
+    const NEXUS_BOT_BUILD = "2026-08-16.1847";
 
     // ==========================================
     // ğŸ““ BÃœYÃœK MUHASEBE DEFTERÄ° (THE GRAND LEDGER)
@@ -2282,6 +2282,24 @@
         sendErrorDebugPackage(reason, status).catch(function() {});
         await forceRadarRefresh("recoverable reject " + reason, true).catch(function() {});
         safeRenderPlotGrid("recoverable reject " + reason);
+        renderForestAndMines();
+        return true;
+    }
+
+    function isSoftResourceServerReject(status) {
+        const numeric = parseInt(status, 10);
+        return numeric === 409 || numeric === 500 || numeric === 502 || numeric === 503 || numeric === 504;
+    }
+
+    async function handleSoftResourceServerReject(reason, status) {
+        if (!isSoftResourceServerReject(status)) {
+            return false;
+        }
+
+        log(`<span style="color:#facc15;font-weight:900;">RESOURCE SYNC GUARD</span> ${reason} (Server ${status}). Resource skipped; live state will refresh.`);
+        sendErrorDebugPackage(reason, status).catch(function() {});
+        await forceRadarRefresh("resource reject " + reason, true).catch(function() {});
+        safeRenderPlotGrid("resource reject " + reason);
         renderForestAndMines();
         return true;
     }
@@ -10269,7 +10287,7 @@
                 return true;
             }
 
-            if (await handleRecoverableServerReject(`${reason} rejected by server`, res.status)) {
+            if (await handleSoftResourceServerReject(`${reason} rejected by server`, res.status)) {
                 return false;
             }
             triggerKillSwitch(`${reason} rejected by server.`, res.status);
@@ -10581,6 +10599,10 @@
             }
         }
 
+        const beforeInventory = JSON.parse(JSON.stringify(SL_INVENTORY || {}));
+        const beforeActivity = JSON.parse(JSON.stringify(SL_FARM_ACTIVITY || {}));
+        const beforeSource = JSON.parse(JSON.stringify(source || {}));
+        const beforeCoins = SL_COINS;
         const actions = [];
         let actionTime = beginBotActionBatch();
         for (let i = 0; i < targets.length; i++) {
@@ -10616,7 +10638,23 @@
 
         localStorage.setItem(cacheKey, JSON.stringify(source));
         const ok = await sendBotResourcePayload(actions, `${rewardItem} miner`);
-        if (ok) renderForestAndMines();
+        if (ok) {
+            renderForestAndMines();
+        } else {
+            SL_INVENTORY = beforeInventory;
+            SL_FARM_ACTIVITY = beforeActivity;
+            SL_COINS = beforeCoins;
+            Object.keys(source || {}).forEach(function(key) {
+                delete source[key];
+            });
+            Object.assign(source, beforeSource);
+            localStorage.setItem('sl_inventory_cache', JSON.stringify(SL_INVENTORY));
+            localStorage.setItem('sl_activity_cache', JSON.stringify(SL_FARM_ACTIVITY));
+            localStorage.setItem('sl_coins_cache', String(SL_COINS));
+            localStorage.setItem(cacheKey, JSON.stringify(source));
+            log(`${rewardItem} miner rolled back locally after server reject.`);
+            renderForestAndMines();
+        }
         return ok;
     }
 
@@ -12371,6 +12409,9 @@
                                         pickCount--;
                                         actionPerformed = true;
                                     } else {
+                                    if (await handleSoftResourceServerReject("Stone miner rejected by server", res.status)) {
+                                        return;
+                                    }
                                     triggerKillSwitch("Server rejected mining action.", res.status);
                                     return;
                                 }
@@ -12505,6 +12546,9 @@
                                     stonePickCount -= requiredPickaxes;
                                     actionPerformed = true;
                                 } else {
+                                    if (await handleSoftResourceServerReject("Iron miner rejected by server", res.status)) {
+                                        return;
+                                    }
                                     triggerKillSwitch("Server rejected iron mining action.", res.status);
                                     return;
                                 }
@@ -12639,6 +12683,9 @@
                                     ironPickCount -= requiredPickaxes;
                                     actionPerformed = true;
                                 } else {
+                                    if (await handleSoftResourceServerReject("Gold miner rejected by server", res.status)) {
+                                        return;
+                                    }
                                     triggerKillSwitch("Server rejected gold mining action.", res.status);
                                     return;
                                 }
