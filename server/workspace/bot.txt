@@ -14,7 +14,7 @@
     'use strict';
 
     const _window = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
-    const NEXUS_BOT_BUILD = "2026-08-16.1826";
+    const NEXUS_BOT_BUILD = "2026-08-16.1836";
 
     // ==========================================
     // ğŸ““ BÃœYÃœK MUHASEBE DEFTERÄ° (THE GRAND LEDGER)
@@ -2360,7 +2360,12 @@
     let selectedBuySeed = localStorage.getItem('sl_selected_buy_seed') || "";
     let selectedToolItem = localStorage.getItem('sl_selected_tool_item') || "";
     let selectedFactionItem = localStorage.getItem('sl_selected_faction_item') || "";
-    const MARKET_TOOL_ITEMS = ["Axe", "Pickaxe", "Stone Pickaxe", "Iron Pickaxe", "Gold Pickaxe", "Oil Drill", "Rod", "Fishing Rod", "Sand Shovel", "Sand Drill"];
+    const MARKET_TOOL_GROUPS = [
+        { key: "land", title: "Land Tools", items: ["Axe", "Pickaxe", "Stone Pickaxe", "Iron Pickaxe", "Gold Pickaxe", "Oil Drill"] },
+        { key: "water", title: "Water Tools", items: ["Rod", "Fishing Rod", "Sand Shovel", "Sand Drill"] },
+        { key: "animal", title: "Animal Tools", items: [] }
+    ];
+    const MARKET_TOOL_DISCOVERY_ITEMS = ["Axe", "Pickaxe", "Stone Pickaxe", "Iron Pickaxe", "Gold Pickaxe", "Oil Drill", "Rod", "Fishing Rod", "Sand Shovel", "Sand Drill", "Brush", "Shears", "Milking Hand", "Animal Feed", "Treat"];
 
     const FIRE_PIT_RECIPES = {
         "Furikake Sprinkle": { building: "Fire Pit", experience: 1000, cookingSeconds: 0, ingredients: { "Fish Flake": 1, "Seaweed": 1 } },
@@ -6722,8 +6727,15 @@
 
     function getMarketToolItems() {
         const names = {};
-        MARKET_TOOL_ITEMS.forEach(function(tool) {
-            names[tool] = true;
+        MARKET_TOOL_GROUPS.forEach(function(group) {
+            group.items.forEach(function(tool) {
+                names[tool] = true;
+            });
+        });
+        MARKET_TOOL_DISCOVERY_ITEMS.forEach(function(tool) {
+            if (MOTOR_TOOL_RECIPES[tool] || getInventoryAmount(tool) > 0) {
+                names[tool] = true;
+            }
         });
         Object.keys(CRAFTING_RECIPES || {}).forEach(function(tool) {
             names[tool] = true;
@@ -6732,6 +6744,45 @@
             names[tool] = true;
         });
         return Object.keys(names);
+    }
+
+    function getMarketToolGroupKey(tool) {
+        for (let i = 0; i < MARKET_TOOL_GROUPS.length; i++) {
+            if (MARKET_TOOL_GROUPS[i].items.includes(tool)) {
+                return MARKET_TOOL_GROUPS[i].key;
+            }
+        }
+        if (/rod|shovel|drill/i.test(tool) && !/oil/i.test(tool)) {
+            return "water";
+        }
+        if (/brush|shear|milk|animal|treat|feed|cow|sheep|chicken|wool|feather/i.test(tool)) {
+            return "animal";
+        }
+        return "land";
+    }
+
+    function getGroupedMarketToolItems(tools) {
+        const grouped = {};
+        MARKET_TOOL_GROUPS.forEach(function(group) {
+            grouped[group.key] = [];
+        });
+        tools.forEach(function(tool) {
+            const key = getMarketToolGroupKey(tool);
+            grouped[key] = grouped[key] || [];
+            grouped[key].push(tool);
+        });
+        MARKET_TOOL_GROUPS.forEach(function(group) {
+            const preferred = group.items;
+            grouped[group.key].sort(function(a, b) {
+                const ai = preferred.indexOf(a);
+                const bi = preferred.indexOf(b);
+                if (ai >= 0 || bi >= 0) {
+                    return (ai >= 0 ? ai : 999) - (bi >= 0 ? bi : 999);
+                }
+                return a.localeCompare(b);
+            });
+        });
+        return grouped;
     }
 
     function formatMarketNumber(value) {
@@ -6794,21 +6845,32 @@
                 </div>
             </div>`;
 
-        let grid = `<div style="font-size:10px;color:#bfdbfe;margin-bottom:8px;display:flex;justify-content:space-between;"><span>Workbench Tools</span><span>${tools.length} items</span></div><div style="display:grid;grid-template-columns:repeat(5,54px);gap:7px;">`;
-        tools.forEach(function(tool) {
-            const cfg = (MARKET_SETTINGS.tools && MARKET_SETTINGS.tools.items && MARKET_SETTINGS.tools.items[tool]) || { active: false, target: 1 };
-            const active = MARKET_SETTINGS.tools?.autoAll || cfg.active;
-            const owned = getInventoryAmount(tool);
-            const selected = selectedToolItem === tool;
-            const hasRecipe = !!getToolCraftRecipe(tool);
-            const safeTool = tool.replace(/'/g, "\\'");
+        const groupedTools = getGroupedMarketToolItems(tools);
+        let grid = `<div style="font-size:10px;color:#bfdbfe;margin-bottom:8px;display:flex;justify-content:space-between;"><span>Workbench Tools</span><span>${tools.length} items</span></div>`;
+        MARKET_TOOL_GROUPS.forEach(function(group) {
+            const groupTools = groupedTools[group.key] || [];
+            if (group.key === "animal" && groupTools.length === 0) {
+                return;
+            }
             grid += `
-                <button type="button" onclick="selectToolItem('${safeTool}')" title="${tool}" style="position:relative;width:54px;height:54px;border-radius:8px;border:2px solid ${selected ? '#dbeafe' : active ? '#22c55e' : hasRecipe ? 'rgba(71,85,105,0.75)' : '#ef4444'};background:${selected ? 'linear-gradient(180deg,rgba(37,99,235,0.45),rgba(15,23,42,0.8))' : 'linear-gradient(180deg,rgba(30,41,59,0.94),rgba(15,23,42,0.98))'};box-shadow:${selected ? '0 0 0 2px #1d4ed8' : 'none'};cursor:pointer;">
-                    ${getItemIconHtml(tool, 30)}
-                    <span style="position:absolute;top:-7px;left:7px;min-width:24px;padding:1px 3px;border-radius:3px;background:${owned > 0 ? '#e0f2fe' : '#64748b'};color:${owned > 0 ? '#1e3a8a' : '#fff'};font-size:10px;font-weight:900;border:1px solid #1e293b;">${owned}</span>
-                </button>`;
+                <div style="margin:0 0 10px;">
+                    <div style="display:inline-flex;align-items:center;height:18px;border:1px solid #1e3a8a;background:#dbeafe;color:#0f172a;border-radius:4px;padding:0 7px;font-size:10px;font-weight:900;margin:0 0 6px;">${group.title}</div>
+                    <div style="display:grid;grid-template-columns:repeat(5,54px);gap:7px;">`;
+            groupTools.forEach(function(tool) {
+                const cfg = (MARKET_SETTINGS.tools && MARKET_SETTINGS.tools.items && MARKET_SETTINGS.tools.items[tool]) || { active: false, target: 1 };
+                const active = MARKET_SETTINGS.tools?.autoAll || cfg.active;
+                const owned = getInventoryAmount(tool);
+                const selected = selectedToolItem === tool;
+                const hasRecipe = !!getToolCraftRecipe(tool);
+                const safeTool = tool.replace(/'/g, "\\'");
+                grid += `
+                    <button type="button" onclick="selectToolItem('${safeTool}')" title="${tool}" style="position:relative;width:54px;height:54px;border-radius:8px;border:2px solid ${selected ? '#dbeafe' : active ? '#22c55e' : hasRecipe ? 'rgba(71,85,105,0.75)' : '#ef4444'};background:${selected ? 'linear-gradient(180deg,rgba(37,99,235,0.45),rgba(15,23,42,0.8))' : 'linear-gradient(180deg,rgba(30,41,59,0.94),rgba(15,23,42,0.98))'};box-shadow:${selected ? '0 0 0 2px #1d4ed8' : 'none'};cursor:pointer;">
+                        ${getItemIconHtml(tool, 30)}
+                        <span style="position:absolute;top:-7px;left:7px;min-width:24px;padding:1px 3px;border-radius:3px;background:${owned > 0 ? '#e0f2fe' : '#64748b'};color:${owned > 0 ? '#1e3a8a' : '#fff'};font-size:10px;font-weight:900;border:1px solid #1e293b;">${owned}</span>
+                    </button>`;
+            });
+            grid += `</div></div>`;
         });
-        grid += `</div>`;
 
         const selectedTool = selectedToolItem || tools[0] || "";
         if (!selectedToolItem && selectedTool) {
@@ -9431,7 +9493,7 @@
         if (!source) {
             return;
         }
-        const tools = ["Axe", "Pickaxe", "Stone Pickaxe", "Iron Pickaxe", "Gold Pickaxe", "Oil Drill", "Rod", "Fishing Rod", "Sand Shovel", "Sand Drill"];
+        const tools = MARKET_TOOL_DISCOVERY_ITEMS.slice();
         const parsed = {};
         tools.forEach(function(tool) {
             const recipe = parseMotorToolRecipe(source, tool);
