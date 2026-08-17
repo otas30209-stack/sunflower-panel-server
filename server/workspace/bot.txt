@@ -14,7 +14,7 @@
     'use strict';
 
     const _window = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
-    const NEXUS_BOT_BUILD = "2026-08-16.1847";
+    const NEXUS_BOT_BUILD = "2026-08-18.2104";
 
     // ==========================================
     // ğŸ““ BÃœYÃœK MUHASEBE DEFTERÄ° (THE GRAND LEDGER)
@@ -2301,6 +2301,20 @@
         await forceRadarRefresh("resource reject " + reason, true).catch(function() {});
         safeRenderPlotGrid("resource reject " + reason);
         renderForestAndMines();
+        return true;
+    }
+
+    async function handleSoftMarketServerReject(reason, status) {
+        const numeric = parseInt(status, 10);
+        if (![409, 500, 502, 503, 504].includes(numeric)) {
+            return false;
+        }
+
+        log(`<span style="color:#facc15;font-weight:900;">MARKET SYNC GUARD</span> ${reason} (Server ${status}). Market state will refresh; no kill switch.`);
+        sendErrorDebugPackage(reason, status).catch(function() {});
+        await forceRadarRefresh("market reject " + reason, true).catch(function() {});
+        renderMarketTabs();
+        updateHud();
         return true;
     }
 
@@ -7657,6 +7671,10 @@
             return false;
         }
 
+        const beforeInventory = JSON.parse(JSON.stringify(SL_INVENTORY || {}));
+        const beforeActivity = JSON.parse(JSON.stringify(SL_FARM_ACTIVITY || {}));
+        const beforeStock = JSON.parse(JSON.stringify(SL_STOCK || {}));
+        const beforeCoins = SL_COINS;
         let payload = JSON.parse(JSON.stringify(masterPayload));
         let createdAt = new Date().toISOString();
         payload.actions = [{ type: "seed.bought", item: seed, amount: amount, createdAt: createdAt }];
@@ -7679,6 +7697,17 @@
             body: JSON.stringify(payload)
         });
         if (!res.ok) {
+            SL_INVENTORY = beforeInventory;
+            SL_FARM_ACTIVITY = beforeActivity;
+            SL_STOCK = beforeStock;
+            SL_COINS = beforeCoins;
+            localStorage.setItem('sl_inventory_cache', JSON.stringify(SL_INVENTORY));
+            localStorage.setItem('sl_activity_cache', JSON.stringify(SL_FARM_ACTIVITY));
+            localStorage.setItem('sl_stock_cache', JSON.stringify(SL_STOCK));
+            localStorage.setItem('sl_coins_cache', String(SL_COINS));
+            if (await handleSoftMarketServerReject("Manual seed buy rejected", res.status)) {
+                return false;
+            }
             triggerKillSwitch("Manual seed buy rejected.", res.status);
             return false;
         }
@@ -11733,6 +11762,10 @@
                 if (chunksToProcess.length > 0) {
                     actionPerformed = true;
                     log(`ğŸ›’ Fast buy starting... (Budget guard active)`);
+                    const beforeBuyInventory = JSON.parse(JSON.stringify(SL_INVENTORY || {}));
+                    const beforeBuyActivity = JSON.parse(JSON.stringify(SL_FARM_ACTIVITY || {}));
+                    const beforeBuyStock = JSON.parse(JSON.stringify(SL_STOCK || {}));
+                    const beforeBuyCoins = SL_COINS;
 
                     for (let i = 0; i < chunksToProcess.length; i++) {
                         if (stopRequested || killSwitchActivated) {
@@ -11827,10 +11860,33 @@
                                 masterPayload.stateHash = payload.stateHash;
                                 lastCompletedPhase = 'buy';
                             } else {
+                                SL_INVENTORY = beforeBuyInventory;
+                                SL_FARM_ACTIVITY = beforeBuyActivity;
+                                SL_STOCK = beforeBuyStock;
+                                SL_COINS = beforeBuyCoins;
+                                localStorage.setItem('sl_inventory_cache', JSON.stringify(SL_INVENTORY));
+                                localStorage.setItem('sl_activity_cache', JSON.stringify(SL_FARM_ACTIVITY));
+                                localStorage.setItem('sl_stock_cache', JSON.stringify(SL_STOCK));
+                                localStorage.setItem('sl_coins_cache', String(SL_COINS));
+                                lastBotMarketPrediction = null;
+                                log("Fast buy rolled back locally after server reject.");
+                                if (await handleSoftMarketServerReject("Seed buy rejected by server", res.status)) {
+                                    return;
+                                }
                                 triggerKillSwitch("Sunucu alÄ±mÄ± reddetti.", res.status);
                                 return;
                             }
                         } catch(e) {
+                            SL_INVENTORY = beforeBuyInventory;
+                            SL_FARM_ACTIVITY = beforeBuyActivity;
+                            SL_STOCK = beforeBuyStock;
+                            SL_COINS = beforeBuyCoins;
+                            localStorage.setItem('sl_inventory_cache', JSON.stringify(SL_INVENTORY));
+                            localStorage.setItem('sl_activity_cache', JSON.stringify(SL_FARM_ACTIVITY));
+                            localStorage.setItem('sl_stock_cache', JSON.stringify(SL_STOCK));
+                            localStorage.setItem('sl_coins_cache', String(SL_COINS));
+                            lastBotMarketPrediction = null;
+                            log("Fast buy rolled back locally after network error.");
                             triggerKillSwitch("AÄŸ baÄŸlantÄ±sÄ± koptu (AlÄ±m).", "NETWORK");
                             return;
                         }
