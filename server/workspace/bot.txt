@@ -1,5 +1,5 @@
 ﻿// ==UserScript==
-// @name         Nezus Sunlower Bot 1.0.2
+// @name         Nezus Sunlower Bot 1.0.3
 // @namespace    http://tampermonkey.net/
 // @version      50.0.0
 // @description  Sabit Åablon Yenileyici + Tekli Orman/Maden + Karantina + SansÃ¼rsÃ¼z Tam Kod
@@ -3958,7 +3958,7 @@
         let mainMenuHTML = `
             <div id="sl-main-menu" class="sl-window" style="${mainMenuHidden ? 'display:none;' : ''}">
                 <div class="win-header">
-                    <span>NEZUS SUNLOWER BOT 1.0.2</span>
+                    <span>NEZUS SUNLOWER BOT 1.0.3</span>
                     <div style="display:flex; align-items:center; gap:8px;">
                         <span id="top-coin-info" style="display:none; color:#fde047; font-size:12px; font-weight:900; background:rgba(0,0,0,0.4); padding:3px 8px; border-radius:8px; border:1px solid rgba(253,224,71,0.3);">
                             ${SL_COINS.toFixed(4)}

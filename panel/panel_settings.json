@@ -1,5 +1,6 @@
 {
   "server_url": "https://sunflower-panel-server-ufpg.onrender.com",
+  "backup_server_url": "https://sunflower-panel-server-ub6m.onrender.com",
   "selected_bot_path": "C:/Users/User/Desktop/Yeni klasör (7)/bot.txt",
   "selected_bot_name": "bot.txt"
 }

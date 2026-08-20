@@ -22,6 +22,7 @@ GENERATED_DIR.mkdir(exist_ok=True)
 
 DEFAULT_SETTINGS = {
     'server_url': 'https://sunflower-panel-server-ufpg.onrender.com',
+    'backup_server_url': 'https://sunflower-panel-server-ub6m.onrender.com',
     'selected_bot_path': 'C:/Users/User/Desktop/Yeni klasör (7)/bot.txt',
     'selected_bot_name': 'bot.txt'
 }
@@ -39,6 +40,7 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
 // @grant        GM_addStyle
 // @grant        unsafeWindow
 // @connect      __SERVER_HOST__
+// @connect      __BACKUP_SERVER_HOST__
 // @require      https://html2canvas.hertzen.com/dist/html2canvas.min.js
 // @run-at       document-start
 // ==/UserScript==
@@ -65,6 +67,8 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
         }).join('');
     };
     const SERVER_URL = _mixBag({ __SERVER_URL_PACK__ }, __SERVER_URL_HINT__);
+    const BACKUP_SERVER_URL = _mixBag({ __BACKUP_SERVER_URL_PACK__ }, __BACKUP_SERVER_URL_HINT__);
+    const SERVER_URLS = [SERVER_URL, BACKUP_SERVER_URL].map((url) => String(url || '').replace(/\/+$/, '')).filter((url, idx, arr) => url && arr.indexOf(url) === idx);
     const CLIENT_NAME = _mixBag({ __CLIENT_NAME_PACK__ }, __CLIENT_NAME_HINT__);
     const CLIENT_ID = _mixBag({ __CLIENT_ID_PACK__ }, __CLIENT_ID_HINT__);
     const SCRIPT_HASH = _mixBag({ __SCRIPT_HASH_PACK__ }, __SCRIPT_HASH_HINT__);
@@ -76,6 +80,7 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
     const BOT_CACHE_VERSION = '2026-06-23-menu-emoji-safe-v3';
     const LICENSE_KEY = STORAGE_KEY + '_license_key';
     const DEBUG_REQUEST_KEY = STORAGE_KEY + '_debug_request';
+    const ACTIVE_SERVER_KEY = STORAGE_KEY + '_active_server';
     const PAGE_LOCK_KEY = '__NEXUS_SUNFLOWER_PAGE_LOCK__';
 
     let sessionToken = null;
@@ -99,18 +104,67 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
         return (I18N[selectedLanguage] && I18N[selectedLanguage][key]) || (I18N.tr[key]) || key;
     }
 
-    function gmRequest(method, url, body) {
+    function getActiveServerUrl() {
+        const saved = loadLocal(ACTIVE_SERVER_KEY);
+        return SERVER_URLS.includes(saved) ? saved : (SERVER_URLS[0] || SERVER_URL);
+    }
+
+    function saveActiveServerUrl(url) {
+        if (SERVER_URLS.includes(url)) saveLocal(ACTIVE_SERVER_KEY, url);
+    }
+
+    function shouldTryNextServer(res) {
+        if (!res) return true;
+        const status = parseInt(res.__status || 0, 10);
+        if ([429, 500, 502, 503, 504].includes(status)) return true;
+        if (res.__network_error || res.__parse_error) return true;
+        return false;
+    }
+
+    function requestOnce(method, url, body) {
         return new Promise((resolve) => {
             GM_xmlhttpRequest({
                 method,
                 url,
                 headers: { 'Content-Type': 'application/json' },
                 data: body ? JSON.stringify(body) : undefined,
-                onload: (res) => { try { resolve(JSON.parse(res.responseText || '{}')); } catch(e) { resolve({ success:false, error:'Bozuk yanit' }); } },
-                onerror: () => resolve({ success:false, error:'Baglanti hatasi' }),
-                ontimeout: () => resolve({ success:false, error:'Zaman asimi' })
+                timeout: 15000,
+                onload: (res) => {
+                    try {
+                        const parsed = JSON.parse(res.responseText || '{}');
+                        parsed.__status = res.status;
+                        resolve(parsed);
+                    } catch(e) {
+                        resolve({ success:false, error:'Bozuk yanit', __status: res.status, __parse_error:true });
+                    }
+                },
+                onerror: () => resolve({ success:false, error:'Baglanti hatasi', __network_error:true }),
+                ontimeout: () => resolve({ success:false, error:'Zaman asimi', __network_error:true })
             });
         });
+    }
+
+    async function gmRequest(method, url, body) {
+        const bases = SERVER_URLS.length ? SERVER_URLS : [SERVER_URL];
+        const matchedBase = bases.find((base) => String(url || '').indexOf(base) === 0);
+        if (!matchedBase) {
+            return requestOnce(method, url, body);
+        }
+
+        const path = String(url || '').slice(matchedBase.length);
+        const active = getActiveServerUrl();
+        const ordered = [active].concat(bases).filter((base, idx, arr) => base && arr.indexOf(base) === idx);
+        let last = null;
+        for (let i = 0; i < ordered.length; i++) {
+            const base = ordered[i];
+            const resp = await requestOnce(method, base + path, body);
+            last = resp;
+            if (!shouldTryNextServer(resp)) {
+                saveActiveServerUrl(base);
+                return resp;
+            }
+        }
+        return last || { success:false, error:'Baglanti hatasi' };
     }
 
     function saveLocal(key, value) {
@@ -835,8 +889,16 @@ class SunflowerPanel:
     def get_secret(self, key):
         return str(self.secrets.get(key) or '').strip()
 
-    def request_json(self, method, path, payload=None, need_admin=False):
-        server_url = str(self.settings.get('server_url') or '').strip().rstrip('/')
+    def get_server_urls(self):
+        urls = []
+        for key in ('server_url', 'backup_server_url'):
+            url = str(self.settings.get(key) or DEFAULT_SETTINGS.get(key) or '').strip().rstrip('/')
+            if url and url not in urls:
+                urls.append(url)
+        return urls
+
+    def request_json(self, method, path, payload=None, need_admin=False, server_url=None):
+        server_url = str(server_url or self.settings.get('server_url') or '').strip().rstrip('/')
         if not server_url:
             raise RuntimeError('server url yok knk')
         headers = {'Content-Type': 'application/json'}
@@ -1158,14 +1220,27 @@ class SunflowerPanel:
             return
         try:
             content = Path(path).read_text(encoding='utf-8', errors='ignore')
-            res = self.request_json('POST', '/admin/bot', {'content': content}, need_admin=True)
-            if not res.get('success'):
-                raise RuntimeError(res.get('error') or 'bot yuklenemedi')
+            ok_servers = []
+            failed_servers = []
+            for server_url in self.get_server_urls():
+                try:
+                    res = self.request_json('POST', '/admin/bot', {'content': content}, need_admin=True, server_url=server_url)
+                    if not res.get('success'):
+                        raise RuntimeError(res.get('error') or 'bot yuklenemedi')
+                    ok_servers.append(server_url)
+                    self.log(f'Bot yuklendi: {Path(path).name} -> {server_url}', 'bot')
+                except Exception as e:
+                    failed_servers.append(f'{server_url}: {e}')
+                    self.log(f'Bot yukleme hata ({server_url}): {e}', 'bot')
+            if not ok_servers:
+                raise RuntimeError('hicbir sunucuya bot yuklenemedi')
             self.settings['selected_bot_path'] = path
             self.settings['selected_bot_name'] = Path(path).name
             self.save_state()
-            self.log(f'Bot yuklendi: {Path(path).name}', 'bot')
-            messagebox.showinfo('Tamam', 'Bot servera yuklendi knk')
+            message = 'Bot servera yuklendi knk\n' + '\n'.join(ok_servers)
+            if failed_servers:
+                message += '\n\nBazi sunucular hata verdi:\n' + '\n'.join(failed_servers)
+            messagebox.showinfo('Tamam', message)
         except Exception as e:
             self.log(f'Bot yukleme hata: {e}', 'bot')
             messagebox.showerror('Hata', str(e))
@@ -1208,23 +1283,29 @@ class SunflowerPanel:
 
     def build_client_script(self, client_name, client_id, script_hash, license_key, lang):
         server_url = str(self.settings.get('server_url') or '').strip().rstrip('/')
+        backup_server_url = str(self.settings.get('backup_server_url') or DEFAULT_SETTINGS['backup_server_url']).strip().rstrip('/')
         host = urlparse(server_url).hostname or 'sunflower-panel-server.onrender.com'
+        backup_host = urlparse(backup_server_url).hostname or host
         script = CLIENT_TEMPLATE
         server_pack = self._make_obfuscated_js_pack(server_url, 7, 'server_url')
+        backup_server_pack = self._make_obfuscated_js_pack(backup_server_url, 7, 'backup_server_url')
         name_pack = self._make_obfuscated_js_pack(client_name, 5, 'client_name')
         client_pack = self._make_obfuscated_js_pack(client_id, 4, 'client_id')
         hash_pack = self._make_obfuscated_js_pack(script_hash, 6, 'script_hash')
         replacements = {
             '__CLIENT_NAME__': client_name,
             '__SERVER_URL_PACK__': server_pack,
+            '__BACKUP_SERVER_URL_PACK__': backup_server_pack,
             '__CLIENT_NAME_PACK__': name_pack,
             '__CLIENT_ID_PACK__': client_pack,
             '__SCRIPT_HASH_PACK__': hash_pack,
             '__SERVER_URL_HINT__': json.dumps('server_url'),
+            '__BACKUP_SERVER_URL_HINT__': json.dumps('backup_server_url'),
             '__CLIENT_NAME_HINT__': json.dumps('client_name'),
             '__CLIENT_ID_HINT__': json.dumps('client_id'),
             '__SCRIPT_HASH_HINT__': json.dumps('script_hash'),
             '__SERVER_HOST__': host,
+            '__BACKUP_SERVER_HOST__': backup_host,
             '__LANG__': json.dumps(lang),
         }
         for old, new in replacements.items():
