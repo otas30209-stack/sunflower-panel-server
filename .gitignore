@@ -8,6 +8,7 @@ venv/
 
 panel/generated_scripts/
 panel/panel_secrets.local.json
+panel/panel_local_licenses.json
 
 server/workspace/users.json
 server/workspace/licenses.json

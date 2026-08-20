@@ -17,6 +17,7 @@ from urllib.parse import quote, urlparse
 BASE_DIR = Path(__file__).resolve().parent
 SETTINGS_FILE = BASE_DIR / 'panel_settings.json'
 SECRETS_FILE = BASE_DIR / 'panel_secrets.local.json'
+LOCAL_LICENSES_FILE = BASE_DIR / 'panel_local_licenses.json'
 GENERATED_DIR = BASE_DIR / 'generated_scripts'
 GENERATED_DIR.mkdir(exist_ok=True)
 
@@ -863,6 +864,16 @@ def save_json_file(path, data):
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
 
 
+def load_local_licenses():
+    data = load_json_file(LOCAL_LICENSES_FILE, {'licenses': {}})
+    licenses = data.get('licenses') if isinstance(data, dict) else {}
+    return licenses if isinstance(licenses, dict) else {}
+
+
+def save_local_licenses(licenses):
+    save_json_file(LOCAL_LICENSES_FILE, {'licenses': licenses if isinstance(licenses, dict) else {}})
+
+
 class SunflowerPanel:
     def __init__(self, root):
         self.root = root
@@ -1360,6 +1371,7 @@ class SunflowerPanel:
             out_path.write_text(script_content, encoding='utf-8')
             self.script_preview.delete('1.0', 'end')
             self.script_preview.insert('1.0', script_content)
+            self.remember_local_license(str(res.get("license_id") or ''), dict(payload), res)
             self.log(f'Script uretildi: {filename}', 'script')
             self.log(f'Key hazir: {res.get("license_id", "-")}', 'script')
             self.refresh_generated_list()
@@ -1396,6 +1408,55 @@ class SunflowerPanel:
             return value
         return value[:7] + '...' + value[-4:]
 
+    def remember_local_license(self, license_id, payload, response):
+        license_id = str(license_id or '').strip()
+        if not license_id:
+            license_id = 'local:' + str((payload or {}).get('script_file') or secrets.token_hex(4))
+        licenses = load_local_licenses()
+        row = dict(payload or {})
+        row.update({
+            'license_id': license_id,
+            'encrypted_license': str((response or {}).get('encrypted_license') or ''),
+            'created_at': str((response or {}).get('created_at') or datetime.now().isoformat()),
+            'status': str(row.get('status') or 'active'),
+            'row_tag': 'active',
+            'local_cached': True
+        })
+        licenses[license_id] = row
+        save_local_licenses(licenses)
+
+    def build_local_license_rows(self):
+        rows = load_local_licenses()
+        changed = False
+        for path in GENERATED_DIR.glob('*.user.js'):
+            file_name = path.name
+            exists = any(str((row or {}).get('script_file') or '') == file_name for row in rows.values())
+            if exists:
+                continue
+            license_id = 'local:' + file_name
+            rows[license_id] = {
+                'license_id': license_id,
+                'client_name': path.stem.replace('.user', ''),
+                'encrypted_license': '',
+                'uid_mode': 'fixed',
+                'status': 'local',
+                'row_tag': 'passive',
+                'script_file': file_name,
+                'created_at': datetime.fromtimestamp(path.stat().st_mtime).isoformat(),
+                'local_cached': True,
+                'local_only': True
+            }
+            changed = True
+        if changed:
+            save_local_licenses(rows)
+        return rows
+
+    def merge_license_rows(self, server_rows):
+        merged = dict(self.build_local_license_rows())
+        for license_id, row in (server_rows or {}).items():
+            merged[str(license_id)] = dict(row or {})
+        return merged
+
     def refresh_users(self, silent=False):
         try:
             res = self.request_json('GET', '/admin/licenses', need_admin=True)
@@ -1403,7 +1464,7 @@ class SunflowerPanel:
                 if not silent:
                     raise RuntimeError(res.get('error') or 'liste alinamadi')
                 return
-            rows = res.get('licenses') or {}
+            rows = self.merge_license_rows(res.get('licenses') or {})
             selected_license = None
             selected = self.tree.selection()
             if selected and selected[0] in self.current_rows:
@@ -1418,6 +1479,8 @@ class SunflowerPanel:
                 row = dict(row or {})
                 row['license_id'] = license_id
                 key_text = str(row.get('encrypted_license') or '')
+                if not key_text and row.get('local_cached'):
+                    key_text = 'LOCAL'
                 shown_uid = str(row.get('display_uid') or row.get('uid') or row.get('last_uid') or '').strip() or '-'
                 mode_text = 'Sabit' if str(row.get('uid_mode') or 'fixed').strip().lower() == 'fixed' else 'Coklu'
                 file_name = str(row.get('script_file') or '-').strip()
@@ -1739,14 +1802,19 @@ class SunflowerPanel:
         if not messagebox.askyesno('Sil', f'{license_id} silinsin mi knk?'):
             return
         try:
-            res = self.request_json('POST', '/admin/license/delete', {'license_id': license_id}, need_admin=True)
-            if not res.get('success'):
-                raise RuntimeError(res.get('error') or 'silinemedi')
+            if not str(row.get('local_only') or '').lower() == 'true' and not license_id.startswith('local:'):
+                res = self.request_json('POST', '/admin/license/delete', {'license_id': license_id}, need_admin=True)
+                if not res.get('success'):
+                    raise RuntimeError(res.get('error') or 'silinemedi')
             script_file = str(row.get('script_file') or '').strip()
             if script_file:
                 local_path = GENERATED_DIR / script_file
                 if local_path.exists():
                     local_path.unlink()
+            local_rows = load_local_licenses()
+            if license_id in local_rows:
+                del local_rows[license_id]
+                save_local_licenses(local_rows)
             self.log(f'Script/lisans silindi: {license_id}', 'script')
             self.refresh_generated_list()
             self.refresh_users()
@@ -1765,6 +1833,8 @@ class SunflowerPanel:
             if not license_id or license_id in seen:
                 continue
             seen.add(license_id)
+            if str((row or {}).get('local_only') or '').lower() == 'true' or license_id.startswith('local:'):
+                continue
             try:
                 res = self.request_json('POST', '/admin/license/delete', {'license_id': license_id}, need_admin=True)
                 if not res.get('success'):
@@ -1776,6 +1846,7 @@ class SunflowerPanel:
                 path.unlink()
             except Exception as e:
                 errors.append(f'{path.name}: {e}')
+        save_local_licenses({})
         self.refresh_generated_list()
         self.refresh_users(silent=True)
         if errors:
