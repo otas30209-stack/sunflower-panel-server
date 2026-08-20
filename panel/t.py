@@ -897,8 +897,8 @@ class SunflowerPanel:
                 urls.append(url)
         return urls
 
-    def request_json(self, method, path, payload=None, need_admin=False, server_url=None):
-        server_url = str(server_url or self.settings.get('server_url') or '').strip().rstrip('/')
+    def _request_json_single(self, method, path, payload=None, need_admin=False, server_url=None):
+        server_url = str(server_url or '').strip().rstrip('/')
         if not server_url:
             raise RuntimeError('server url yok knk')
         headers = {'Content-Type': 'application/json'}
@@ -915,11 +915,30 @@ class SunflowerPanel:
         except HTTPError as e:
             raw = e.read().decode('utf-8', errors='ignore')
             try:
-                return json.loads(raw or '{}')
+                parsed = json.loads(raw or '{}')
+                if e.code in (429, 500, 502, 503, 504):
+                    raise RuntimeError(f'HTTP {e.code}: {parsed.get("error") or parsed}')
+                return parsed
             except Exception:
                 raise RuntimeError(f'HTTP {e.code}: {raw}')
         except URLError as e:
             raise RuntimeError(str(e))
+
+    def request_json(self, method, path, payload=None, need_admin=False, server_url=None):
+        if server_url:
+            return self._request_json_single(method, path, payload, need_admin, server_url)
+
+        errors = []
+        for candidate in self.get_server_urls():
+            try:
+                res = self._request_json_single(method, path, payload, need_admin, candidate)
+                if candidate != str(self.settings.get('server_url') or '').strip().rstrip('/'):
+                    self.log(f'Yedek sunucu kullanildi: {candidate}', 'script')
+                return res
+            except Exception as e:
+                errors.append(f'{candidate}: {e}')
+                self.log(f'Sunucu cevap vermedi, siradaki deneniyor ({candidate}): {e}', 'script')
+        raise RuntimeError('Tum sunucular cevap vermedi knk\n' + '\n'.join(errors))
 
     def log(self, text, channel='script'):
         line = f'[{datetime.now().strftime("%H:%M:%S")}] {text}'
