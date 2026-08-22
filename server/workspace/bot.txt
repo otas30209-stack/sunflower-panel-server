@@ -1,5 +1,5 @@
 ﻿// ==UserScript==
-// @name         Nezus Sunlower Bot 1.0.4
+// @name         Nezus Sunlower Bot 1.1.0
 // @namespace    http://tampermonkey.net/
 // @version      50.0.0
 // @description  Sabit Åablon Yenileyici + Tekli Orman/Maden + Karantina + SansÃ¼rsÃ¼z Tam Kod
@@ -1454,9 +1454,18 @@
         localStorage.setItem('sl_crop_plan_settings', JSON.stringify(CROP_PLAN_SETTINGS));
     }
     let CROP_PLAN_MENU_OPEN = localStorage.getItem('sl_crop_plan_menu_open') === 'true';
+    let CROP_PLAN_INTERACTION_UNTIL = 0;
+    function markCropPlanInteraction(ms) {
+        CROP_PLAN_INTERACTION_UNTIL = Date.now() + (ms || 2500);
+    }
     function isCropPlanMenuEditing() {
         const active = document.activeElement;
         return !!(active && active.classList && active.classList.contains('crop-plan-target'));
+    }
+    function isCropPlanMenuBusy() {
+        const menu = document.getElementById('sl-crop-plan-menu');
+        const hovered = !!(menu && menu.matches && menu.matches(':hover'));
+        return isCropPlanMenuEditing() || hovered || Date.now() < CROP_PLAN_INTERACTION_UNTIL;
     }
     let RESOURCE_SELECTIONS = JSON.parse(localStorage.getItem('sl_resource_selections') || '{"trees":{},"stones":{},"iron":{},"gold":{},"fruits":{},"oilReserves":{},"beehives":{},"flowers":{},"lavaPits":{},"specialRocks":{}}');
     let WATER_PANEL_OPEN = localStorage.getItem('sl_water_panel_open') === 'true';
@@ -3962,7 +3971,7 @@
         let mainMenuHTML = `
             <div id="sl-main-menu" class="sl-window" style="${mainMenuHidden ? 'display:none;' : ''}">
                 <div class="win-header">
-                    <span>NEZUS SUNLOWER BOT 1.0.4</span>
+                    <span>NEZUS SUNLOWER BOT 1.1.0</span>
                     <div style="display:flex; align-items:center; gap:8px;">
                         <span id="top-coin-info" style="display:none; color:#fde047; font-size:12px; font-weight:900; background:rgba(0,0,0,0.4); padding:3px 8px; border-radius:8px; border:1px solid rgba(253,224,71,0.3);">
                             ${SL_COINS.toFixed(4)}
@@ -6403,9 +6412,12 @@
         return Object.entries(map);
     }
 
-    function renderCropPlanMenu() {
+    function renderCropPlanMenu(force) {
         const body = document.getElementById('crop-plan-body');
         if (!body) return;
+        if (!force && body.children.length && isCropPlanMenuBusy()) {
+            return;
+        }
         const previousList = document.getElementById('crop-plan-seed-list');
         const previousScrollTop = previousList ? previousList.scrollTop : 0;
         const active = document.activeElement;
@@ -6464,9 +6476,27 @@
             <div id="crop-plan-seed-list" style="display:grid;gap:6px;max-height:430px;overflow-y:auto;padding-right:3px;">${rows}</div>
         `;
 
+        const menuEl = document.getElementById('sl-crop-plan-menu');
+        if (menuEl) {
+            menuEl.onmouseenter = function() {
+                markCropPlanInteraction(3000);
+            };
+            menuEl.onmousemove = function() {
+                markCropPlanInteraction(1200);
+            };
+        }
         const restoredList = document.getElementById('crop-plan-seed-list');
         if (restoredList) {
             restoredList.scrollTop = previousScrollTop;
+            restoredList.onscroll = function() {
+                markCropPlanInteraction(3000);
+            };
+            restoredList.onmouseenter = function() {
+                markCropPlanInteraction(3000);
+            };
+            restoredList.onmousemove = function() {
+                markCropPlanInteraction(1200);
+            };
         }
 
         const activeToggle = document.getElementById('toggle-crop-plan-active');
@@ -6474,7 +6504,7 @@
             activeToggle.onchange = function(e) {
                 CROP_PLAN_SETTINGS.active = !!e.target.checked;
                 saveCropPlanSettings();
-                renderCropPlanMenu();
+                renderCropPlanMenu(true);
                 renderPlotGrid();
             };
         }
@@ -6483,7 +6513,7 @@
             buyToggle.onchange = function(e) {
                 CROP_PLAN_SETTINGS.autoBuy = !!e.target.checked;
                 saveCropPlanSettings();
-                renderCropPlanMenu();
+                renderCropPlanMenu(true);
             };
         }
         const sellToggle = document.getElementById('toggle-crop-plan-sell');
@@ -6491,11 +6521,18 @@
             sellToggle.onchange = function(e) {
                 CROP_PLAN_SETTINGS.autoSell = !!e.target.checked;
                 saveCropPlanSettings();
-                renderCropPlanMenu();
+                renderCropPlanMenu(true);
             };
         }
         document.querySelectorAll('.crop-plan-target').forEach(function(input) {
+            input.onfocus = function() {
+                markCropPlanInteraction(6000);
+            };
+            input.onkeydown = function() {
+                markCropPlanInteraction(6000);
+            };
             input.oninput = function(e) {
+                markCropPlanInteraction(6000);
                 const seed = e.target.dataset.seed;
                 const target = Math.max(0, parseInt(e.target.value || 0) || 0);
                 if (target > 0) {
@@ -6506,7 +6543,7 @@
                 saveCropPlanSettings();
             };
             input.onchange = function() {
-                renderCropPlanMenu();
+                markCropPlanInteraction(2500);
                 renderPlotGrid();
             };
         });
@@ -6540,7 +6577,7 @@
             menu.style.display = CROP_PLAN_MENU_OPEN ? 'block' : 'none';
         }
         if (CROP_PLAN_MENU_OPEN) {
-            renderCropPlanMenu();
+            renderCropPlanMenu(true);
         }
     };
 
@@ -6559,7 +6596,7 @@
 
         renderWaterCapacityPanel();
         renderMushroomPanel();
-        if (CROP_PLAN_MENU_OPEN && !isCropPlanMenuEditing()) {
+        if (CROP_PLAN_MENU_OPEN && !isCropPlanMenuBusy()) {
             renderCropPlanMenu();
         }
         grid.innerHTML = "";
