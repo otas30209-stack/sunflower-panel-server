@@ -1,5 +1,5 @@
 ﻿// ==UserScript==
-// @name         Nezus Sunlower Bot 1.1.0
+// @name         Nezus Sunlower Bot 1.1.1
 // @namespace    http://tampermonkey.net/
 // @version      50.0.0
 // @description  Sabit Åablon Yenileyici + Tekli Orman/Maden + Karantina + SansÃ¼rsÃ¼z Tam Kod
@@ -69,6 +69,7 @@
 
     _window.WAITING_FOR_TEMPLATE_TO_START = false;
     _window.AUTO_RESUME_PENDING = localStorage.getItem('sl_auto_resume') === 'true';
+    _window.TEMPLATE_START_AFTER_RELOAD = localStorage.getItem('sl_template_start_after_reload') === 'true';
 
     let lastSentActions = [];
     let lastBotMarketPrediction = null;
@@ -2494,7 +2495,7 @@
     let CHARACTER_SETTINGS = normalizeCharacterSettings(parsedCharacterSettings);
     let lastCharacterMenuRenderAt = 0;
 
-    if (!_window.AUTO_RESUME_PENDING) {
+    if (!_window.AUTO_RESUME_PENDING && !_window.TEMPLATE_START_AFTER_RELOAD) {
         localStorage.removeItem('sl_master_payload');
         localStorage.removeItem('sl_master_payload_at');
         masterPayload = null;
@@ -3971,7 +3972,7 @@
         let mainMenuHTML = `
             <div id="sl-main-menu" class="sl-window" style="${mainMenuHidden ? 'display:none;' : ''}">
                 <div class="win-header">
-                    <span>NEZUS SUNLOWER BOT 1.1.0</span>
+                    <span>NEZUS SUNLOWER BOT 1.1.1</span>
                     <div style="display:flex; align-items:center; gap:8px;">
                         <span id="top-coin-info" style="display:none; color:#fde047; font-size:12px; font-weight:900; background:rgba(0,0,0,0.4); padding:3px 8px; border-radius:8px; border:1px solid rgba(253,224,71,0.3);">
                             ${SL_COINS.toFixed(4)}
@@ -4984,6 +4985,22 @@
                 startBtn.innerText = "Starting...";
                 startBtn.style.background = "#d97706";
             }
+        }
+        if (_window.TEMPLATE_START_AFTER_RELOAD && !_window.AUTO_RESUME_PENDING) {
+            _window.TEMPLATE_START_AFTER_RELOAD = false;
+            localStorage.removeItem('sl_template_start_after_reload');
+            _window.WAITING_FOR_TEMPLATE_TO_START = true;
+            masterPayload = null;
+            localStorage.removeItem('sl_master_payload');
+            localStorage.removeItem('sl_master_payload_at');
+            let startBtn = document.getElementById('btn-start-auto');
+            if (startBtn) {
+                startBtn.innerText = "Waiting...";
+                startBtn.style.background = "#d97706";
+            }
+            updateGameClickGuard();
+            requestNexusWakeLock();
+            log(`<span style="display:block; color:#f59e0b; font-weight:1000; font-size:15px; line-height:1.35; text-align:center; letter-spacing:0.4px;">REFRESH DONE. DO ONE MANUAL PLANT OR HARVEST TO CAPTURE CONTROL.</span>`);
         }
 
         setTimeout(function() {
@@ -9998,9 +10015,11 @@
             stopRequested = true;
             isBotRunning = false;
             _window.WAITING_FOR_TEMPLATE_TO_START = false;
+            _window.TEMPLATE_START_AFTER_RELOAD = false;
             killSwitchActivated = false;
             hasLoggedQuarantine = false;
 
+            localStorage.removeItem('sl_template_start_after_reload');
             localStorage.removeItem('sl_master_payload');
             localStorage.removeItem('sl_master_payload_at');
             masterPayload = null;
@@ -10018,14 +10037,21 @@
             hasLoggedQuarantine = false;
 
             if (!masterPayload) {
-                _window.WAITING_FOR_TEMPLATE_TO_START = true;
                 if (btn) {
-                    btn.innerText = "Waiting...";
+                    btn.innerText = "Refreshing...";
                     btn.style.background = "#d97706";
                 }
+                _window.WAITING_FOR_TEMPLATE_TO_START = false;
+                localStorage.removeItem('sl_auto_resume');
+                localStorage.setItem('sl_template_start_after_reload', 'true');
+                localStorage.removeItem('sl_master_payload');
+                localStorage.removeItem('sl_master_payload_at');
+                masterPayload = null;
                 updateGameClickGuard();
-                requestNexusWakeLock();
-                log(`<span style="display:block; color:#fde047; font-weight:900; font-size:13px; text-align:center; letter-spacing:0.3px;">TO START THE BOT, PLEASE PLANT OR HARVEST ONCE.</span>`);
+                log(`<span style="display:block; color:#f59e0b; font-weight:1000; font-size:15px; line-height:1.35; text-align:center; letter-spacing:0.4px;">SAFE START: PAGE WILL REFRESH FIRST. AFTER RELOAD, DO ONE MANUAL PLANT OR HARVEST.</span>`);
+                setTimeout(function() {
+                    window.location.reload();
+                }, 650);
                 return;
             }
 
