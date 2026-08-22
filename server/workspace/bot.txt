@@ -6282,19 +6282,13 @@
 
     function getUsableFieldIds() {
         const plotFilters = getSafeAndQuarantinedPlots();
-        return Object.entries(SL_CROPS || {}).filter(function(entry) {
-            return plotFilters.safe.includes(entry[0]);
-        }).map(function(entry) {
-            return entry[0];
-        });
+        return (plotFilters.safe || []).slice();
     }
 
     function getEmptyUsableFieldIds() {
         const plotFilters = getSafeAndQuarantinedPlots();
-        return Object.entries(SL_CROPS || {}).filter(function(entry) {
-            return plotFilters.safe.includes(entry[0]) && getCropStatus(entry[1]) === "EMPTY";
-        }).map(function(entry) {
-            return entry[0];
+        return (plotFilters.safe || []).filter(function(id) {
+            return getCropStatus((SL_CROPS || {})[id]) === "EMPTY";
         });
     }
 
@@ -10209,7 +10203,9 @@
         lastAutomationDiagnosticAt = now;
 
         const safe = Array.isArray(safePlots) ? safePlots : [];
-        const cropEntries = BOT_SETTINGS.autoFields ? Object.entries(SL_CROPS || {}) : [];
+        const cropEntries = (BOT_SETTINGS.autoFields || isCropPlanActive()) ? safe.map(function(id) {
+            return [id, (SL_CROPS || {})[id]];
+        }) : [];
         let emptyCount = 0;
         let readyCount = 0;
         let growingCount = 0;
@@ -11265,6 +11261,9 @@
 
         let actionPerformed = false;
         let lastCompletedPhase = null;
+        let plotTaskKeys = Object.keys(PLOT_TASKS || {});
+        let hasCropPlanTasks = isCropPlanActive() && getCropPlanEntries().length > 0;
+        let hasPlotTasks = (BOT_SETTINGS.autoFields && plotTaskKeys.length > 0) || hasCropPlanTasks;
 
         if (!stopRequested && !killSwitchActivated && BOT_SETTINGS.autoFishing && hasPendingFishingReel()) {
             log("Fishing reel is pending after refresh. Reeling before farm actions...");
@@ -11282,14 +11281,14 @@
         // ---------------------------------------------------------
         // 1. HASAT AÅAMASI (DÃœZELTÄ°LDÄ°: TEKLÄ° ONAY BEKLÄ°YOR)
         // ---------------------------------------------------------
-        if (BOT_SETTINGS.autoFields) {
+        if (BOT_SETTINGS.autoFields || hasCropPlanTasks) {
             await syncCropStateBeforeDecision('harvest crop sync');
             if (stopRequested || killSwitchActivated) {
                 return;
             }
         }
 
-        let cropEntries = BOT_SETTINGS.autoFields ? Object.entries(SL_CROPS) : [];
+        let cropEntries = (BOT_SETTINGS.autoFields || hasCropPlanTasks) ? Object.entries(SL_CROPS) : [];
         let readyPlots = [];
 
         for (let i = 0; i < cropEntries.length; i++) {
@@ -11523,10 +11522,6 @@
             }
         }
         let hasToolTargets = getActiveMarketToolTargets().length > 0;
-
-        let plotTaskKeys = Object.keys(PLOT_TASKS || {});
-        let hasCropPlanTasks = isCropPlanActive() && getCropPlanEntries().length > 0;
-        let hasPlotTasks = BOT_SETTINGS.autoFields && (plotTaskKeys.length > 0 || hasCropPlanTasks);
 
         if (!stopRequested && !killSwitchActivated) {
             if (actionPerformed) {
@@ -11997,20 +11992,19 @@
         // ---------------------------------------------------------
         // 4. EKÄ°M AÅAMASI
         // ---------------------------------------------------------
-        if (!stopRequested && !killSwitchActivated && BOT_SETTINGS.autoFields) {
+        if (!stopRequested && !killSwitchActivated && (BOT_SETTINGS.autoFields || hasCropPlanTasks)) {
             log("Plant phase reached.");
             await syncCropStateBeforeDecision('plant crop sync');
             if (stopRequested || killSwitchActivated) {
                 return;
             }
 
-            let cropEntries = Object.entries(SL_CROPS);
             let emptyPlots = [];
 
-            for (let i = 0; i < cropEntries.length; i++) {
-                let id = cropEntries[i][0];
-                let p = cropEntries[i][1];
-                if (safePlots.includes(id) && getCropStatus(p) === "EMPTY") {
+            for (let i = 0; i < safePlots.length; i++) {
+                let id = safePlots[i];
+                let p = (SL_CROPS || {})[id];
+                if (getCropStatus(p) === "EMPTY") {
                     emptyPlots.push(id);
                 }
             }
@@ -12112,6 +12106,7 @@
                                 modifyActivity(actName, 1);
 
                                 let currentMs = Date.now();
+                                SL_CROPS[plotId] = SL_CROPS[plotId] || {};
                                 const cropTimeInfo = GameRules.getCropGrowTimeMs(cropSade, SL_CROPS[plotId], currentMs);
                                 const cropBaseMs = LEARNED_CROP_TIMES[cropSade] || BASE_CROP_TIMES[cropSade] || cropTimeInfo.ms;
                                 const cropBoostedTime = Math.max(0, cropBaseMs - cropTimeInfo.ms);
@@ -12846,7 +12841,11 @@
                 let hasSellWaiting = false;
                 let blockedSeeds = [];
 
-                let cropEntries = BOT_SETTINGS.autoFields ? Object.entries(SL_CROPS) : [];
+                let cropEntries = (BOT_SETTINGS.autoFields || isCropPlanActive()) ? safePlots.map(function(id) {
+                    return [id, (SL_CROPS || {})[id]];
+                }) : [];
+                const idleCropPlanQueue = isCropPlanActive() ? buildCropPlanPlantQueue(cropEntries.length) : [];
+                let idleCropPlanIndex = 0;
 
                 for (let i = 0; i < cropEntries.length; i++) {
                     let id = cropEntries[i][0];
@@ -12861,7 +12860,7 @@
                     if (status === "READY") {
                         hasReadyHarvest = true;
                     } else if (status === "EMPTY") {
-                        let assignedSeed = PLOT_TASKS[id];
+                        let assignedSeed = isCropPlanActive() ? idleCropPlanQueue[idleCropPlanIndex++] : PLOT_TASKS[id];
                         if (assignedSeed) {
                             let currentStock = getInventoryAmount(assignedSeed);
                             if (currentStock > 0) {
