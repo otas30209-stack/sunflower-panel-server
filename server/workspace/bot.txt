@@ -1,5 +1,5 @@
 ﻿// ==UserScript==
-// @name         Nezus Sunlower Bot 1.1.1
+// @name         Nezus Sunlower Bot 1.1.2
 // @namespace    http://tampermonkey.net/
 // @version      50.0.0
 // @description  Sabit Åablon Yenileyici + Tekli Orman/Maden + Karantina + SansÃ¼rsÃ¼z Tam Kod
@@ -3972,7 +3972,7 @@
         let mainMenuHTML = `
             <div id="sl-main-menu" class="sl-window" style="${mainMenuHidden ? 'display:none;' : ''}">
                 <div class="win-header">
-                    <span>NEZUS SUNLOWER BOT 1.1.1</span>
+                    <span>NEZUS SUNLOWER BOT 1.1.2</span>
                     <div style="display:flex; align-items:center; gap:8px;">
                         <span id="top-coin-info" style="display:none; color:#fde047; font-size:12px; font-weight:900; background:rgba(0,0,0,0.4); padding:3px 8px; border-radius:8px; border:1px solid rgba(253,224,71,0.3);">
                             ${SL_COINS.toFixed(4)}
@@ -4448,6 +4448,7 @@
                         <button id="cooking-tab-firepit" class="tab-btn ${COOKING_SETTINGS.tab !== 'deli' ? 'active' : ''}">Fire Pit</button>
                         <button id="cooking-tab-deli" class="tab-btn ${COOKING_SETTINGS.tab === 'deli' ? 'active' : ''}">Deli</button>
                     </div>
+                    <input id="cooking-search" type="search" placeholder="Search recipes..." autocomplete="off" style="width:100%;box-sizing:border-box;margin:0 0 10px 0;padding:9px 10px;border-radius:8px;border:1px solid rgba(244,114,182,0.38);background:rgba(2,6,23,0.86);color:#f8fafc;font-weight:800;outline:none;">
                     <div id="fire-pit-recipes" class="cook-grid"></div>
                 </div>
             </div>
@@ -4477,6 +4478,7 @@
                         <button id="character-tab-foods" class="tab-btn ${CHARACTER_SETTINGS.tab !== 'fish' ? 'active' : ''}">Foods</button>
                         <button id="character-tab-fish" class="tab-btn ${CHARACTER_SETTINGS.tab === 'fish' ? 'active' : ''}">Fish</button>
                     </div>
+                    <input id="character-search" type="search" placeholder="Search foods..." autocomplete="off" style="width:100%;box-sizing:border-box;margin:0 0 10px 0;padding:9px 10px;border-radius:8px;border:1px solid rgba(56,189,248,0.38);background:rgba(2,6,23,0.86);color:#f8fafc;font-weight:800;outline:none;">
                     <div id="character-foods" class="cook-grid"></div>
                 </div>
             </div>
@@ -5385,6 +5387,8 @@
         const activeTab = COOKING_SETTINGS.tab === "deli" ? "deli" : "firepit";
         const catalog = getCookingCatalog(activeTab);
         const buildingName = activeTab === "deli" ? "Deli" : "Fire Pit";
+        const searchInput = document.getElementById('cooking-search');
+        const query = searchInput ? String(searchInput.value || "").trim().toLowerCase() : "";
         warmNexusIconsFromClientAssets(Object.keys(catalog || {}));
 
         const building = getCookingBuilding(buildingName);
@@ -5398,7 +5402,12 @@
         if (firepitTab) firepitTab.classList.toggle('active', activeTab !== "deli");
         if (deliTab) deliTab.classList.toggle('active', activeTab === "deli");
 
-        Object.keys(catalog).forEach(function(name) {
+        Object.keys(catalog).filter(function(name) {
+            if (!query) return true;
+            const recipe = catalog[name] || {};
+            const ingredients = Object.keys(recipe.ingredients || {}).join(" ");
+            return (name + " " + ingredients).toLowerCase().includes(query);
+        }).forEach(function(name) {
             const recipe = catalog[name];
             const selected = !!COOKING_SETTINGS.selected[name];
             let progressHtml = "";
@@ -5439,7 +5448,7 @@
             `;
         });
 
-        root.innerHTML = html || `<div class="panel-sub">${buildingName} recipe not found.</div>`;
+        root.innerHTML = html || `<div class="panel-sub">${query ? "No matching recipe found." : buildingName + " recipe not found."}</div>`;
         const cards = root.querySelectorAll('.cook-card');
         cards.forEach(function(card) {
             card.onclick = function() {
@@ -5457,6 +5466,12 @@
         const smartToggle = document.getElementById('toggle-smart-cook');
         if (smartToggle) {
             smartToggle.checked = !!COOKING_SETTINGS.smartReserve;
+        }
+        if (searchInput && !searchInput.dataset.bound) {
+            searchInput.dataset.bound = "1";
+            searchInput.oninput = function() {
+                renderCookingMenu();
+            };
         }
         lastCookingMenuRenderAt = Date.now();
 
@@ -5534,8 +5549,15 @@
             warmFishIconsFromClientAssets();
         }
         const catalog = isFishTab ? FISH_FEED_ITEMS : Object.assign({}, FIRE_PIT_RECIPES, DELI_RECIPES);
+        const searchInput = document.getElementById('character-search');
+        const query = searchInput ? String(searchInput.value || "").trim().toLowerCase() : "";
         warmNexusIconsFromClientAssets(Object.keys(catalog || {}));
-        Object.keys(catalog).forEach(function(name) {
+        Object.keys(catalog).filter(function(name) {
+            if (!query) return true;
+            const recipe = catalog[name] || {};
+            const ingredients = Object.keys(recipe.ingredients || {}).join(" ");
+            return (name + " " + ingredients).toLowerCase().includes(query);
+        }).forEach(function(name) {
             const recipe = catalog[name];
             const selected = !!CHARACTER_SETTINGS.selected[name];
             const have = getInventoryAmount(name);
@@ -5552,7 +5574,7 @@
             `;
         });
 
-        root.innerHTML = html || `<div class="panel-sub">${isFishTab ? "No fish feed data found." : "No food found."}</div>`;
+        root.innerHTML = html || `<div class="panel-sub">${query ? "No matching food found." : (isFishTab ? "No fish feed data found." : "No food found.")}</div>`;
         const cards = root.querySelectorAll('.cook-card');
         cards.forEach(function(card) {
             card.onclick = function() {
@@ -5566,6 +5588,12 @@
         const autoToggle = document.getElementById('toggle-auto-feed');
         if (autoToggle) {
             autoToggle.checked = !!CHARACTER_SETTINGS.auto;
+        }
+        if (searchInput && !searchInput.dataset.bound) {
+            searchInput.dataset.bound = "1";
+            searchInput.oninput = function() {
+                renderCharacterMenu();
+            };
         }
         const foodsTab = document.getElementById('character-tab-foods');
         const fishTab = document.getElementById('character-tab-fish');
@@ -6344,21 +6372,64 @@
         if (!isCropPlanActive()) {
             return [];
         }
-        let remaining = Math.max(0, parseInt(emptyCount || 0) || 0);
-        const entries = shuffleArray(getCropPlanEntries());
+        const maxFields = Math.max(0, parseInt(emptyCount || 0) || 0);
+        const entries = getCropPlanEntries();
+        if (!maxFields || entries.length === 0) {
+            return [];
+        }
+        const targetTotal = Math.min(maxFields, entries.reduce(function(sum, entry) {
+            return sum + Math.max(0, parseInt(entry.target || 0) || 0);
+        }, 0));
+        const plans = entries.map(function(entry) {
+            const target = Math.max(0, parseInt(entry.target || 0) || 0);
+            const max = Math.min(maxFields, target + 2);
+            const min = Math.min(max, target <= 1 ? target : Math.max(1, target - 2));
+            return {
+                seed: entry.seed,
+                target: target,
+                min: min,
+                max: max,
+                count: randInt(min, max)
+            };
+        });
+        let total = plans.reduce(function(sum, plan) {
+            return sum + plan.count;
+        }, 0);
+        let guard = 0;
+        while (total > targetTotal && guard++ < 500) {
+            let candidates = plans.filter(function(plan) {
+                return plan.count > plan.min;
+            });
+            if (!candidates.length) {
+                candidates = plans.filter(function(plan) {
+                    return plan.count > 0;
+                });
+            }
+            if (!candidates.length) break;
+            const plan = candidates[randInt(0, candidates.length - 1)];
+            plan.count--;
+            total--;
+        }
+        guard = 0;
+        while (total < targetTotal && guard++ < 500) {
+            let candidates = plans.filter(function(plan) {
+                return plan.count < plan.max;
+            });
+            if (!candidates.length) {
+                candidates = plans;
+            }
+            if (!candidates.length) break;
+            const plan = candidates[randInt(0, candidates.length - 1)];
+            plan.count++;
+            total++;
+        }
         const queue = [];
 
-        entries.forEach(function(entry, idx) {
-            if (remaining <= 0) {
-                return;
-            }
-            const isLast = idx === entries.length - 1;
-            let count = isLast ? Math.min(remaining, entry.target) : randomizeCropPlanTarget(entry.target, remaining);
-            count = Math.min(remaining, count);
+        plans.forEach(function(plan) {
+            const count = Math.max(0, Math.min(maxFields, plan.count));
             for (let i = 0; i < count; i++) {
-                queue.push(entry.seed);
+                queue.push(plan.seed);
             }
-            remaining -= count;
         });
 
         return shuffleArray(queue);
