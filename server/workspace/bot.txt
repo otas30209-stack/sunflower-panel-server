@@ -1,5 +1,5 @@
 ﻿// ==UserScript==
-// @name         Nezus Sunlower Bot 1.0.3
+// @name         Nezus Sunlower Bot 1.0.4
 // @namespace    http://tampermonkey.net/
 // @version      50.0.0
 // @description  Sabit Åablon Yenileyici + Tekli Orman/Maden + Karantina + SansÃ¼rsÃ¼z Tam Kod
@@ -1454,6 +1454,10 @@
         localStorage.setItem('sl_crop_plan_settings', JSON.stringify(CROP_PLAN_SETTINGS));
     }
     let CROP_PLAN_MENU_OPEN = localStorage.getItem('sl_crop_plan_menu_open') === 'true';
+    function isCropPlanMenuEditing() {
+        const active = document.activeElement;
+        return !!(active && active.classList && active.classList.contains('crop-plan-target'));
+    }
     let RESOURCE_SELECTIONS = JSON.parse(localStorage.getItem('sl_resource_selections') || '{"trees":{},"stones":{},"iron":{},"gold":{},"fruits":{},"oilReserves":{},"beehives":{},"flowers":{},"lavaPits":{},"specialRocks":{}}');
     let WATER_PANEL_OPEN = localStorage.getItem('sl_water_panel_open') === 'true';
     let MUSHROOM_PANEL_OPEN = localStorage.getItem('sl_mushroom_panel_open') === 'true';
@@ -3958,7 +3962,7 @@
         let mainMenuHTML = `
             <div id="sl-main-menu" class="sl-window" style="${mainMenuHidden ? 'display:none;' : ''}">
                 <div class="win-header">
-                    <span>NEZUS SUNLOWER BOT 1.0.3</span>
+                    <span>NEZUS SUNLOWER BOT 1.0.4</span>
                     <div style="display:flex; align-items:center; gap:8px;">
                         <span id="top-coin-info" style="display:none; color:#fde047; font-size:12px; font-weight:900; background:rgba(0,0,0,0.4); padding:3px 8px; border-radius:8px; border:1px solid rgba(253,224,71,0.3);">
                             ${SL_COINS.toFixed(4)}
@@ -6402,6 +6406,13 @@
     function renderCropPlanMenu() {
         const body = document.getElementById('crop-plan-body');
         if (!body) return;
+        const previousList = document.getElementById('crop-plan-seed-list');
+        const previousScrollTop = previousList ? previousList.scrollTop : 0;
+        const active = document.activeElement;
+        const focusedSeed = active && active.classList && active.classList.contains('crop-plan-target') ? active.dataset.seed : null;
+        const focusedValue = focusedSeed ? active.value : null;
+        const focusedSelectionStart = focusedSeed && typeof active.selectionStart === 'number' ? active.selectionStart : null;
+        const focusedSelectionEnd = focusedSeed && typeof active.selectionEnd === 'number' ? active.selectionEnd : null;
         const usableCount = getUsableFieldIds().length;
         const emptyCount = getEmptyUsableFieldIds().length;
         const totalTarget = getCropPlanTargetTotal();
@@ -6415,6 +6426,7 @@
             const levelLocked = GameRules.getCurrentBumpkinLevel() < (seedInfo.bumpkinLevel || 1);
             const seasonBad = !GameRules.isSeedInCurrentSeason(seed);
             const disabled = levelLocked || seasonBad;
+            const inputValue = focusedSeed === seed ? focusedValue : target;
             return `
                 <div style="display:grid;grid-template-columns:1fr 72px;gap:8px;align-items:center;padding:7px 8px;border:1px solid ${target > 0 ? 'rgba(34,197,94,0.45)' : 'rgba(148,163,184,0.16)'};border-radius:8px;background:${target > 0 ? 'rgba(6,78,59,0.34)' : 'rgba(15,23,42,0.78)'};opacity:${disabled ? '0.5' : '1'};">
                     <div style="min-width:0;display:flex;align-items:center;gap:7px;color:#e5e7eb;font-size:11px;font-weight:900;">
@@ -6422,7 +6434,7 @@
                         <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${seed}</span>
                         <span style="margin-left:auto;color:#93c5fd;font-size:10px;">${Math.floor(getInventoryAmount(seed))}</span>
                     </div>
-                    <input class="crop-plan-target" data-seed="${seed}" type="number" min="0" max="${usableCount}" value="${target}" ${disabled ? 'disabled' : ''} style="width:100%;box-sizing:border-box;background:rgba(2,6,23,0.96);border:1px solid rgba(250,204,21,0.36);border-radius:8px;color:#f8fafc;padding:7px;font-weight:900;text-align:center;">
+                    <input class="crop-plan-target" data-seed="${seed}" type="number" min="0" max="${usableCount}" value="${inputValue}" ${disabled ? 'disabled' : ''} style="width:100%;box-sizing:border-box;background:rgba(2,6,23,0.96);border:1px solid rgba(250,204,21,0.36);border-radius:8px;color:#f8fafc;padding:7px;font-weight:900;text-align:center;">
                 </div>`;
         }).join("");
 
@@ -6449,8 +6461,13 @@
                 </div>
             </div>
             <div style="font-size:10px;color:#94a3b8;line-height:1.4;margin-bottom:8px;">When Menu Active is on, empty fields use this plan instead of manual field seed choices.</div>
-            <div style="display:grid;gap:6px;max-height:430px;overflow-y:auto;padding-right:3px;">${rows}</div>
+            <div id="crop-plan-seed-list" style="display:grid;gap:6px;max-height:430px;overflow-y:auto;padding-right:3px;">${rows}</div>
         `;
+
+        const restoredList = document.getElementById('crop-plan-seed-list');
+        if (restoredList) {
+            restoredList.scrollTop = previousScrollTop;
+        }
 
         const activeToggle = document.getElementById('toggle-crop-plan-active');
         if (activeToggle) {
@@ -6493,6 +6510,26 @@
                 renderPlotGrid();
             };
         });
+
+        if (focusedSeed) {
+            requestAnimationFrame(function() {
+                const inputs = Array.from(document.querySelectorAll('.crop-plan-target'));
+                const input = inputs.find(function(el) {
+                    return el.dataset.seed === focusedSeed;
+                });
+                if (!input || input.disabled) return;
+                input.focus({ preventScroll: true });
+                if (focusedSelectionStart !== null && focusedSelectionEnd !== null) {
+                    try {
+                        input.setSelectionRange(focusedSelectionStart, focusedSelectionEnd);
+                    } catch (e) {}
+                }
+                const list = document.getElementById('crop-plan-seed-list');
+                if (list) {
+                    list.scrollTop = previousScrollTop;
+                }
+            });
+        }
     }
 
     _window.toggleCropPlanMenu = function() {
@@ -6522,7 +6559,7 @@
 
         renderWaterCapacityPanel();
         renderMushroomPanel();
-        if (CROP_PLAN_MENU_OPEN) {
+        if (CROP_PLAN_MENU_OPEN && !isCropPlanMenuEditing()) {
             renderCropPlanMenu();
         }
         grid.innerHTML = "";
