@@ -1,7 +1,7 @@
-﻿// ==UserScript==
-// @name         Nezus Sunlower Bot 1.1.2
+// ==UserScript==
+// @name         Nexus Sunflower Bot 1.1.12
 // @namespace    http://tampermonkey.net/
-// @version      50.0.0
+// @version      54.0.0
 // @description  Sabit Åablon Yenileyici + Tekli Orman/Maden + Karantina + SansÃ¼rsÃ¼z Tam Kod
 // @author       Nexus
 // @match        https://sunflower-land.com/*
@@ -14,7 +14,7 @@
     'use strict';
 
     const _window = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
-    const NEXUS_BOT_BUILD = "2026-08-18.2104";
+    const NEXUS_BOT_BUILD = "2026-09-20.1-fertiliser-plot-quarantine";
 
     // ==========================================
     // ğŸ““ BÃœYÃœK MUHASEBE DEFTERÄ° (THE GRAND LEDGER)
@@ -86,9 +86,20 @@
     })();
     let sessionRefreshPromise = null;
     const SESSION_REFRESH_COOLDOWN_MS = 8000;
+    const TEMPLATE_FRESHNESS_MS = 5 * 60 * 1000;
     let BOT_STATE_MUTATION_LOCK = 0;
     let BOT_STATE_MUTATION_LOCK_UNTIL = 0;
     let SL_API_BASE = localStorage.getItem('sl_api_base') || 'https://api.sunflower-land.com';
+    let SL_DEVICE_TRACKER_ID = localStorage.getItem('sl_device_tracker_id') || "";
+    let SL_SESSION_ID = localStorage.getItem('sl_session_id') || "";
+    let SL_AUTOSAVE_CACHED_KEY = localStorage.getItem('sl_autosave_cached_key') || "";
+    let SL_SESSION_CODE = localStorage.getItem('sl_session_code') || "";
+    let SL_SESSION_CODE_EXPIRES_AT = parseInt(localStorage.getItem('sl_session_code_expires_at') || "0", 10) || 0;
+    let NEXUS_REQUEST_TOKEN_MODULE = null;
+    let NEXUS_REQUEST_TOKEN_PROMISE = null;
+    let NEXUS_REQUEST_TOKEN_READY = false;
+    let NEXUS_REQUEST_TOKEN_ERROR = "";
+    const LIVE_CLIENT_VERSION_FALLBACK = "2026-09-03T22:50";
     let SL_SESSION_BODY_CACHE = (function() {
         try {
             const cached = JSON.parse(localStorage.getItem('sl_session_body_cache') || '{}');
@@ -193,6 +204,24 @@
         return parsed;
     }
 
+    function roundDownDecimal(value, decimals = 4) {
+        const numeric = Number(value || 0);
+        if (!Number.isFinite(numeric)) {
+            return 0;
+        }
+        const factor = Math.pow(10, decimals);
+        return Math.floor((numeric + Number.EPSILON) * factor) / factor;
+    }
+
+    function toGameDecimalString(value, decimals = 4) {
+        return roundDownDecimal(value, decimals).toString();
+    }
+
+    function addGameNumber(left, right) {
+        const sum = readDecimal(left, 0) + readDecimal(right, 0);
+        return Number(sum.toFixed(12));
+    }
+
     function calculateOraclePrice(itemName, basePrice, type = "sell") {
         if (type === "sell") {
             return calculateClientSellPrice(itemName, basePrice, Date.now()).price;
@@ -282,6 +311,14 @@
 
     function formatCoinAmount(value) {
         return parseFloat(value || 0).toFixed(4);
+    }
+
+    function formatActionAmount(value, decimals = 2) {
+        const numeric = Number(value || 0);
+        if (!Number.isFinite(numeric)) {
+            return Number(0).toFixed(decimals);
+        }
+        return numeric.toFixed(decimals);
     }
 
     function formatTimeLeftMs(endAt, nowMs = Date.now()) {
@@ -379,13 +416,27 @@
     }
 
     let defaultSellPrices = {
-        "Sunflower": 0.02, "Potato": 0.14, "Rhubarb": 0.2, "Zucchini": 0.4, "Pumpkin": 0.4,
-        "Carrot": 0.8, "Cabbage": 1.5, "Yam": 2.0, "Soybean": 2.5, "Beetroot": 2.8,
-        "Broccoli": 3.0, "Pepper": 3.5, "Cauliflower": 4.25, "Parsnip": 6.5, "Eggplant": 12,
-        "Corn": 9, "Onion": 10, "Turnip": 12, "Radish": 15, "Wheat": 7, "Kale": 10,
+        "Sunflower": 0.02, "Potato": 0.14, "Rhubarb": 0.24, "Zucchini": 0.4, "Pumpkin": 0.4,
+        "Carrot": 0.8, "Cabbage": 1.5, "Yam": 1.5, "Soybean": 2.3, "Beetroot": 2.8,
+        "Broccoli": 3.0, "Pepper": 4.25, "Cauliflower": 6.5, "Parsnip": 8, "Eggplant": 9,
+        "Corn": 10, "Onion": 9.5, "Turnip": 7, "Radish": 8, "Wheat": 10, "Kale": 12,
         "Artichoke": 12, "Barley": 14
     };
     let CROP_SELL_PRICES = JSON.parse(localStorage.getItem('sl_live_sell_prices') || JSON.stringify(defaultSellPrices));
+    const CROP_SELL_PRICE_TABLE_VERSION = "2026-09-04-client-sell-prices-v3";
+    if (localStorage.getItem('sl_sell_price_table_version') !== CROP_SELL_PRICE_TABLE_VERSION) {
+        CROP_SELL_PRICES = { ...defaultSellPrices };
+        localStorage.setItem('sl_sell_price_table_version', CROP_SELL_PRICE_TABLE_VERSION);
+        localStorage.setItem('sl_live_sell_prices', JSON.stringify(CROP_SELL_PRICES));
+    } else {
+        Object.keys(defaultSellPrices).forEach(function(crop) {
+            const live = parseFloat(CROP_SELL_PRICES[crop]);
+            if (!Number.isFinite(live) || live <= 0) {
+                CROP_SELL_PRICES[crop] = defaultSellPrices[crop];
+            }
+        });
+        localStorage.setItem('sl_live_sell_prices', JSON.stringify(CROP_SELL_PRICES));
+    }
 
     const BASE_CROP_TIMES = {
         "Sunflower": 60000, "Potato": 300000, "Rhubarb": 600000, "Zucchini": 1800000,
@@ -871,10 +922,14 @@
             let quarantined = [];
 
             for (let i = 0; i < sortedEntries.length; i++) {
-                if (i < limit) {
-                    safe.push(sortedEntries[i][0]);
+                const plotId = sortedEntries[i][0];
+                const plot = sortedEntries[i][1] || {};
+                const unsupportedAccounting = getPlotAccountingRisk(plot);
+
+                if (i < limit && !unsupportedAccounting) {
+                    safe.push(plotId);
                 } else {
-                    quarantined.push(sortedEntries[i][0]);
+                    quarantined.push(plotId);
                 }
             }
 
@@ -1043,7 +1098,7 @@
 
             let price = basePrice * multiplier;
             return {
-                price: parseFloat(price.toFixed(4)),
+                price: price,
                 rawPrice: price,
                 multiplier: multiplier,
                 boosts: boosts
@@ -1056,42 +1111,42 @@
 
             if (isWearableActive("Luna's Hat")) {
                 seconds *= 0.5;
-                boosts.push("Luna's Hat x0.5");
+                boosts.push({ name: "Luna's Hat", value: "x0.5" });
             }
             if (isWearableActive("Master Chef's Cleaver")) {
                 seconds *= 0.85;
-                boosts.push("Master Chef's Cleaver x0.85");
+                boosts.push({ name: "Master Chef's Cleaver", value: "x0.85" });
             }
             if (isTemporaryCollectibleActive("Legendary Shrine")) {
                 seconds *= 0.5;
-                boosts.push("Legendary Shrine x0.5");
+                boosts.push({ name: "Legendary Shrine", value: "x0.5" });
             }
             if (isTemporaryCollectibleActive("Boar Shrine")) {
                 seconds *= 0.8;
-                boosts.push("Boar Shrine x0.8");
+                boosts.push({ name: "Boar Shrine", value: "x0.8" });
             }
             if (isTemporaryCollectibleActive("Super Totem")) {
                 seconds *= 0.5;
-                boosts.push("Super Totem x0.5");
+                boosts.push({ name: "Super Totem", value: "x0.5" });
             } else if (isTemporaryCollectibleActive("Time Warp Totem")) {
                 seconds *= 0.5;
-                boosts.push("Time Warp Totem x0.5");
+                boosts.push({ name: "Time Warp Totem", value: "x0.5" });
             }
             if (isTemporaryCollectibleActive("Gourmet Hourglass")) {
                 seconds *= 0.5;
-                boosts.push("Gourmet Hourglass x0.5");
+                boosts.push({ name: "Gourmet Hourglass", value: "x0.5" });
             }
             if (isCollectibleBuilt("Desert Gnome")) {
                 seconds *= 0.9;
-                boosts.push("Desert Gnome x0.9");
+                boosts.push({ name: "Desert Gnome", value: "x0.9" });
             }
             if ((buildingName === "Fire Pit" || buildingName === "Kitchen") && hasSkill("Fast Feasts")) {
                 seconds *= 0.9;
-                boosts.push("Fast Feasts x0.9");
+                boosts.push({ name: "Fast Feasts", value: "x0.9" });
             }
             if (String(recipe || "").includes("Cake") && hasSkill("Frosted Cakes")) {
                 seconds *= 0.9;
-                boosts.push("Frosted Cakes x0.9");
+                boosts.push({ name: "Frosted Cakes", value: "x0.9" });
             }
 
             return { seconds: seconds, readyAt: createdAt + Math.round(seconds * 1000), boosts: boosts };
@@ -1116,24 +1171,23 @@
             return false;
         }
 
+        function getPlotAccountingRisk(plot) {
+            plot = plot || {};
+            if (plot.fertiliser) {
+                return "fertiliser";
+            }
+            if (plot.beeSwarm) {
+                return "beeSwarm";
+            }
+            if (plot.crop && (plot.crop.amount !== undefined || plot.crop.reward !== undefined)) {
+                return "precomputedReward";
+            }
+            return null;
+        }
+
         function getUnsupportedAccountingReason() {
             if (hasActiveWeatherRisk()) {
                 return "Aktif hava olayi tespit edildi. Client weather muhasebesi birebir port edilmeden bot durduruldu.";
-            }
-
-            const cropEntries = Object.entries(SL_CROPS || {});
-            for (let i = 0; i < cropEntries.length; i++) {
-                const plotId = cropEntries[i][0];
-                const plot = cropEntries[i][1] || {};
-                if (plot.fertiliser) {
-                    return "Fertiliser kullanilan tarla var: " + plotId;
-                }
-                if (plot.beeSwarm) {
-                    return "Bee swarm etkisi olan tarla var: " + plotId;
-                }
-                if (plot.crop && (plot.crop.amount !== undefined || plot.crop.reward !== undefined)) {
-                    return "Hazir crop icinde onceden hesaplanmis amount/reward var: " + plotId;
-                }
             }
 
             return null;
@@ -1315,12 +1369,12 @@
     function modifyInventory(item, amount) {
         let currentString = SL_INVENTORY[item] || "0";
         let current = parseFloat(currentString);
-        let newAmount = current + amount;
+        let newAmount = roundDownDecimal(current + amount, 4);
 
         if (newAmount <= 0) {
             delete SL_INVENTORY[item];
         } else {
-            SL_INVENTORY[item] = newAmount.toString();
+            SL_INVENTORY[item] = toGameDecimalString(newAmount, 4);
         }
         localStorage.setItem('sl_inventory_cache', JSON.stringify(SL_INVENTORY));
     }
@@ -1328,9 +1382,9 @@
     function modifyActivity(activityName, amount) {
         let currentString = SL_FARM_ACTIVITY[activityName] || 0;
         let current = parseFloat(currentString);
-        let newAmount = current + amount;
+        let newAmount = addGameNumber(current, amount);
 
-        SL_FARM_ACTIVITY[activityName] = newAmount;
+        SL_FARM_ACTIVITY[activityName] = Math.max(0, newAmount);
         localStorage.setItem('sl_activity_cache', JSON.stringify(SL_FARM_ACTIVITY));
     }
 
@@ -1427,6 +1481,27 @@
     let AUTO_DEBUG_PACKAGE_IN_FLIGHT = false;
     let LAST_ERROR_DEBUG_PACKAGE_AT = 0;
     let AUTOSAVE_BODY_EXAMPLES = JSON.parse(localStorage.getItem('sl_autosave_body_examples') || '{}');
+    let REQUIRED_TEMPLATE_ACTION_TYPES = [];
+    localStorage.removeItem('sl_required_template_actions');
+    const BUILTIN_AUTOSAVE_ACTION_EXAMPLES = {
+        "crop.sold": { type: "crop.sold", crop: "Sunflower", amount: "1", createdAt: "1970-01-01T00:00:00.000Z" },
+        "crop.harvested": { type: "crop.harvested", index: "00000000", createdAt: "1970-01-01T00:00:00.000Z" },
+        "seed.planted": { type: "seed.planted", index: "00000000", item: "Sunflower Seed", cropId: "00000000", createdAt: "1970-01-01T00:00:00.000Z" },
+        "mushroom.picked": { type: "mushroom.picked", id: "00000000", createdAt: "1970-01-01T00:00:00.000Z" },
+        "timber.chopped": { type: "timber.chopped", index: "00000000", item: "Axe", createdAt: "1970-01-01T00:00:00.000Z" },
+        "stoneRock.mined": { type: "stoneRock.mined", index: "00000000", createdAt: "1970-01-01T00:00:00.000Z" },
+        "ironRock.mined": { type: "ironRock.mined", index: "00000000", createdAt: "1970-01-01T00:00:00.000Z" },
+        "goldRock.mined": { type: "goldRock.mined", index: "00000000", createdAt: "1970-01-01T00:00:00.000Z" },
+        "fruit.harvested": { type: "fruit.harvested", index: "00000000", createdAt: "1970-01-01T00:00:00.000Z" },
+        "oilReserve.drilled": { type: "oilReserve.drilled", id: "00000000", createdAt: "1970-01-01T00:00:00.000Z" },
+        "tool.crafted": { type: "tool.crafted", tool: "Axe", amount: 1, createdAt: "1970-01-01T00:00:00.000Z" },
+        "seed.bought": { type: "seed.bought", item: "Sunflower Seed", amount: 1, createdAt: "1970-01-01T00:00:00.000Z" },
+        "recipe.cooked": { type: "recipe.cooked", item: "Rhubarb Tart", buildingId: "0", recipeId: "00000000", createdAt: "1970-01-01T00:00:00.000Z" },
+        "recipes.collected": { type: "recipes.collected", building: "Fire Pit", buildingId: "0", createdAt: "1970-01-01T00:00:00.000Z" },
+        "rod.casted": { type: "rod.casted", bait: "Worm", createdAt: "1970-01-01T00:00:00.000Z" },
+        "rod.reeled": { type: "rod.reeled", createdAt: "1970-01-01T00:00:00.000Z" },
+        "bumpkin.feed": { type: "bumpkin.feed", food: "Sunflower Cake", amount: 1, createdAt: "1970-01-01T00:00:00.000Z" }
+    };
     let STOP_CONFIRM_UNTIL_MS = 0;
     const exhaustedSeedWarnings = new Set();
 
@@ -2287,7 +2362,36 @@
         return numeric === 409;
     }
 
-    async function handleRecoverableServerReject(reason, status) {
+    function isTemplateAuthReject(status) {
+        const numeric = parseInt(status, 10);
+        return numeric === 401 || numeric === 403;
+    }
+
+    async function handleTemplateAuthReject(reason, status, responseDetail) {
+        if (!isTemplateAuthReject(status)) {
+            return false;
+        }
+
+        log(`<span style="color:#f59e0b;font-weight:900;">TEMPLATE AUTH GUARD</span> ${reason} (Server ${status}). Fresh manual template capture is required.`);
+        await sendErrorDebugPackage(reason, status, responseDetail);
+        const requiredTypes = Array.isArray(REQUIRED_TEMPLATE_ACTION_TYPES) && REQUIRED_TEMPLATE_ACTION_TYPES.length > 0
+            ? REQUIRED_TEMPLATE_ACTION_TYPES
+            : ((LAST_BODY_AUDIT && Array.isArray(LAST_BODY_AUDIT.actionTypes) && LAST_BODY_AUDIT.actionTypes.length > 0) ? LAST_BODY_AUDIT.actionTypes : []);
+        clearCapturedAutosaveTemplate();
+        if (requiredTypes.length > 0) {
+            setRequiredTemplateActionTypes(requiredTypes);
+            _window.WAITING_FOR_TEMPLATE_TO_START = true;
+        }
+        const actionHint = requiredTypes.length > 0 ? requiredTypes.join(" / ") : "plant or harvest";
+        refreshThenCaptureTemplateNotice(`Server ${status}: ${reason}. Page stayed open. Do one manual ${actionHint} to capture a fresh template.`);
+        return true;
+    }
+
+    async function handleRecoverableServerReject(reason, status, responseDetail) {
+        if (await handleTemplateAuthReject(reason, status, responseDetail)) {
+            return true;
+        }
+
         if (!isRecoverableServerReject(status)) {
             return false;
         }
@@ -2305,27 +2409,35 @@
         return numeric === 409 || numeric === 500 || numeric === 502 || numeric === 503 || numeric === 504;
     }
 
-    async function handleSoftResourceServerReject(reason, status) {
+    async function handleSoftResourceServerReject(reason, status, responseDetail) {
+        if (await handleTemplateAuthReject(reason, status, responseDetail)) {
+            return true;
+        }
+
         if (!isSoftResourceServerReject(status)) {
             return false;
         }
 
         log(`<span style="color:#facc15;font-weight:900;">RESOURCE SYNC GUARD</span> ${reason} (Server ${status}). Resource skipped; live state will refresh.`);
-        sendErrorDebugPackage(reason, status).catch(function() {});
+        sendErrorDebugPackage(reason, status, responseDetail).catch(function() {});
         await forceRadarRefresh("resource reject " + reason, true).catch(function() {});
         safeRenderPlotGrid("resource reject " + reason);
         renderForestAndMines();
         return true;
     }
 
-    async function handleSoftMarketServerReject(reason, status) {
+    async function handleSoftMarketServerReject(reason, status, responseDetail) {
+        if (await handleTemplateAuthReject(reason, status, responseDetail)) {
+            return true;
+        }
+
         const numeric = parseInt(status, 10);
         if (![409, 500, 502, 503, 504].includes(numeric)) {
             return false;
         }
 
         log(`<span style="color:#facc15;font-weight:900;">MARKET SYNC GUARD</span> ${reason} (Server ${status}). Market state will refresh; no kill switch.`);
-        sendErrorDebugPackage(reason, status).catch(function() {});
+        sendErrorDebugPackage(reason, status, responseDetail).catch(function() {});
         await forceRadarRefresh("market reject " + reason, true).catch(function() {});
         renderMarketTabs();
         updateHud();
@@ -2446,9 +2558,50 @@
         "Honey Cheddar": { building: "Deli", experience: 15000, cookingSeconds: 43200, ingredients: { "Cheese": 3, "Honey": 5 } }
     };
 
+    const BAKERY_FEED_ITEMS = {
+        "Apple Pie": { building: "Bakery", experience: 720 },
+        "Orange Cake": { building: "Bakery", experience: 730 },
+        "Kale & Mushroom Pie": { building: "Bakery", experience: 720 },
+        "Sunflower Cake": { building: "Bakery", experience: 525 },
+        "Honey Cake": { building: "Bakery", experience: 4000 },
+        "Potato Cake": { building: "Bakery", experience: 650 },
+        "Pumpkin Cake": { building: "Bakery", experience: 625 },
+        "Cornbread": { building: "Bakery", experience: 600 },
+        "Carrot Cake": { building: "Bakery", experience: 750 },
+        "Cabbage Cake": { building: "Bakery", experience: 860 },
+        "Beetroot Cake": { building: "Bakery", experience: 1250 },
+        "Cauliflower Cake": { building: "Bakery", experience: 1190 },
+        "Parsnip Cake": { building: "Bakery", experience: 1300 },
+        "Eggplant Cake": { building: "Bakery", experience: 1400 },
+        "Radish Cake": { building: "Bakery", experience: 1200 },
+        "Wheat Cake": { building: "Bakery", experience: 1100 },
+        "Lemon Cheesecake": { building: "Bakery", experience: 30000 }
+    };
+
+    const BAKERY_RECIPES = {
+        "Apple Pie": { building: "Bakery", experience: 720, cookingSeconds: 14400, ingredients: { "Apple": 5, "Wheat": 10, "Egg": 20 } },
+        "Orange Cake": { building: "Bakery", experience: 730, cookingSeconds: 14400, ingredients: { "Orange": 5, "Egg": 30, "Wheat": 10 } },
+        "Kale & Mushroom Pie": { building: "Bakery", experience: 720, cookingSeconds: 14400, ingredients: { "Wild Mushroom": 10, "Kale": 5, "Wheat": 5 } },
+        "Sunflower Cake": { building: "Bakery", experience: 525, cookingSeconds: 23400, ingredients: { "Sunflower": 1000, "Wheat": 10, "Egg": 30 } },
+        "Honey Cake": { building: "Bakery", experience: 4000, cookingSeconds: 28800, ingredients: { "Honey": 10, "Wheat": 10, "Egg": 20 } },
+        "Potato Cake": { building: "Bakery", experience: 650, cookingSeconds: 37800, ingredients: { "Potato": 500, "Wheat": 10, "Egg": 30 } },
+        "Pumpkin Cake": { building: "Bakery", experience: 625, cookingSeconds: 37800, ingredients: { "Pumpkin": 130, "Wheat": 10, "Egg": 30 } },
+        "Cornbread": { building: "Bakery", experience: 600, cookingSeconds: 43200, ingredients: { "Corn": 15, "Wheat": 5, "Egg": 10 } },
+        "Carrot Cake": { building: "Bakery", experience: 750, cookingSeconds: 46800, ingredients: { "Carrot": 120, "Wheat": 10, "Egg": 30 } },
+        "Cabbage Cake": { building: "Bakery", experience: 860, cookingSeconds: 54000, ingredients: { "Cabbage": 90, "Wheat": 10, "Egg": 30 } },
+        "Beetroot Cake": { building: "Bakery", experience: 1250, cookingSeconds: 79200, ingredients: { "Beetroot": 100, "Wheat": 10, "Egg": 30 } },
+        "Cauliflower Cake": { building: "Bakery", experience: 1190, cookingSeconds: 79200, ingredients: { "Cauliflower": 60, "Wheat": 10, "Egg": 30 } },
+        "Parsnip Cake": { building: "Bakery", experience: 1300, cookingSeconds: 86400, ingredients: { "Parsnip": 45, "Wheat": 10, "Egg": 30 } },
+        "Eggplant Cake": { building: "Bakery", experience: 1400, cookingSeconds: 86400, ingredients: { "Eggplant": 30, "Wheat": 10, "Egg": 30 } },
+        "Radish Cake": { building: "Bakery", experience: 1200, cookingSeconds: 86400, ingredients: { "Radish": 25, "Wheat": 10, "Egg": 30 } },
+        "Wheat Cake": { building: "Bakery", experience: 1100, cookingSeconds: 86400, ingredients: { "Wheat": 35, "Egg": 30 } },
+        "Lemon Cheesecake": { building: "Bakery", experience: 30000, cookingSeconds: 108000, ingredients: { "Lemon": 20, "Cheese": 5, "Egg": 40 } }
+    };
+
     const COOKING_CATALOGS = {
         firepit: FIRE_PIT_RECIPES,
-        deli: DELI_RECIPES
+        deli: DELI_RECIPES,
+        bakery: BAKERY_RECIPES
     };
 
     function getCookingCatalog(tab) {
@@ -2456,7 +2609,48 @@
     }
 
     function getCookingRecipe(recipeName) {
-        return FIRE_PIT_RECIPES[recipeName] || DELI_RECIPES[recipeName] || null;
+        return FIRE_PIT_RECIPES[recipeName] || DELI_RECIPES[recipeName] || BAKERY_RECIPES[recipeName] || null;
+    }
+
+    function getCharacterFeedRecipe(foodName) {
+        return getCookingRecipe(foodName) || BAKERY_FEED_ITEMS[foodName] || FISH_FEED_ITEMS[foodName] || null;
+    }
+
+    function sortNamesByInventoryFirst(names) {
+        return (names || []).slice().sort(function(a, b) {
+            const haveA = getInventoryAmount(a);
+            const haveB = getInventoryAmount(b);
+            if (haveA > 0 && haveB <= 0) return -1;
+            if (haveB > 0 && haveA <= 0) return 1;
+            if (haveA !== haveB) return haveB - haveA;
+            return String(a).localeCompare(String(b));
+        });
+    }
+
+    function looksLikeCharacterFoodItem(name) {
+        if (!name || getCharacterFeedRecipe(name)) {
+            return false;
+        }
+        if (getInventoryAmount(name) <= 0) {
+            return false;
+        }
+        if (/(seed|plant|sapling|tool|axe|pickaxe|rod|drill|shovel|box|chest|ticket|token|egg|ore|stone|wood|oil|lure|bait)$/i.test(name)) {
+            return false;
+        }
+        return /(cake|pie|soup|broth|stew|omelette|popcorn|tofu|bun|jam|cheese|mash|eggs|tart|sprinkle|antipasto|pizza|smoothie|juice|salad|sandwich|fries|food)$/i.test(name);
+    }
+
+    function getCharacterFoodCatalog(isFishTab) {
+        if (isFishTab) {
+            return FISH_FEED_ITEMS;
+        }
+        const catalog = Object.assign({}, FIRE_PIT_RECIPES, DELI_RECIPES, BAKERY_FEED_ITEMS);
+        Object.keys(SL_INVENTORY || {}).forEach(function(name) {
+            if (looksLikeCharacterFoodItem(name)) {
+                catalog[name] = { experience: 0, inventoryOnly: true };
+            }
+        });
+        return catalog;
     }
 
     function normalizeCookingSettings(raw) {
@@ -2470,7 +2664,8 @@
                 selected[name] = !!raw.selected[name];
             }
         });
-        return { auto: !!raw.auto, smartReserve: !!raw.smartReserve, tab: raw.tab === "deli" ? "deli" : "firepit", selected: selected };
+        const tab = ["firepit", "deli", "bakery"].includes(raw.tab) ? raw.tab : "firepit";
+        return { auto: !!raw.auto, smartReserve: !!raw.smartReserve, tab: tab, selected: selected };
     }
 
     let parsedCookingSettings = JSON.parse(localStorage.getItem('sl_cooking_settings') || '{"auto":false,"selected":{}}');
@@ -2484,7 +2679,7 @@
         }
         const selected = {};
         Object.keys(raw.selected || {}).forEach(function(name) {
-            if (getCookingRecipe(name) || FISH_FEED_ITEMS[name]) {
+            if (getCharacterFeedRecipe(name) || looksLikeCharacterFoodItem(name)) {
                 selected[name] = !!raw.selected[name];
             }
         });
@@ -2498,7 +2693,10 @@
     if (!_window.AUTO_RESUME_PENDING && !_window.TEMPLATE_START_AFTER_RELOAD) {
         localStorage.removeItem('sl_master_payload');
         localStorage.removeItem('sl_master_payload_at');
+        localStorage.removeItem('sl_master_headers');
+        localStorage.removeItem('sl_master_headers_at');
         masterPayload = null;
+        masterHeaders = null;
     } else {
         try {
             masterPayload = JSON.parse(localStorage.getItem('sl_master_payload'));
@@ -2522,6 +2720,50 @@
         }
 
         localStorage.setItem('sl_master_headers', JSON.stringify(masterHeaders));
+        localStorage.setItem('sl_master_headers_at', Date.now().toString());
+    }
+
+    function clearCapturedAutosaveTemplate() {
+        masterPayload = null;
+        masterHeaders = null;
+        localStorage.removeItem('sl_master_payload');
+        localStorage.removeItem('sl_master_payload_at');
+        localStorage.removeItem('sl_master_headers');
+        localStorage.removeItem('sl_master_headers_at');
+        localStorage.removeItem('sl_auto_resume');
+        setRequiredTemplateActionTypes([]);
+    }
+
+    function getMasterHeadersCapturedAt() {
+        return parseInt(localStorage.getItem("sl_master_headers_at") || "0", 10) || 0;
+    }
+
+    function hasRequiredAutosaveHeaders(headers) {
+        if (!headers) {
+            return false;
+        }
+
+        const required = ['authorization', 'x-fingerprint'];
+        return required.every(function(headerName) {
+            const key = findHeaderKey(headers, headerName);
+            return key && isUsableHeaderValue(headers[key]);
+        });
+    }
+
+    function isCapturedTemplateFreshEnough() {
+        if (!masterPayload || !masterHeaders || !hasRequiredAutosaveHeaders(masterHeaders)) {
+            return false;
+        }
+
+        const payloadAt = getMasterPayloadCapturedAt();
+        const headersAt = getMasterHeadersCapturedAt();
+        const now = Date.now();
+        if (!payloadAt || !headersAt) {
+            return false;
+        }
+
+        return (now - payloadAt) <= TEMPLATE_FRESHNESS_MS &&
+            (now - headersAt) <= TEMPLATE_FRESHNESS_MS;
     }
 
     function rememberMasterHeaders(headers) {
@@ -2634,6 +2876,22 @@
         return Math.random().toString(36).slice(2, 9);
     }
 
+    function makeShortHexId() {
+        try {
+            if (_window.crypto && typeof _window.crypto.randomUUID === "function") {
+                return _window.crypto.randomUUID().replace(/-/g, "").slice(0, 8);
+            }
+            if (_window.crypto && typeof _window.crypto.getRandomValues === "function") {
+                const bytes = new Uint8Array(4);
+                _window.crypto.getRandomValues(bytes);
+                return Array.from(bytes).map(function(byte) {
+                    return byte.toString(16).padStart(2, "0");
+                }).join("");
+            }
+        } catch(e) {}
+        return Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, "0");
+    }
+
     function getLiveAmzTtl() {
         try {
             return _window['x-amz-ttl'] || window['x-amz-ttl'] || null;
@@ -2642,9 +2900,97 @@
         }
     }
 
-    function makeBotHeaders() {
-        if (!masterHeaders) {
-            return masterHeaders;
+    function getLiveHeaderValue(headerName) {
+        try {
+            return _window[headerName] || window[headerName] || null;
+        } catch(e) {
+            return null;
+        }
+    }
+
+    async function loadNexusRequestTokenModule() {
+        if (NEXUS_REQUEST_TOKEN_MODULE) {
+            return NEXUS_REQUEST_TOKEN_MODULE;
+        }
+        if (NEXUS_REQUEST_TOKEN_PROMISE) {
+            return await NEXUS_REQUEST_TOKEN_PROMISE;
+        }
+
+        NEXUS_REQUEST_TOKEN_PROMISE = (async function() {
+            const signerUrl = "https://sunflower-land.com/wasm";
+            const module = await import(signerUrl + "/request_token.js");
+            await module.default({ module_or_path: signerUrl + "/request_token_bg.wasm" });
+            NEXUS_REQUEST_TOKEN_MODULE = module;
+            return module;
+        })();
+
+        return await NEXUS_REQUEST_TOKEN_PROMISE;
+    }
+
+    async function initNexusRequestTokenSigner(sessionCode, sessionCodeExpiresAt) {
+        if (!sessionCode || !sessionCodeExpiresAt) {
+            return false;
+        }
+
+        try {
+            const module = await loadNexusRequestTokenModule();
+            module.initSession(sessionCode);
+            SL_SESSION_CODE = sessionCode;
+            SL_SESSION_CODE_EXPIRES_AT = parseInt(sessionCodeExpiresAt, 10) || 0;
+            localStorage.setItem('sl_session_code', SL_SESSION_CODE);
+            localStorage.setItem('sl_session_code_expires_at', String(SL_SESSION_CODE_EXPIRES_AT));
+            NEXUS_REQUEST_TOKEN_READY = true;
+            NEXUS_REQUEST_TOKEN_ERROR = "";
+            return true;
+        } catch(e) {
+            NEXUS_REQUEST_TOKEN_READY = false;
+            NEXUS_REQUEST_TOKEN_ERROR = String(e && e.message ? e.message : e).slice(0, 180);
+            return false;
+        }
+    }
+
+    async function ensureNexusRequestTokenSigner() {
+        if (NEXUS_REQUEST_TOKEN_READY && NEXUS_REQUEST_TOKEN_MODULE && SL_SESSION_CODE && SL_SESSION_CODE_EXPIRES_AT > Date.now()) {
+            return true;
+        }
+        if (SL_SESSION_CODE && SL_SESSION_CODE_EXPIRES_AT > Date.now()) {
+            return await initNexusRequestTokenSigner(SL_SESSION_CODE, SL_SESSION_CODE_EXPIRES_AT);
+        }
+        return false;
+    }
+
+    function getSignedRequestTokenHeaders(url, method, bodyText) {
+        if (!NEXUS_REQUEST_TOKEN_READY || !NEXUS_REQUEST_TOKEN_MODULE) {
+            return null;
+        }
+
+        try {
+            const path = new URL(url, window.location.origin).pathname;
+            const signed = NEXUS_REQUEST_TOKEN_MODULE.signRequest(String(method || "POST").toUpperCase(), path, String(bodyText || ""));
+            const parts = String(signed || "").split(":");
+            if (parts.length < 2 || !parts[0] || !parts[1]) {
+                return null;
+            }
+            return {
+                "x-token": parts.slice(1).join(":"),
+                "x-timestamp": parts[0],
+                "x-expires": String(SL_SESSION_CODE_EXPIRES_AT)
+            };
+        } catch(e) {
+            NEXUS_REQUEST_TOKEN_READY = false;
+            NEXUS_REQUEST_TOKEN_ERROR = String(e && e.message ? e.message : e).slice(0, 180);
+            return null;
+        }
+    }
+
+    async function makeBotHeaders(url, bodyText) {
+        if (!isCapturedTemplateFreshEnough()) {
+            const requiredTypes = getNextManualTemplateActionTypes();
+            log(`<span style="color:#f59e0b;font-weight:900;">TEMPLATE AUTH GUARD</span> Captured template/header is missing or stale. Fresh manual template capture is required.`);
+            clearCapturedAutosaveTemplate();
+            setRequiredTemplateActionTypes(requiredTypes);
+            refreshThenCaptureTemplateNotice("Fresh template required. Do one manual " + getTemplateActionHint(requiredTypes) + " after reload.");
+            return null;
         }
 
         let headers = {};
@@ -2671,7 +3017,22 @@
             saveMasterHeaders();
         }
 
+        saveMasterHeaders();
+
         setHeaderValue(headers, 'x-transaction-id', makeTransactionId());
+
+        await ensureNexusRequestTokenSigner();
+        const signedHeaders = getSignedRequestTokenHeaders(url || makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), "POST", bodyText || "");
+        if (signedHeaders) {
+            Object.keys(signedHeaders).forEach(function(key) {
+                setHeaderValue(headers, key, signedHeaders[key]);
+                setHeaderValue(masterHeaders, key, signedHeaders[key]);
+            });
+            saveMasterHeaders();
+        } else {
+            log(`<span style="color:#f87171;font-weight:900;">REQUEST TOKEN MISSING</span> Canli WASM signer hazir degil. Session refresh/manual autosave gerekli. ${NEXUS_REQUEST_TOKEN_ERROR || ""}`);
+            return null;
+        }
 
         return headers;
     }
@@ -2712,6 +3073,130 @@
         } catch(e) {}
     }
 
+    function getAutosaveCachedKeyStorageName() {
+        try {
+            const host = String(window.location.host || "").replace(/^www\./, "");
+            const path = String(window.location.pathname || "/");
+            return "sb_wiz.xtc.t." + host + "-" + path;
+        } catch(e) {
+            return "";
+        }
+    }
+
+    function getLiveAutosaveCachedKey() {
+        const storageKey = getAutosaveCachedKeyStorageName();
+        if (!storageKey) {
+            return SL_AUTOSAVE_CACHED_KEY || "";
+        }
+
+        const raw = localStorage.getItem(storageKey);
+        if (!raw) {
+            return SL_AUTOSAVE_CACHED_KEY || "";
+        }
+
+        try {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === "object") {
+                const value = Object.values(parsed).join(":");
+                if (value) {
+                    SL_AUTOSAVE_CACHED_KEY = value;
+                    localStorage.setItem('sl_autosave_cached_key', value);
+                    return value;
+                }
+            }
+        } catch(e) {
+            SL_AUTOSAVE_CACHED_KEY = raw;
+            localStorage.setItem('sl_autosave_cached_key', raw);
+            return raw;
+        }
+
+        return SL_AUTOSAVE_CACHED_KEY || "";
+    }
+
+    function syncAutosaveRuntimeEnvelope(payload) {
+        if (!payload || typeof payload !== "object") {
+            return payload;
+        }
+
+        const liveCachedKey = getLiveAutosaveCachedKey();
+        if (liveCachedKey) {
+            payload.cachedKey = liveCachedKey;
+            if (masterPayload && masterPayload !== payload) {
+                masterPayload.cachedKey = liveCachedKey;
+            }
+        }
+
+        if (SL_DEVICE_TRACKER_ID) {
+            payload.deviceTrackerId = SL_DEVICE_TRACKER_ID;
+            if (masterPayload && masterPayload !== payload) {
+                masterPayload.deviceTrackerId = SL_DEVICE_TRACKER_ID;
+            }
+        }
+
+        const liveSessionId = SL_SESSION_ID || payload.sessionId || (masterPayload && masterPayload.sessionId) || "0x0";
+        if (liveSessionId) {
+            payload.sessionId = liveSessionId;
+            if (masterPayload && masterPayload !== payload) {
+                masterPayload.sessionId = liveSessionId;
+            }
+        }
+
+        const clientVersion = SL_SESSION_BODY_CACHE.clientVersion || payload.clientVersion || (masterPayload && masterPayload.clientVersion) || LIVE_CLIENT_VERSION_FALLBACK;
+        if (clientVersion) {
+            payload.clientVersion = clientVersion;
+            if (masterPayload && masterPayload !== payload) {
+                masterPayload.clientVersion = clientVersion;
+            }
+        }
+
+        if (Object.prototype.hasOwnProperty.call(payload, "metrics")) {
+            delete payload.metrics;
+        }
+        if (masterPayload && masterPayload !== payload && Object.prototype.hasOwnProperty.call(masterPayload, "metrics")) {
+            delete masterPayload.metrics;
+        }
+
+        if (masterPayload && masterPayload !== payload) {
+            localStorage.setItem('sl_master_payload', JSON.stringify(masterPayload));
+        }
+
+        return payload;
+    }
+
+    function rememberSessionRuntime(data) {
+        if (!data || typeof data !== "object") {
+            return;
+        }
+
+        if (data.deviceTrackerId) {
+            SL_DEVICE_TRACKER_ID = data.deviceTrackerId;
+            localStorage.setItem('sl_device_tracker_id', SL_DEVICE_TRACKER_ID);
+        }
+
+        if (data.sessionId) {
+            SL_SESSION_ID = data.sessionId;
+            localStorage.setItem('sl_session_id', SL_SESSION_ID);
+        } else if (!SL_SESSION_ID) {
+            SL_SESSION_ID = "0x0";
+            localStorage.setItem('sl_session_id', SL_SESSION_ID);
+        }
+
+        if (data.sessionCode && data.sessionCodeExpiresAt) {
+            SL_SESSION_CODE = data.sessionCode;
+            SL_SESSION_CODE_EXPIRES_AT = parseInt(data.sessionCodeExpiresAt, 10) || 0;
+            localStorage.setItem('sl_session_code', SL_SESSION_CODE);
+            localStorage.setItem('sl_session_code_expires_at', String(SL_SESSION_CODE_EXPIRES_AT));
+            initNexusRequestTokenSigner(SL_SESSION_CODE, SL_SESSION_CODE_EXPIRES_AT);
+        }
+
+        getLiveAutosaveCachedKey();
+
+        if (masterPayload) {
+            syncAutosaveRuntimeEnvelope(masterPayload);
+            localStorage.setItem('sl_master_payload', JSON.stringify(masterPayload));
+        }
+    }
+
     function getSessionRequestBody(cachedPayload) {
         cachedPayload = cachedPayload || {};
         let timezone = SL_SESSION_BODY_CACHE.timezone;
@@ -2723,7 +3208,7 @@
             }
         }
         return {
-            "clientVersion": SL_SESSION_BODY_CACHE.clientVersion || cachedPayload.clientVersion || "2026-07-20T04:39",
+            "clientVersion": SL_SESSION_BODY_CACHE.clientVersion || cachedPayload.clientVersion || LIVE_CLIENT_VERSION_FALLBACK,
             "timezone": timezone || "Europe/Istanbul",
             "language": SL_SESSION_BODY_CACHE.language || "en"
         };
@@ -3972,7 +4457,7 @@
         let mainMenuHTML = `
             <div id="sl-main-menu" class="sl-window" style="${mainMenuHidden ? 'display:none;' : ''}">
                 <div class="win-header">
-                    <span>NEZUS SUNLOWER BOT 1.1.2</span>
+                    <span>NEXUS SUNFLOWER BOT 1.1.1</span>
                     <div style="display:flex; align-items:center; gap:8px;">
                         <span id="top-coin-info" style="display:none; color:#fde047; font-size:12px; font-weight:900; background:rgba(0,0,0,0.4); padding:3px 8px; border-radius:8px; border:1px solid rgba(253,224,71,0.3);">
                             ${SL_COINS.toFixed(4)}
@@ -4445,10 +4930,14 @@
                         </div>
                     </div>
                     <div class="tabs" style="margin:10px 0 12px 0;">
-                        <button id="cooking-tab-firepit" class="tab-btn ${COOKING_SETTINGS.tab !== 'deli' ? 'active' : ''}">Fire Pit</button>
+                        <button id="cooking-tab-firepit" class="tab-btn ${COOKING_SETTINGS.tab === 'firepit' ? 'active' : ''}">Fire Pit</button>
                         <button id="cooking-tab-deli" class="tab-btn ${COOKING_SETTINGS.tab === 'deli' ? 'active' : ''}">Deli</button>
+                        <button id="cooking-tab-bakery" class="tab-btn ${COOKING_SETTINGS.tab === 'bakery' ? 'active' : ''}">Bakery</button>
                     </div>
-                    <input id="cooking-search" type="search" placeholder="Search recipes..." autocomplete="off" style="width:100%;box-sizing:border-box;margin:0 0 10px 0;padding:9px 10px;border-radius:8px;border:1px solid rgba(244,114,182,0.38);background:rgba(2,6,23,0.86);color:#f8fafc;font-weight:800;outline:none;">
+                    <div style="display:flex;align-items:center;gap:6px;width:210px;max-width:100%;margin:0 0 8px auto;padding:5px 8px;border-radius:8px;border:1px solid rgba(244,114,182,0.36);background:rgba(2,6,23,0.88);box-shadow:inset 0 0 0 1px rgba(255,255,255,0.03);">
+                        <span style="font-size:13px;color:#f9a8d4;line-height:1;">&#128269;</span>
+                        <input id="cooking-search" type="search" placeholder="Search recipe..." autocomplete="off" style="width:100%;min-width:0;box-sizing:border-box;border:0;background:transparent;color:#f8fafc;font-size:11px;font-weight:850;outline:none;">
+                    </div>
                     <div id="fire-pit-recipes" class="cook-grid"></div>
                 </div>
             </div>
@@ -4478,7 +4967,10 @@
                         <button id="character-tab-foods" class="tab-btn ${CHARACTER_SETTINGS.tab !== 'fish' ? 'active' : ''}">Foods</button>
                         <button id="character-tab-fish" class="tab-btn ${CHARACTER_SETTINGS.tab === 'fish' ? 'active' : ''}">Fish</button>
                     </div>
-                    <input id="character-search" type="search" placeholder="Search foods..." autocomplete="off" style="width:100%;box-sizing:border-box;margin:0 0 10px 0;padding:9px 10px;border-radius:8px;border:1px solid rgba(56,189,248,0.38);background:rgba(2,6,23,0.86);color:#f8fafc;font-weight:800;outline:none;">
+                    <div style="display:flex;align-items:center;gap:6px;width:210px;max-width:100%;margin:0 0 8px auto;padding:5px 8px;border-radius:8px;border:1px solid rgba(56,189,248,0.36);background:rgba(2,6,23,0.88);box-shadow:inset 0 0 0 1px rgba(255,255,255,0.03);">
+                        <span style="font-size:13px;color:#7dd3fc;line-height:1;">&#128269;</span>
+                        <input id="character-search" type="search" placeholder="Search food..." autocomplete="off" style="width:100%;min-width:0;box-sizing:border-box;border:0;background:transparent;color:#f8fafc;font-size:11px;font-weight:850;outline:none;">
+                    </div>
                     <div id="character-foods" class="cook-grid"></div>
                 </div>
             </div>
@@ -4764,6 +5256,11 @@
             saveCookingSettingsToStorage();
             renderCookingMenu();
         };
+        document.getElementById('cooking-tab-bakery').onclick = function() {
+            COOKING_SETTINGS.tab = "bakery";
+            saveCookingSettingsToStorage();
+            renderCookingMenu();
+        };
 
         document.getElementById('btn-open-character').onclick = function() {
             document.getElementById('sl-character-menu').style.display = 'block';
@@ -4995,6 +5492,9 @@
             masterPayload = null;
             localStorage.removeItem('sl_master_payload');
             localStorage.removeItem('sl_master_payload_at');
+            localStorage.removeItem('sl_master_headers');
+            localStorage.removeItem('sl_master_headers_at');
+            masterHeaders = null;
             let startBtn = document.getElementById('btn-start-auto');
             if (startBtn) {
                 startBtn.innerText = "Waiting...";
@@ -5002,7 +5502,7 @@
             }
             updateGameClickGuard();
             requestNexusWakeLock();
-            log(`<span style="display:block; color:#f59e0b; font-weight:1000; font-size:15px; line-height:1.35; text-align:center; letter-spacing:0.4px;">REFRESH DONE. DO ONE MANUAL PLANT OR HARVEST TO CAPTURE CONTROL.</span>`);
+            log(`<span style="display:block; color:#f59e0b; font-weight:1000; font-size:15px; line-height:1.35; text-align:center; letter-spacing:0.4px;">REFRESH DONE. DO ONE MANUAL ${getTemplateActionHint()} TO CAPTURE CONTROL.</span>`);
         }
 
         setTimeout(function() {
@@ -5341,13 +5841,28 @@
             return { timeToCook: recipe ? recipe.cookingSeconds : 0, oilConsumed: 0, percent: 0 };
         }
 
-        if (recipe.building !== "Fire Pit") {
+        const dailyOilConsumption = {
+            "Fire Pit": 1,
+            "Kitchen": 5,
+            "Smoothie Shack": 8,
+            "Bakery": 10,
+            "Deli": 12
+        };
+        const oilBoosts = {
+            "Fire Pit": GameRules.hasSkill("Swift Sizzle") ? 0.4 : 0.2,
+            "Kitchen": GameRules.hasSkill("Turbo Fry") ? 0.5 : 0.25,
+            "Smoothie Shack": 0.3,
+            "Bakery": 0.35,
+            "Deli": GameRules.hasSkill("Fry Frenzy") ? 0.6 : 0.4
+        };
+
+        if (!Object.prototype.hasOwnProperty.call(dailyOilConsumption, recipe.building)) {
             return { timeToCook: recipe.cookingSeconds, oilConsumed: 0, percent: 0 };
         }
 
-        const oilNeed = recipe.cookingSeconds / 86400;
+        const oilNeed = dailyOilConsumption[recipe.building] * (recipe.cookingSeconds / 86400);
         const availableOil = Math.max(0, Number(building.oil || 0));
-        const boostPercent = GameRules.hasSkill("Swift Sizzle") ? 0.4 : 0.2;
+        const boostPercent = oilBoosts[recipe.building] || 0;
         if (oilNeed <= 0) {
             return { timeToCook: recipe.cookingSeconds, oilConsumed: 0, percent: 0 };
         }
@@ -5364,6 +5879,98 @@
             oilConsumed: availableOil,
             percent: partialPercent
         };
+    }
+
+    function markCookingBoostsUsed(plan, createdAt) {
+        if (!SL_BOOSTS_USED_AT || typeof SL_BOOSTS_USED_AT !== "object") {
+            SL_BOOSTS_USED_AT = {};
+        }
+
+        const used = [];
+        if (plan && Number(plan.oilConsumed || 0) > 0) {
+            used.push({ name: "Building Oil" });
+        }
+        if (plan && Array.isArray(plan.boosts)) {
+            plan.boosts.forEach(function(boost) {
+                if (boost && typeof boost === "object" && boost.name) {
+                    used.push(boost);
+                }
+            });
+        }
+
+        used.forEach(function(boost) {
+            SL_BOOSTS_USED_AT[boost.name] = createdAt;
+        });
+        return used;
+    }
+
+    function snapshotCookingState() {
+        return {
+            inventory: JSON.stringify(SL_INVENTORY || {}),
+            buildings: JSON.stringify(SL_BUILDINGS || {}),
+            bumpkin: JSON.stringify(SL_BUMPKIN || {}),
+            activity: JSON.stringify(SL_FARM_ACTIVITY || {}),
+            boostsUsedAt: JSON.stringify(SL_BOOSTS_USED_AT || {})
+        };
+    }
+
+    function restoreCookingState(snapshot) {
+        if (!snapshot) {
+            return;
+        }
+
+        SL_INVENTORY = JSON.parse(snapshot.inventory || "{}");
+        SL_BUILDINGS = JSON.parse(snapshot.buildings || "{}");
+        SL_BUMPKIN = JSON.parse(snapshot.bumpkin || "{}");
+        SL_FARM_ACTIVITY = JSON.parse(snapshot.activity || "{}");
+        SL_BOOSTS_USED_AT = JSON.parse(snapshot.boostsUsedAt || "{}");
+
+        localStorage.setItem('sl_inventory_cache', JSON.stringify(SL_INVENTORY));
+        localStorage.setItem('sl_buildings_cache', JSON.stringify(SL_BUILDINGS));
+        localStorage.setItem('sl_bumpkin_cache', JSON.stringify(SL_BUMPKIN));
+        localStorage.setItem('sl_activity_cache', JSON.stringify(SL_FARM_ACTIVITY));
+        localStorage.setItem('sl_boosts_used_at_cache', JSON.stringify(SL_BOOSTS_USED_AT));
+    }
+
+    function snapshotMarketState() {
+        return {
+            inventory: JSON.stringify(SL_INVENTORY || {}),
+            coins: String(SL_COINS || 0),
+            activity: JSON.stringify(SL_FARM_ACTIVITY || {}),
+            boostsUsedAt: JSON.stringify(SL_BOOSTS_USED_AT || {})
+        };
+    }
+
+    function restoreMarketState(snapshot) {
+        if (!snapshot) {
+            return;
+        }
+
+        SL_INVENTORY = JSON.parse(snapshot.inventory || "{}");
+        SL_COINS = parseFloat(snapshot.coins || "0") || 0;
+        SL_FARM_ACTIVITY = JSON.parse(snapshot.activity || "{}");
+        SL_BOOSTS_USED_AT = JSON.parse(snapshot.boostsUsedAt || "{}");
+
+        localStorage.setItem('sl_inventory_cache', JSON.stringify(SL_INVENTORY));
+        localStorage.setItem('sl_coins_cache', String(SL_COINS));
+        localStorage.setItem('sl_activity_cache', JSON.stringify(SL_FARM_ACTIVITY));
+        localStorage.setItem('sl_boosts_used_at_cache', JSON.stringify(SL_BOOSTS_USED_AT));
+    }
+
+    function markSaleBoostsUsed(boosts, createdAt) {
+        if (!SL_BOOSTS_USED_AT || typeof SL_BOOSTS_USED_AT !== "object") {
+            SL_BOOSTS_USED_AT = {};
+        }
+
+        (boosts || []).forEach(function(boost) {
+            const text = typeof boost === "string" ? boost : ((boost && boost.name) || "");
+            if (text.includes("Green Thumb")) {
+                SL_BOOSTS_USED_AT["Green Thumb"] = createdAt;
+            }
+            if (text.includes("Coin Swindler")) {
+                SL_BOOSTS_USED_AT["Coin Swindler"] = createdAt;
+            }
+        });
     }
 
     function getCookPlan(recipeName, building, createdAtMs) {
@@ -5384,9 +5991,9 @@
         if (!root) {
             return;
         }
-        const activeTab = COOKING_SETTINGS.tab === "deli" ? "deli" : "firepit";
+        const activeTab = ["firepit", "deli", "bakery"].includes(COOKING_SETTINGS.tab) ? COOKING_SETTINGS.tab : "firepit";
         const catalog = getCookingCatalog(activeTab);
-        const buildingName = activeTab === "deli" ? "Deli" : "Fire Pit";
+        const buildingName = activeTab === "deli" ? "Deli" : (activeTab === "bakery" ? "Bakery" : "Fire Pit");
         const searchInput = document.getElementById('cooking-search');
         const query = searchInput ? String(searchInput.value || "").trim().toLowerCase() : "";
         warmNexusIconsFromClientAssets(Object.keys(catalog || {}));
@@ -5399,10 +6006,12 @@
 
         const firepitTab = document.getElementById('cooking-tab-firepit');
         const deliTab = document.getElementById('cooking-tab-deli');
-        if (firepitTab) firepitTab.classList.toggle('active', activeTab !== "deli");
+        const bakeryTab = document.getElementById('cooking-tab-bakery');
+        if (firepitTab) firepitTab.classList.toggle('active', activeTab === "firepit");
         if (deliTab) deliTab.classList.toggle('active', activeTab === "deli");
+        if (bakeryTab) bakeryTab.classList.toggle('active', activeTab === "bakery");
 
-        Object.keys(catalog).filter(function(name) {
+        sortNamesByInventoryFirst(Object.keys(catalog)).filter(function(name) {
             if (!query) return true;
             const recipe = catalog[name] || {};
             const ingredients = Object.keys(recipe.ingredients || {}).join(" ");
@@ -5485,12 +6094,12 @@
 
     function getSelectedFeedFoods() {
         return Object.keys(CHARACTER_SETTINGS.selected || {}).filter(function(name) {
-            return CHARACTER_SETTINGS.selected[name] && (getCookingRecipe(name) || FISH_FEED_ITEMS[name]);
+            return CHARACTER_SETTINGS.selected[name] && (getCharacterFeedRecipe(name) || looksLikeCharacterFoodItem(name));
         });
     }
 
     function calculateFoodXp(foodName, createdAtMs = Date.now()) {
-        const recipe = getCookingRecipe(foodName) || FISH_FEED_ITEMS[foodName];
+        const recipe = getCharacterFeedRecipe(foodName);
         if (!recipe) {
             return { xp: 0, boosts: [] };
         }
@@ -5548,11 +6157,11 @@
         if (isFishTab) {
             warmFishIconsFromClientAssets();
         }
-        const catalog = isFishTab ? FISH_FEED_ITEMS : Object.assign({}, FIRE_PIT_RECIPES, DELI_RECIPES);
+        const catalog = getCharacterFoodCatalog(isFishTab);
         const searchInput = document.getElementById('character-search');
         const query = searchInput ? String(searchInput.value || "").trim().toLowerCase() : "";
         warmNexusIconsFromClientAssets(Object.keys(catalog || {}));
-        Object.keys(catalog).filter(function(name) {
+        sortNamesByInventoryFirst(Object.keys(catalog)).filter(function(name) {
             if (!query) return true;
             const recipe = catalog[name] || {};
             const ingredients = Object.keys(recipe.ingredients || {}).join(" ");
@@ -5635,10 +6244,9 @@
         }
 
         const selected = getSelectedFeedFoods();
-        const actions = [];
         let totalXp = 0;
         let fedInfo = [];
-        let usedBoosts = [];
+        let sentAny = false;
 
         for (let i = 0; i < selected.length; i++) {
             const foodName = selected[i];
@@ -5650,67 +6258,118 @@
             const createdAtMs = Date.now();
             const dateIso = new Date(createdAtMs).toISOString();
             const xpInfo = calculateFoodXp(foodName, createdAtMs);
-
-            actions.push({
+            const action = {
                 type: "bumpkin.feed",
                 food: foodName,
                 amount: amount,
                 createdAt: dateIso
-            });
+            };
+
+            const beforeInventory = JSON.parse(JSON.stringify(SL_INVENTORY));
+            const beforeActivity = JSON.parse(JSON.stringify(SL_FARM_ACTIVITY));
+            const beforeBumpkin = JSON.parse(JSON.stringify(SL_BUMPKIN));
+            const beforeBoostsUsedAt = JSON.parse(JSON.stringify(SL_BOOSTS_USED_AT));
 
             modifyInventory(foodName, -amount);
             modifyActivity(foodName + " Fed", amount);
             SL_BUMPKIN.experience = Number(SL_BUMPKIN.experience || 0) + (xpInfo.xp * amount);
-            totalXp += xpInfo.xp * amount;
-            fedInfo.push(amount + "x " + foodName);
 
             xpInfo.boosts.forEach(function(boost) {
-                usedBoosts.push(boost);
-                SL_BOOSTS_USED_AT[boost.name] = createdAtMs;
-            });
-        }
-
-        if (actions.length === 0) {
-            return false;
-        }
-
-        localStorage.setItem('sl_bumpkin_cache', JSON.stringify(SL_BUMPKIN));
-        localStorage.setItem('sl_boosts_used_at_cache', JSON.stringify(SL_BOOSTS_USED_AT));
-
-        let payload = JSON.parse(JSON.stringify(masterPayload));
-        payload.actions = actions;
-        payload.stateHash.inventory = await computeSHA256(SL_INVENTORY);
-        payload.stateHash.farmActivity = await computeSHA256(SL_FARM_ACTIVITY);
-        if (payload.stateHash.bumpkin) {
-            payload.stateHash.bumpkin = await computeSHA256(SL_BUMPKIN);
-        }
-        if (payload.stateHash.boostsUsedAt) {
-            payload.stateHash.boostsUsedAt = await computeSHA256(SL_BOOSTS_USED_AT);
-        }
-        await refreshVolatileStateHashes(payload);
-
-        log(`ğŸ½ï¸ Karakter besleniyor: ${fedInfo.join(", ")} (+${Math.round(totalXp * 100) / 100} XP)`);
-
-        try {
-            let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
-                method: 'POST',
-                headers: makeBotHeaders(),
-                body: JSON.stringify(payload)
+                SL_BOOSTS_USED_AT[boost.name] = dateIso;
             });
 
-            if (res.ok) {
-                log(`âœ… Karakter besleme baÅŸarÄ±lÄ±.`);
-                masterPayload.stateHash = payload.stateHash;
-                renderCharacterMenu();
-                return true;
+            localStorage.setItem('sl_bumpkin_cache', JSON.stringify(SL_BUMPKIN));
+            localStorage.setItem('sl_boosts_used_at_cache', JSON.stringify(SL_BOOSTS_USED_AT));
+
+            let payload = JSON.parse(JSON.stringify(masterPayload));
+            payload.actions = [action];
+            payload.stateHash.inventory = await computeSHA256(SL_INVENTORY);
+            payload.stateHash.farmActivity = await computeSHA256(SL_FARM_ACTIVITY);
+            if (payload.stateHash.bumpkin) {
+                payload.stateHash.bumpkin = await computeSHA256(SL_BUMPKIN);
+            }
+            if (payload.stateHash.boostsUsedAt) {
+                payload.stateHash.boostsUsedAt = await computeSHA256(SL_BOOSTS_USED_AT);
+            }
+            await refreshVolatileStateHashes(payload);
+
+            if (!guardGeneratedAutosavePayload(payload, "Character feed")) {
+                SL_INVENTORY = beforeInventory;
+                SL_FARM_ACTIVITY = beforeActivity;
+                SL_BUMPKIN = beforeBumpkin;
+                SL_BOOSTS_USED_AT = beforeBoostsUsedAt;
+                localStorage.setItem('sl_bumpkin_cache', JSON.stringify(SL_BUMPKIN));
+                localStorage.setItem('sl_boosts_used_at_cache', JSON.stringify(SL_BOOSTS_USED_AT));
+                return sentAny;
             }
 
-            triggerKillSwitch("Sunucu karakter beslemeyi reddetti.", res.status);
-            return false;
-        } catch(e) {
-            triggerKillSwitch("AÄŸ baÄŸlantÄ±sÄ± koptu (Karakter besleme).", "NETWORK");
-            return false;
+            log(`ğŸ½ï¸ Karakter besleniyor: ${amount}x ${foodName} (+${Math.round((xpInfo.xp * amount) * 100) / 100} XP)`);
+
+            try {
+                const stringifiedPayload = JSON.stringify(payload);
+                const botHeaders = await makeBotHeaders(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), stringifiedPayload);
+                if (!botHeaders) {
+                    SL_INVENTORY = beforeInventory;
+                    SL_FARM_ACTIVITY = beforeActivity;
+                    SL_BUMPKIN = beforeBumpkin;
+                    SL_BOOSTS_USED_AT = beforeBoostsUsedAt;
+                    localStorage.setItem('sl_bumpkin_cache', JSON.stringify(SL_BUMPKIN));
+                    localStorage.setItem('sl_boosts_used_at_cache', JSON.stringify(SL_BOOSTS_USED_AT));
+                    return sentAny;
+                }
+                let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
+                    method: 'POST',
+                    headers: botHeaders,
+                    body: stringifiedPayload
+                });
+
+                if (res.ok) {
+                    log(`âœ… Karakter besleme baÅŸarÄ±lÄ±: ${amount}x ${foodName}`);
+                    masterPayload.stateHash = payload.stateHash;
+                    totalXp += xpInfo.xp * amount;
+                    fedInfo.push(amount + "x " + foodName);
+                    sentAny = true;
+                    await controlledSleep(randInt(1800, 3200));
+                    continue;
+                }
+
+                let responseDetail = "";
+                try {
+                    responseDetail = await res.clone().text();
+                } catch(e) {}
+                if (responseDetail) {
+                    log(`<span style="color:#fb923c;font-weight:900;">SERVER RESPONSE</span> ${responseDetail.slice(0, 500)}`);
+                }
+
+                SL_INVENTORY = beforeInventory;
+                SL_FARM_ACTIVITY = beforeActivity;
+                SL_BUMPKIN = beforeBumpkin;
+                SL_BOOSTS_USED_AT = beforeBoostsUsedAt;
+                localStorage.setItem('sl_bumpkin_cache', JSON.stringify(SL_BUMPKIN));
+                localStorage.setItem('sl_boosts_used_at_cache', JSON.stringify(SL_BOOSTS_USED_AT));
+
+                if (await handleRecoverableServerReject("Character feed rejected by server", res.status, responseDetail)) {
+                    return sentAny;
+                }
+                triggerKillSwitch("Sunucu karakter beslemeyi reddetti.", res.status);
+                return sentAny;
+            } catch(e) {
+                SL_INVENTORY = beforeInventory;
+                SL_FARM_ACTIVITY = beforeActivity;
+                SL_BUMPKIN = beforeBumpkin;
+                SL_BOOSTS_USED_AT = beforeBoostsUsedAt;
+                localStorage.setItem('sl_bumpkin_cache', JSON.stringify(SL_BUMPKIN));
+                localStorage.setItem('sl_boosts_used_at_cache', JSON.stringify(SL_BOOSTS_USED_AT));
+                triggerKillSwitch("AÄŸ baÄŸlantÄ±sÄ± koptu (Karakter besleme).", "NETWORK");
+                return sentAny;
+            }
         }
+
+        if (sentAny) {
+            log(`âœ… Karakter besleme turu tamam: ${fedInfo.join(", ")} (+${Math.round(totalXp * 100) / 100} XP)`);
+            renderCharacterMenu();
+        }
+        return sentAny;
     }
 
     function getCookingReservedIngredients() {
@@ -5757,8 +6416,9 @@
             return false;
         }
 
-        for (let b = 0; b < ["Fire Pit", "Deli"].length; b++) {
-            const buildingName = ["Fire Pit", "Deli"][b];
+        const cookingBuildings = ["Fire Pit", "Deli", "Bakery"];
+        for (let b = 0; b < cookingBuildings.length; b++) {
+            const buildingName = cookingBuildings[b];
             const building = getCookingBuilding(buildingName);
             if (!building || !building.id) {
                 continue;
@@ -5806,15 +6466,27 @@
         if (payload.stateHash.buildings) {
             payload.stateHash.buildings = await computeSHA256(SL_BUILDINGS);
         }
+        if (payload.stateHash.boostsUsedAt) {
+            payload.stateHash.boostsUsedAt = await computeSHA256(SL_BOOSTS_USED_AT);
+        }
         await refreshVolatileStateHashes(payload);
+
+        if (!guardGeneratedAutosavePayload(payload, buildingName || "Cooking")) {
+            return false;
+        }
 
         log(`${buildingName || "Cooking"} package sending... (${reason})`);
 
         try {
+            const stringifiedPayload = JSON.stringify(payload);
+            const botHeaders = await makeBotHeaders(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), stringifiedPayload);
+            if (!botHeaders) {
+                return false;
+            }
             let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                 method: 'POST',
-                headers: makeBotHeaders(),
-                body: JSON.stringify(payload)
+                headers: botHeaders,
+                body: stringifiedPayload
             });
 
             if (res.ok) {
@@ -5824,7 +6496,15 @@
                 return true;
             }
 
-            if (await handleRecoverableServerReject((buildingName || "Cooking") + " rejected by server", res.status)) {
+            let responseDetail = "";
+            try {
+                responseDetail = await res.clone().text();
+            } catch(e) {}
+            if (responseDetail) {
+                log(`<span style="color:#fb923c;font-weight:900;">SERVER RESPONSE</span> ${responseDetail.slice(0, 500)}`);
+            }
+
+            if (await handleRecoverableServerReject((buildingName || "Cooking") + " rejected by server", res.status, responseDetail)) {
                 return false;
             }
             triggerKillSwitch("Server rejected " + (buildingName || "cooking") + " operation.", res.status);
@@ -5846,7 +6526,7 @@
         }
 
         let performed = false;
-        const buildingNames = ["Fire Pit", "Deli"];
+        const buildingNames = ["Fire Pit", "Deli", "Bakery"];
         for (let b = 0; b < buildingNames.length; b++) {
             const buildingName = buildingNames[b];
             const building = getCookingBuilding(buildingName);
@@ -5869,6 +6549,7 @@
                     createdAt: dateIso
                 }];
 
+                const collectSnapshot = snapshotCookingState();
                 let remaining = [];
                 let crafting = Array.isArray(building.crafting) ? building.crafting : [];
                 for (let i = 0; i < crafting.length; i++) {
@@ -5878,6 +6559,7 @@
                         let amount = 1;
                         if (item.skills && item.skills["Double Nom"]) {
                             amount += 1;
+                            SL_BOOSTS_USED_AT["Double Nom"] = dateIso;
                         }
                         modifyInventory(item.name, amount);
                         modifyActivity(item.name + " Cooked", 1);
@@ -5892,9 +6574,12 @@
                 building.crafting = remaining;
                 localStorage.setItem('sl_buildings_cache', JSON.stringify(SL_BUILDINGS));
                 localStorage.setItem('sl_bumpkin_cache', JSON.stringify(SL_BUMPKIN));
+                localStorage.setItem('sl_activity_cache', JSON.stringify(SL_FARM_ACTIVITY));
+                localStorage.setItem('sl_boosts_used_at_cache', JSON.stringify(SL_BOOSTS_USED_AT));
 
                 let ok = await sendCookingPayload(actions, "collect", buildingName);
                 if (!ok) {
+                    restoreCookingState(collectSnapshot);
                     return performed;
                 }
                 performed = true;
@@ -5934,9 +6619,11 @@
                     type: "recipe.cooked",
                     item: recipeName,
                     buildingId: building.id,
+                    recipeId: makeShortHexId(),
                     createdAt: dateIso
                 };
 
+                const cookSnapshot = snapshotCookingState();
                 applyCookingIngredients(recipeName);
                 building.crafting = Array.isArray(building.crafting) ? building.crafting : [];
                 building.crafting.push({
@@ -5948,11 +6635,15 @@
                 if (plan.oilConsumed > 0) {
                     building.oil = Math.max(0, Number(building.oil || 0) - plan.oilConsumed);
                 }
+                markCookingBoostsUsed(plan, dateIso);
                 localStorage.setItem('sl_buildings_cache', JSON.stringify(SL_BUILDINGS));
+                localStorage.setItem('sl_inventory_cache', JSON.stringify(SL_INVENTORY));
+                localStorage.setItem('sl_boosts_used_at_cache', JSON.stringify(SL_BOOSTS_USED_AT));
 
                 log(`${buildingName}: ${recipeName} cooking. Ready in: ${formatDuration(plan.seconds)}`);
                 let ok = await sendCookingPayload([action], "cook", buildingName);
                 if (!ok) {
+                    restoreCookingState(cookSnapshot);
                     return performed;
                 }
                 performed = true;
@@ -6170,6 +6861,94 @@
         });
     }
 
+    function getActionTypes(actions) {
+        const types = [];
+        (actions || []).forEach(function(action) {
+            if (action && action.type && !types.includes(action.type)) {
+                types.push(action.type);
+            }
+        });
+        return types;
+    }
+
+    function getAutosaveBodyExample(actionType) {
+        const captured = AUTOSAVE_BODY_EXAMPLES[actionType];
+        if (captured && captured.action) {
+            return captured;
+        }
+        const builtin = BUILTIN_AUTOSAVE_ACTION_EXAMPLES[actionType];
+        if (!builtin) {
+            return null;
+        }
+        return {
+            capturedAt: 0,
+            action: builtin,
+            stateHashKeys: [],
+            topLevelKeys: []
+        };
+    }
+
+    function getMissingAutosaveBodySamples(actions) {
+        return getActionTypes(actions).filter(function(type) {
+            const example = getAutosaveBodyExample(type);
+            return !example || !example.action;
+        });
+    }
+
+    function setRequiredTemplateActionTypes(types) {
+        REQUIRED_TEMPLATE_ACTION_TYPES = (types || []).filter(Boolean);
+        if (REQUIRED_TEMPLATE_ACTION_TYPES.length > 0) {
+            localStorage.setItem('sl_required_template_actions', JSON.stringify(REQUIRED_TEMPLATE_ACTION_TYPES));
+        } else {
+            localStorage.removeItem('sl_required_template_actions');
+        }
+    }
+
+    function getNextManualTemplateActionTypes() {
+        return ["crop.harvested", "seed.planted"];
+    }
+
+    function getTemplateActionHint(types) {
+        const actionTypes = (types && types.length > 0) ? types : getNextManualTemplateActionTypes();
+        return actionTypes.join(" / ");
+    }
+
+    function waitForManualTemplateAction(types, label) {
+        setRequiredTemplateActionTypes(types);
+        _window.WAITING_FOR_TEMPLATE_TO_START = true;
+        isBotRunning = false;
+        stopRequested = true;
+        updateGameClickGuard();
+
+        const startButton = document.getElementById('btn-start-auto');
+        if (startButton) {
+            startButton.innerText = "MANUAL CAPTURE";
+            startButton.style.background = "linear-gradient(90deg,#f59e0b,#f97316)";
+        }
+
+        log(`<span style="color:#f59e0b;font-weight:900;">ACTION TEMPLATE REQUIRED</span> ${label || "Manual autosave"} icin bir kez manuel ${types.join(" / ")} yap. Bu paket server'a gonderilmedi.`);
+    }
+
+    function ensureAutosaveActionSamples(actions, label) {
+        const missingSamples = getMissingAutosaveBodySamples(actions);
+        if (missingSamples.length === 0) {
+            return true;
+        }
+
+        LAST_BODY_AUDIT = {
+            ok: false,
+            reason: label || "autosave",
+            createdAt: new Date().toISOString(),
+            actionTypes: getActionTypes(actions),
+            actionSummary: summarizeActionTypes(actions),
+            diffs: [],
+            missingSamples: missingSamples
+        };
+        localStorage.setItem('sl_last_body_audit', JSON.stringify(LAST_BODY_AUDIT));
+        waitForManualTemplateAction(missingSamples, label || "Autosave");
+        return false;
+    }
+
     function auditGeneratedAutosaveBody(payload, reason) {
         if (!payload || !masterPayload || !Array.isArray(payload.actions) || payload.actions.length === 0) {
             return null;
@@ -6186,7 +6965,7 @@
                 return;
             }
 
-            const example = AUTOSAVE_BODY_EXAMPLES[action.type];
+            const example = getAutosaveBodyExample(action.type);
             if (!example || !example.action) {
                 missingSamples.add(action.type);
                 return;
@@ -6195,7 +6974,7 @@
             diffs.push(...diffKeys("action " + action.type, example.action, action, ["createdAt"]));
         });
 
-        const ok = diffs.length === 0;
+        const ok = diffs.length === 0 && missingSamples.size === 0;
         LAST_BODY_AUDIT = {
             ok: ok,
             reason: reason || "autosave",
@@ -6215,6 +6994,29 @@
             : `<span style="color:#f87171;font-weight:900;">BODY MATCH: NO</span><br>${LAST_BODY_AUDIT.actionSummary.join(" | ")}<br>${diffs.slice(0, 6).join("<br>")}${sampleNote}`;
         log(msg);
         return LAST_BODY_AUDIT;
+    }
+
+    function guardGeneratedAutosavePayload(payload, label) {
+        if (!payload || !Array.isArray(payload.actions) || payload.actions.length === 0) {
+            return true;
+        }
+
+        syncAutosaveRuntimeEnvelope(payload);
+
+        if (!ensureAutosaveActionSamples(payload.actions, label || "Autosave")) {
+            return false;
+        }
+
+        const audit = auditGeneratedAutosaveBody(payload, label || "autosave");
+        if (!audit || audit.ok) {
+            return true;
+        }
+
+        stopRequested = true;
+        isBotRunning = false;
+        updateGameClickGuard();
+        log(`<span style="color:#f87171;font-weight:900;">AUTOSAVE PREFLIGHT BLOCKED</span> ${label || "Autosave"} action/body manuel ornekle eslesmedi. Server'a gonderilmedi.`);
+        return false;
     }
 
     // ==========================================
@@ -6358,14 +7160,22 @@
         }, 0);
     }
 
-    function randomizeCropPlanTarget(target, maxAllowed) {
-        const base = Math.max(0, parseInt(target || 0) || 0);
-        if (base <= 0) {
-            return 0;
-        }
-        const wiggle = Math.min(2, Math.max(1, Math.floor(base * 0.25)));
-        const randomized = Math.max(1, base + randInt(-wiggle, wiggle));
-        return Math.min(Math.max(0, parseInt(maxAllowed || randomized) || randomized), randomized);
+    function getCropPlanRawTargetTotal(exceptSeed) {
+        return Object.entries(CROP_PLAN_SETTINGS.items || {}).reduce(function(sum, entry) {
+            const seed = entry[0];
+            const cfg = entry[1] || {};
+            if (exceptSeed && seed === exceptSeed) {
+                return sum;
+            }
+            return sum + Math.max(0, parseInt(cfg.target || 0, 10) || 0);
+        }, 0);
+    }
+
+    function clampCropPlanTarget(seed, target, fieldLimit) {
+        const limit = Math.max(0, parseInt(fieldLimit || getUsableFieldIds().length || 0, 10) || 0);
+        const usedByOthers = getCropPlanRawTargetTotal(seed);
+        const leftForSeed = Math.max(0, limit - usedByOthers);
+        return Math.max(0, Math.min(leftForSeed, parseInt(target || 0, 10) || 0));
     }
 
     function buildCropPlanPlantQueue(emptyCount) {
@@ -6377,58 +7187,12 @@
         if (!maxFields || entries.length === 0) {
             return [];
         }
-        const targetTotal = Math.min(maxFields, entries.reduce(function(sum, entry) {
-            return sum + Math.max(0, parseInt(entry.target || 0) || 0);
-        }, 0));
-        const plans = entries.map(function(entry) {
-            const target = Math.max(0, parseInt(entry.target || 0) || 0);
-            const max = Math.min(maxFields, target + 2);
-            const min = Math.min(max, target <= 1 ? target : Math.max(1, target - 2));
-            return {
-                seed: entry.seed,
-                target: target,
-                min: min,
-                max: max,
-                count: randInt(min, max)
-            };
-        });
-        let total = plans.reduce(function(sum, plan) {
-            return sum + plan.count;
-        }, 0);
-        let guard = 0;
-        while (total > targetTotal && guard++ < 500) {
-            let candidates = plans.filter(function(plan) {
-                return plan.count > plan.min;
-            });
-            if (!candidates.length) {
-                candidates = plans.filter(function(plan) {
-                    return plan.count > 0;
-                });
-            }
-            if (!candidates.length) break;
-            const plan = candidates[randInt(0, candidates.length - 1)];
-            plan.count--;
-            total--;
-        }
-        guard = 0;
-        while (total < targetTotal && guard++ < 500) {
-            let candidates = plans.filter(function(plan) {
-                return plan.count < plan.max;
-            });
-            if (!candidates.length) {
-                candidates = plans;
-            }
-            if (!candidates.length) break;
-            const plan = candidates[randInt(0, candidates.length - 1)];
-            plan.count++;
-            total++;
-        }
         const queue = [];
-
-        plans.forEach(function(plan) {
-            const count = Math.max(0, Math.min(maxFields, plan.count));
+        entries.forEach(function(entry) {
+            const target = Math.max(0, parseInt(entry.target || 0) || 0);
+            const count = Math.max(0, Math.min(maxFields - queue.length, target));
             for (let i = 0; i < count; i++) {
-                queue.push(plan.seed);
+                queue.push(entry.seed);
             }
         });
 
@@ -6509,35 +7273,39 @@
         const focusedSelectionEnd = focusedSeed && typeof active.selectionEnd === 'number' ? active.selectionEnd : null;
         const usableCount = getUsableFieldIds().length;
         const emptyCount = getEmptyUsableFieldIds().length;
-        const totalTarget = getCropPlanTargetTotal();
+        const totalTarget = Math.min(getCropPlanRawTargetTotal(), usableCount);
+        const remainingTarget = Math.max(0, usableCount - totalTarget);
         const visibleSeeds = GameRules.getVisibleMarketSeeds();
         warmNexusIconsFromClientAssets(visibleSeeds);
 
         let rows = visibleSeeds.map(function(seed) {
             const cfg = CROP_PLAN_SETTINGS.items[seed] || { target: 0 };
             const target = Math.max(0, parseInt(cfg.target || 0) || 0);
+            const usedByOthers = getCropPlanRawTargetTotal(seed);
+            const maxForSeed = Math.max(0, usableCount - usedByOthers);
             const seedInfo = getMarketSeedDetails(seed);
             const levelLocked = GameRules.getCurrentBumpkinLevel() < (seedInfo.bumpkinLevel || 1);
             const seasonBad = !GameRules.isSeedInCurrentSeason(seed);
-            const disabled = levelLocked || seasonBad;
+            const disabled = levelLocked || seasonBad || (target <= 0 && maxForSeed <= 0);
             const inputValue = focusedSeed === seed ? focusedValue : target;
             return `
                 <div style="display:grid;grid-template-columns:1fr 72px;gap:8px;align-items:center;padding:7px 8px;border:1px solid ${target > 0 ? 'rgba(34,197,94,0.45)' : 'rgba(148,163,184,0.16)'};border-radius:8px;background:${target > 0 ? 'rgba(6,78,59,0.34)' : 'rgba(15,23,42,0.78)'};opacity:${disabled ? '0.5' : '1'};">
                     <div style="min-width:0;display:flex;align-items:center;gap:7px;color:#e5e7eb;font-size:11px;font-weight:900;">
                         ${getItemIconHtml(seed, 22)}
                         <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${seed}</span>
-                        <span style="margin-left:auto;color:#93c5fd;font-size:10px;">${Math.floor(getInventoryAmount(seed))}</span>
+                        <span style="margin-left:auto;color:#93c5fd;font-size:10px;">bag ${Math.floor(getInventoryAmount(seed))}</span>
                     </div>
-                    <input class="crop-plan-target" data-seed="${seed}" type="number" min="0" max="${usableCount}" value="${inputValue}" ${disabled ? 'disabled' : ''} style="width:100%;box-sizing:border-box;background:rgba(2,6,23,0.96);border:1px solid rgba(250,204,21,0.36);border-radius:8px;color:#f8fafc;padding:7px;font-weight:900;text-align:center;">
+                    <input class="crop-plan-target" data-seed="${seed}" type="number" min="0" max="${maxForSeed}" value="${inputValue}" ${disabled ? 'disabled' : ''} title="Max ${maxForSeed}" style="width:100%;box-sizing:border-box;background:rgba(2,6,23,0.96);border:1px solid rgba(250,204,21,0.36);border-radius:8px;color:#f8fafc;padding:7px;font-weight:900;text-align:center;">
                 </div>`;
         }).join("");
 
         body.innerHTML = `
             <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;">
                 <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-                    <span class="capacity-pill" style="background:#064e3b;color:#bbf7d0;">Usable ${usableCount}</span>
+                    <span class="capacity-pill" style="background:#064e3b;color:#bbf7d0;">Fields ${usableCount}</span>
                     <span class="capacity-pill" style="background:#1e3a8a;color:#bfdbfe;">Empty ${emptyCount}</span>
-                    <span class="capacity-pill" style="background:${totalTarget > usableCount ? '#7f1d1d' : '#713f12'};color:${totalTarget > usableCount ? '#fecaca' : '#fde68a'};">Plan ${totalTarget}</span>
+                    <span class="capacity-pill" style="background:#713f12;color:#fde68a;">Used ${totalTarget}</span>
+                    <span class="capacity-pill" style="background:${remainingTarget <= 0 ? '#7f1d1d' : '#0f766e'};color:${remainingTarget <= 0 ? '#fecaca' : '#ccfbf1'};">Left ${remainingTarget}</span>
                 </div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;">
@@ -6554,7 +7322,7 @@
                     <label class="switch"><input type="checkbox" id="toggle-crop-plan-sell" ${CROP_PLAN_SETTINGS.autoSell ? 'checked' : ''}><span class="slider"></span></label>
                 </div>
             </div>
-            <div style="font-size:10px;color:#94a3b8;line-height:1.4;margin-bottom:8px;">When Menu Active is on, empty fields use this plan instead of manual field seed choices.</div>
+            <div style="font-size:10px;color:#94a3b8;line-height:1.4;margin-bottom:8px;">Write exact field counts. Total cannot pass Fields count; deleting a number frees that field capacity.</div>
             <div id="crop-plan-seed-list" style="display:grid;gap:6px;max-height:430px;overflow-y:auto;padding-right:3px;">${rows}</div>
         `;
 
@@ -6616,13 +7384,17 @@
             input.oninput = function(e) {
                 markCropPlanInteraction(6000);
                 const seed = e.target.dataset.seed;
-                const target = Math.max(0, parseInt(e.target.value || 0) || 0);
+                const target = clampCropPlanTarget(seed, e.target.value, getUsableFieldIds().length);
+                if (String(e.target.value || "") !== String(target)) {
+                    e.target.value = target;
+                }
                 if (target > 0) {
                     CROP_PLAN_SETTINGS.items[seed] = { target: target };
                 } else {
                     delete CROP_PLAN_SETTINGS.items[seed];
                 }
                 saveCropPlanSettings();
+                renderCropPlanMenu(false);
             };
             input.onchange = function() {
                 markCropPlanInteraction(2500);
@@ -7753,10 +8525,15 @@
             payload.stateHash.shipments = await computeSHA256(SL_SHIPMENTS);
         }
 
+        let stringifiedPayload = JSON.stringify(payload);
+        let botHeaders = await makeBotHeaders(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), stringifiedPayload);
+        if (!botHeaders) {
+            return false;
+        }
         let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
             method: 'POST',
-            headers: makeBotHeaders(),
-            body: JSON.stringify(payload)
+            headers: botHeaders,
+            body: stringifiedPayload
         });
         if (!res.ok) {
             triggerKillSwitch("Free shipment restock rejected.", res.status);
@@ -7847,10 +8624,15 @@
         }
         lastBotMarketPrediction = { type: "buy", actions: [{ type: "seed.bought", item: seed, amount: amount }], coinsDelta: -cost, boosts: [] };
 
+        let stringifiedPayload = JSON.stringify(payload);
+        let botHeaders = await makeBotHeaders(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), stringifiedPayload);
+        if (!botHeaders) {
+            return false;
+        }
         let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
             method: 'POST',
-            headers: makeBotHeaders(),
-            body: JSON.stringify(payload)
+            headers: botHeaders,
+            body: stringifiedPayload
         });
         if (!res.ok) {
             SL_INVENTORY = beforeInventory;
@@ -8250,6 +9032,14 @@
         return usedAt ? usedAt + recoveryMs : 0;
     }
 
+    function getBeehiveReadyAt(node) {
+        const honey = node && node.honey && typeof node.honey === "object" ? node.honey : {};
+        const produced = Math.max(0, Number(honey.produced || 0));
+        if (produced > 0) return Date.now();
+        const updatedAt = parseTimeValue(honey.updatedAt || node.updatedAt);
+        return updatedAt ? updatedAt + BEEHIVE_RECOVERY_MS : 0;
+    }
+
     function getGenericResourceLabel(node, fallback) {
         if (!node || typeof node !== "object") return fallback;
         if (node.name) return node.name;
@@ -8283,12 +9073,17 @@
             for (let i = 0; i < visibleEntries.length; i++) {
                 const id = String(visibleEntries[i][0]);
                 const node = visibleEntries[i][1] || {};
-                const readyAt = getGenericReadyAt(node, recoveryMs);
+                const readyAt = selectionType === "beehives"
+                    ? getBeehiveReadyAt(node)
+                    : getGenericReadyAt(node, recoveryMs);
                 const hasTimer = readyAt > 0;
                 const isReady = !hasTimer || now >= readyAt;
                 const label = getGenericResourceLabel(node, fallbackLabel);
                 const status = hasTimer ? (isReady ? "READY" : formatTimeLeftMs(readyAt, now)) : "SEEN";
                 const selected = isResourceSelected(selectionType, id);
+                const producedText = selectionType === "beehives"
+                    ? `<div class="res-tool">Honey: ${Math.max(0, Number(node && node.honey && node.honey.produced || 0))}</div>`
+                    : "";
 
                 html += `
                     <div class="resource-box ${selected ? 'selected' : ''}" onclick="window.toggleResourceSelection('${selectionType}', '${id}')">
@@ -8296,6 +9091,7 @@
                         <div class="res-icon">${icon}</div>
                         <div class="res-tool">${toolText || label}</div>
                         <div class="res-status ${isReady ? 'ready' : 'wait'}">${status}</div>
+                        ${producedText}
                     </div>
                 `;
             }
@@ -8581,19 +9377,32 @@
         rememberApiBaseFromUrl(reqUrl);
 
         const options = args[1] || {};
+        const isAutosaveReq = reqUrl.includes('/autosave');
+        const isSessionReq = reqUrl.includes('/session');
+        const isTelemetryReq = reqUrl.includes('collector.moonforge.co') || reqUrl.includes('/api/errors') || reqUrl.includes('/api/send');
         let requestHeaders = mergeHeaderObjects(
             requestInput && requestInput.headers,
             options && options.headers
         );
 
-        if (findHeaderKey(requestHeaders, 'authorization')) {
+        const requestHeaderKeysToCapture = [
+            'authorization',
+            'x-amz-ttl',
+            'x-expires',
+            'x-timestamp',
+            'x-token',
+            'content-type',
+            'accept',
+            'x-fingerprint'
+        ];
+        if (isAutosaveReq && requestHeaderKeysToCapture.some(function(headerName) {
+            const key = findHeaderKey(requestHeaders, headerName);
+            return key && isUsableHeaderValue(requestHeaders[key]);
+        })) {
             rememberMasterHeaders(requestHeaders);
         }
 
         // Ä°stek Giderken Ã–ÄŸrenim Ä°Ã§in Kaydet
-        let isAutosaveReq = reqUrl.includes('/autosave');
-        let isSessionReq = reqUrl.includes('/session');
-        let isTelemetryReq = reqUrl.includes('collector.moonforge.co') || reqUrl.includes('/api/errors') || reqUrl.includes('/api/send');
         let parsedAutosaveBody = null;
         if (isSessionReq && options && options.body) {
             rememberSessionBody(options.body);
@@ -8682,16 +9491,7 @@
 
                 if (isSessionReq) {
                     localStorage.setItem('sl_last_session_refresh_at', Date.now().toString());
-                    if (data.deviceTrackerId) {
-                        if (masterPayload) {
-                            masterPayload.deviceTrackerId = data.deviceTrackerId;
-                            if (data.sessionId) {
-                                masterPayload.sessionId = data.sessionId;
-                            } else {
-                                masterPayload.sessionId = "0x0";
-                            }
-                        }
-                    }
+                    rememberSessionRuntime(data);
                 }
 
                 if (data.farmId || (data.farm && data.farm.id)) {
@@ -9020,32 +9820,37 @@
         }
 
         // ÅABLON Ã‡ALMA (Phoenix Ã–zelliÄŸi)
-        if (isAutosaveReq && options && options.body) {
+        if (isAutosaveReq && options && options.body && res.ok) {
             try {
                 const parsed = JSON.parse(options.body);
 
                 if(parsed.actions && parsed.actions[0]) {
                     if (_window.WAITING_FOR_TEMPLATE_TO_START) {
+                            const capturedTypes = getActionTypes(parsed.actions);
                             _window.WAITING_FOR_TEMPLATE_TO_START = false;
+                            setRequiredTemplateActionTypes([]);
 
-                            masterPayload = parsed;
+                            masterPayload = syncAutosaveRuntimeEnvelope(parsed);
                             let stringifiedPayload = JSON.stringify(masterPayload);
                             localStorage.setItem('sl_master_payload', stringifiedPayload);
                             localStorage.setItem('sl_master_payload_at', Date.now().toString());
 
                             localStorage.setItem('sl_auto_resume', 'true');
 
-                            log("âœ… Bot control captured. Bot checking...");
+                            log(`âœ… Bot control captured from manual ${capturedTypes.join(" / ") || "autosave"}. Refreshing once, then automation will start safely.`);
 
-                            await forceRadarRefresh();
-
+                            const startButton = document.getElementById('btn-start-auto');
+                            if (startButton) {
+                                startButton.innerText = "START BOT";
+                                startButton.style.background = "linear-gradient(90deg,#16a34a,#4ade80)";
+                            }
+                            updateGameClickGuard();
                             log("âœ… Bot check completed. Refreshing safely...");
-
                             setTimeout(function() {
                                 window.location.reload();
                             }, 500);
                     } else {
-                        masterPayload = parsed;
+                        masterPayload = syncAutosaveRuntimeEnvelope(parsed);
                         let stringifiedPayload = JSON.stringify(masterPayload);
                         localStorage.setItem('sl_master_payload', stringifiedPayload);
                         localStorage.setItem('sl_master_payload_at', Date.now().toString());
@@ -9054,6 +9859,8 @@
             } catch(e) {
                 // Åablon hatasÄ± sessizce yutulur
             }
+        } else if (isAutosaveReq && options && options.body && _window.WAITING_FOR_TEMPLATE_TO_START && !res.ok) {
+            log(`<span style="color:#f59e0b;font-weight:900;">TEMPLATE CAPTURE WAITING</span> Manual autosave returned Server ${res.status}; not captured.`);
         }
 
         return res;
@@ -9184,9 +9991,24 @@
 
             let stringifiedBody = JSON.stringify(bodyData);
 
+            const sessionHeaders = {
+                'accept': '*/*',
+                'content-type': 'application/json;charset=UTF-8'
+            };
+            if (masterHeaders) {
+                const fingerprintKey = findHeaderKey(masterHeaders, 'x-fingerprint');
+                const authorizationKey = findHeaderKey(masterHeaders, 'authorization');
+                if (fingerprintKey && isUsableHeaderValue(masterHeaders[fingerprintKey])) {
+                    sessionHeaders['x-fingerprint'] = masterHeaders[fingerprintKey];
+                }
+                if (authorizationKey && isUsableHeaderValue(masterHeaders[authorizationKey])) {
+                    sessionHeaders['authorization'] = masterHeaders[authorizationKey];
+                }
+            }
+
             const res = await _window.fetch(makeSunflowerApiUrl('/session'), {
                 method: 'POST',
-                headers: makeBotHeaders(),
+                headers: sessionHeaders,
                 body: stringifiedBody
             });
 
@@ -9274,6 +10096,43 @@
         setTimeout(function() {
             window.location.reload();
         }, 1200);
+    }
+
+    function refreshThenCaptureTemplateNotice(notice) {
+        const requiredTypes = Array.isArray(REQUIRED_TEMPLATE_ACTION_TYPES)
+            ? REQUIRED_TEMPLATE_ACTION_TYPES.slice()
+            : [];
+        stopRequested = true;
+        isBotRunning = false;
+        killSwitchActivated = false;
+        masterPayload = null;
+        _window.WAITING_FOR_TEMPLATE_TO_START = false;
+        _window.TEMPLATE_START_AFTER_RELOAD = true;
+        clearCapturedAutosaveTemplate();
+        if (requiredTypes.length > 0) {
+            setRequiredTemplateActionTypes(requiredTypes);
+        }
+        localStorage.setItem('sl_template_start_after_reload', 'true');
+        localStorage.setItem('sl_stop_notice', notice || ("Fresh template required. Do one manual " + getTemplateActionHint(requiredTypes) + " after reload."));
+
+        const btn = document.getElementById('btn-start-auto');
+        if (btn) {
+            btn.innerText = "Refreshing...";
+            btn.style.background = "linear-gradient(90deg,#b45309,#f59e0b)";
+        }
+
+        const actionHint = getTemplateActionHint(requiredTypes);
+        log(`<span style="color:#f59e0b;font-weight:900;">FRESH TEMPLATE REQUIRED</span> Old template/header was rejected. Page will stay open; do one manual ${actionHint}.`);
+        updateGameClickGuard();
+        releaseNexusWakeLock().catch(function() {});
+        localStorage.removeItem('sl_template_start_after_reload');
+        _window.TEMPLATE_START_AFTER_RELOAD = false;
+        _window.WAITING_FOR_TEMPLATE_TO_START = true;
+        if (btn) {
+            btn.innerText = "MANUAL CAPTURE";
+            btn.style.background = "linear-gradient(90deg,#b45309,#f59e0b)";
+        }
+        log(`<span style="color:#fbbf24;font-weight:900;">PAGE REFRESH DISABLED</span> Error details were preserved. The next successful manual autosave will be captured without reloading.`);
     }
 
     function stableDebugJson(value) {
@@ -9530,6 +10389,91 @@
         return out;
     }
 
+    function maskDebugValue(value) {
+        const text = value === undefined || value === null ? "" : String(value);
+        if (!text) {
+            return { present: false, length: 0, preview: "" };
+        }
+        return {
+            present: true,
+            length: text.length,
+            preview: text.length <= 12 ? "[set]" : text.slice(0, 4) + "..." + text.slice(-4)
+        };
+    }
+
+    function getNexusDebugState() {
+        const logger = document.getElementById('sl-logger');
+        const liveCachedKey = getLiveAutosaveCachedKey();
+        const payload = masterPayload ? cloneForDebug(masterPayload) : null;
+        const request = cloneForDebug(LAST_REQUEST_SNAPSHOT);
+        const response = cloneForDebug(LAST_RESPONSE_SNAPSHOT);
+        return {
+            build: NEXUS_BOT_BUILD,
+            at: new Date().toISOString(),
+            farmId: SL_FARM_ID,
+            waitingForTemplate: !!_window.WAITING_FOR_TEMPLATE_TO_START,
+            autoResumePending: !!_window.AUTO_RESUME_PENDING,
+            templateStartAfterReload: !!_window.TEMPLATE_START_AFTER_RELOAD,
+            botRunning: !!isBotRunning,
+            stopRequested: !!stopRequested,
+            killSwitchActivated: !!killSwitchActivated,
+            requiredTemplateActions: Array.isArray(REQUIRED_TEMPLATE_ACTION_TYPES) ? REQUIRED_TEMPLATE_ACTION_TYPES.slice() : [],
+            nextManualTemplateActions: getNextManualTemplateActionTypes(),
+            masterPayloadCapturedAt: getMasterPayloadCapturedAt() || null,
+            masterHeadersCapturedAt: getMasterHeadersCapturedAt() || null,
+            hasMasterPayload: !!masterPayload,
+            hasMasterHeaders: !!masterHeaders,
+            masterActionTypes: payload && Array.isArray(payload.actions) ? getActionTypes(payload.actions) : [],
+            masterStateHashKeys: payload && payload.stateHash ? sortedKeys(payload.stateHash) : [],
+            runtimeEnvelope: {
+                cachedKeyStorageName: getAutosaveCachedKeyStorageName(),
+                cachedKey: maskDebugValue(liveCachedKey),
+                masterCachedKey: maskDebugValue(payload && payload.cachedKey),
+                sessionId: maskDebugValue(SL_SESSION_ID || (payload && payload.sessionId)),
+                deviceTrackerId: maskDebugValue(SL_DEVICE_TRACKER_ID || (payload && payload.deviceTrackerId)),
+                clientVersion: (payload && payload.clientVersion) || SL_SESSION_BODY_CACHE.clientVersion || null
+            },
+            requestToken: {
+                ready: !!NEXUS_REQUEST_TOKEN_READY,
+                hasModule: !!NEXUS_REQUEST_TOKEN_MODULE,
+                sessionCode: maskDebugValue(SL_SESSION_CODE),
+                expiresAt: SL_SESSION_CODE_EXPIRES_AT || null,
+                expiresInMs: SL_SESSION_CODE_EXPIRES_AT ? SL_SESSION_CODE_EXPIRES_AT - Date.now() : null,
+                error: NEXUS_REQUEST_TOKEN_ERROR || ""
+            },
+            lastBodyAudit: cloneForDebug(LAST_BODY_AUDIT),
+            lastRequest: request ? {
+                at: request.at,
+                kind: request.kind,
+                url: request.url,
+                method: request.method,
+                actions: request.body && Array.isArray(request.body.actions) ? request.body.actions : [],
+                stateHash: request.body && request.body.stateHash ? request.body.stateHash : null,
+                bodyKeys: request.body && typeof request.body === "object" ? sortedKeys(request.body) : [],
+                runtimeEnvelope: request.body && typeof request.body === "object" ? {
+                    cachedKey: maskDebugValue(request.body.cachedKey),
+                    sessionId: maskDebugValue(request.body.sessionId),
+                    deviceTrackerId: maskDebugValue(request.body.deviceTrackerId),
+                    clientVersion: request.body.clientVersion || null
+                } : null
+            } : null,
+            lastResponse: response,
+            counters: {
+                coins: SL_COINS,
+                inventoryKeys: countDebugKeys(SL_INVENTORY),
+                cropKeys: countDebugKeys(SL_CROPS),
+                activityKeys: countDebugKeys(SL_FARM_ACTIVITY),
+                boostsUsedAtKeys: countDebugKeys(SL_BOOSTS_USED_AT)
+            },
+            focusedInventory: {
+                Sunflower: SL_INVENTORY && SL_INVENTORY.Sunflower,
+                "Sunflower Seed": SL_INVENTORY && SL_INVENTORY["Sunflower Seed"],
+                "Green Thumb": SL_INVENTORY && SL_INVENTORY["Green Thumb"]
+            },
+            loggerTail: logger ? logger.innerText.slice(-6000) : ""
+        };
+    }
+
     function sleepDebug(ms) {
         return new Promise(function(resolve) {
             setTimeout(resolve, ms);
@@ -9723,9 +10667,11 @@
         const requestCreatedAt = Number(detail.created_at || detail.createdAt || 0) || 0;
         const forceTemplate = !!detail.force_template;
 
-        try {
-            await forceSessionRefresh();
-        } catch(e) {}
+        if (!detail.skip_session_refresh) {
+            try {
+                await forceSessionRefresh();
+            } catch(e) {}
+        }
 
         if (forceTemplate && (!getMasterPayloadCapturedAt() || getMasterPayloadCapturedAt() < requestCreatedAt)) {
             masterPayload = null;
@@ -9945,6 +10891,19 @@
             "telemetry.txt": stableDebugJson(LAST_TELEMETRY_SNAPSHOT || {})
         };
 
+        if ((detail && (detail.package_type || detail.packageType)) === "error") {
+            files["error.txt"] = stableDebugJson({
+                capturedAt: new Date().toISOString(),
+                requestId: requestId || "",
+                reason: detail.reason || "",
+                status: detail.error_status || null,
+                responseBody: detail.error_response || "",
+                lastRequest: LAST_REQUEST_SNAPSHOT || null,
+                lastResponse: LAST_RESPONSE_SNAPSHOT || null,
+                lastBodyAudit: LAST_BODY_AUDIT || null
+            });
+        }
+
         if (summary.fullPackage) {
             files["motor.txt"] = await fetchGameMotorFile();
             files["motor-meta.txt"] = stableDebugJson({
@@ -9971,6 +10930,7 @@
                     request_id: requestId,
                     package_type: detail.package_type || detail.packageType || "manual",
                     reason: detail.reason || "",
+                    error_status: detail.error_status || null,
                     files: files
                 }
             }));
@@ -9986,7 +10946,7 @@
         return false;
     }
 
-    async function sendErrorDebugPackage(reason, status) {
+    async function sendErrorDebugPackage(reason, status, responseBody) {
         const now = Date.now();
         if (now - LAST_ERROR_DEBUG_PACKAGE_AT < 60000) return false;
         LAST_ERROR_DEBUG_PACKAGE_AT = now;
@@ -9995,7 +10955,10 @@
             created_at: now,
             package_type: "error",
             reason: String(reason || "error") + " / " + String(status || ""),
-            force_template: false
+            error_status: status || null,
+            error_response: responseBody || "",
+            force_template: false,
+            skip_session_refresh: true
         });
     }
 
@@ -10036,6 +10999,7 @@
         _window.__NEXUS_DEBUG_FILE_EXPORT_READY__ = true;
         _window.__NEXUS_FORCE_DEBUG_EXPORT__ = sendDebugFilesToPanel;
         _window.__NEXUS_FORCE_MOTOR_EXPORT__ = sendMotorFileToPanel;
+        _window.__NEXUS_DEBUG_STATE__ = getNexusDebugState;
         _window.addEventListener("__NEXUS_COLLECT_DEBUG_FILES__", async function(event) {
             const detail = event && event.detail ? event.detail : {};
             await sendDebugFilesToPanel(detail);
@@ -10091,9 +11055,7 @@
             hasLoggedQuarantine = false;
 
             localStorage.removeItem('sl_template_start_after_reload');
-            localStorage.removeItem('sl_master_payload');
-            localStorage.removeItem('sl_master_payload_at');
-            masterPayload = null;
+            clearCapturedAutosaveTemplate();
 
             if (btn) {
                 btn.innerText = "Start";
@@ -10107,19 +11069,18 @@
             killSwitchActivated = false;
             hasLoggedQuarantine = false;
 
-            if (!masterPayload) {
+            if (!isCapturedTemplateFreshEnough()) {
+                const requiredTypes = getNextManualTemplateActionTypes();
                 if (btn) {
                     btn.innerText = "Refreshing...";
                     btn.style.background = "#d97706";
                 }
                 _window.WAITING_FOR_TEMPLATE_TO_START = false;
-                localStorage.removeItem('sl_auto_resume');
                 localStorage.setItem('sl_template_start_after_reload', 'true');
-                localStorage.removeItem('sl_master_payload');
-                localStorage.removeItem('sl_master_payload_at');
-                masterPayload = null;
+                clearCapturedAutosaveTemplate();
+                setRequiredTemplateActionTypes(requiredTypes);
                 updateGameClickGuard();
-                log(`<span style="display:block; color:#f59e0b; font-weight:1000; font-size:15px; line-height:1.35; text-align:center; letter-spacing:0.4px;">SAFE START: PAGE WILL REFRESH FIRST. AFTER RELOAD, DO ONE MANUAL PLANT OR HARVEST.</span>`);
+                log(`<span style="display:block; color:#f59e0b; font-weight:1000; font-size:15px; line-height:1.35; text-align:center; letter-spacing:0.4px;">SAFE START: PAGE WILL REFRESH FIRST. AFTER RELOAD, DO ONE MANUAL ${getTemplateActionHint(requiredTypes)}.</span>`);
                 setTimeout(function() {
                     window.location.reload();
                 }, 650);
@@ -10207,6 +11168,23 @@
             log("Mushrooms package skipped after live state refresh.");
         }
         return ok;
+    }
+
+    function appendReadyMushroomsToPayload(payload, reason, startAtMs) {
+        if (!payload || !Array.isArray(payload.actions)) {
+            return 0;
+        }
+
+        const actions = getReadyMushroomActions(startAtMs || (Date.now() + randInt(650, 1400)));
+        if (actions.length === 0) {
+            return 0;
+        }
+
+        actions.forEach(function(action) {
+            payload.actions.push(action);
+        });
+        log(`Collect Mushrooms added to ${reason || "farm"} payload... (${actions.length})`);
+        return actions.length;
     }
 
     async function refreshCoreAccountingHashes(payload) {
@@ -10461,13 +11439,22 @@
         payload.actions = actions;
         await refreshCoreAccountingHashes(payload);
 
+        if (!guardGeneratedAutosavePayload(payload, reason || "Resource")) {
+            return false;
+        }
+
         log(`ğŸ“¦ ${reason}: sending package... (${actions.length} action${actions.length > 1 ? "s" : ""})`);
 
         try {
+            const stringifiedPayload = JSON.stringify(payload);
+            const botHeaders = await makeBotHeaders(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), stringifiedPayload);
+            if (!botHeaders) {
+                return false;
+            }
             const res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                 method: "POST",
-                headers: makeBotHeaders(),
-                body: JSON.stringify(payload)
+                headers: botHeaders,
+                body: stringifiedPayload
             });
 
             if (res.ok) {
@@ -10483,7 +11470,14 @@
                 return true;
             }
 
-            if (await handleSoftResourceServerReject(`${reason} rejected by server`, res.status)) {
+            let responseDetail = "";
+            try {
+                responseDetail = await res.clone().text();
+            } catch(e) {}
+            if (responseDetail) {
+                log(`<span style="color:#fb923c;font-weight:900;">SERVER RESPONSE</span> ${responseDetail.slice(0, 500)}`);
+            }
+            if (await handleSoftResourceServerReject(`${reason} rejected by server`, res.status, responseDetail)) {
                 return false;
             }
             triggerKillSwitch(`${reason} rejected by server.`, res.status);
@@ -10991,10 +11985,15 @@
             log(`ğŸ£ Reeling catch: ${caughtNames.join(", ")}`);
 
             try {
+                let stringifiedPayload = JSON.stringify(payload);
+                let botHeaders = await makeBotHeaders(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), stringifiedPayload);
+                if (!botHeaders) {
+                    return false;
+                }
                 let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                     method: 'POST',
-                    headers: makeBotHeaders(),
-                    body: JSON.stringify(payload)
+                    headers: botHeaders,
+                    body: stringifiedPayload
                 });
                 if (!res.ok) {
                     triggerKillSwitch("Server rejected fishing reel.", res.status);
@@ -11059,10 +12058,15 @@
         log(`ğŸ£ Casting rod with ${bait}...`);
 
         try {
+            let stringifiedPayload = JSON.stringify(payload);
+            let botHeaders = await makeBotHeaders(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), stringifiedPayload);
+            if (!botHeaders) {
+                return false;
+            }
             let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                 method: 'POST',
-                headers: makeBotHeaders(),
-                body: JSON.stringify(payload)
+                headers: botHeaders,
+                body: stringifiedPayload
             });
             if (!res.ok) {
                 triggerKillSwitch("Server rejected fishing cast.", res.status);
@@ -11127,10 +12131,15 @@
 
         log(`Digging ${reason}: buying ${qty}x ${tool}...`);
         try {
+            let stringifiedPayload = JSON.stringify(payload);
+            let botHeaders = await makeBotHeaders(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), stringifiedPayload);
+            if (!botHeaders) {
+                return false;
+            }
             let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                 method: 'POST',
-                headers: makeBotHeaders(),
-                body: JSON.stringify(payload)
+                headers: botHeaders,
+                body: stringifiedPayload
             });
             if (!res.ok) {
                 triggerKillSwitch("Server rejected digging tool buy.", res.status);
@@ -11183,10 +12192,15 @@
 
         log(`Digging ${reason}: selling ${qty}x ${item}...`);
         try {
+            let stringifiedPayload = JSON.stringify(payload);
+            let botHeaders = await makeBotHeaders(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), stringifiedPayload);
+            if (!botHeaders) {
+                return false;
+            }
             let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                 method: 'POST',
-                headers: makeBotHeaders(),
-                body: JSON.stringify(payload)
+                headers: botHeaders,
+                body: stringifiedPayload
             });
             if (!res.ok) {
                 triggerKillSwitch("Server rejected digging treasure sell.", res.status);
@@ -11240,10 +12254,15 @@
 
         log(`Digging: digging (${cell.x}, ${cell.y})...`);
         try {
+            let stringifiedPayload = JSON.stringify(payload);
+            let botHeaders = await makeBotHeaders(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), stringifiedPayload);
+            if (!botHeaders) {
+                return false;
+            }
             let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                 method: 'POST',
-                headers: makeBotHeaders(),
-                body: JSON.stringify(payload)
+                headers: botHeaders,
+                body: stringifiedPayload
             });
             if (!res.ok) {
                 triggerKillSwitch("Server rejected desert dig.", res.status);
@@ -11496,18 +12515,28 @@
                 }
 
                 if (!isHarvestBatch) {
+                    appendReadyMushroomsToPayload(payload, "single harvest", Date.now() + randInt(650, 1400));
                     payload.stateHash.inventory = await computeSHA256(SL_INVENTORY);
                     payload.stateHash.farmActivity = await computeSHA256(SL_FARM_ACTIVITY);
                     payload.stateHash.crops = await computeSHA256(SL_CROPS);
+                    payload.stateHash.mushrooms = await computeSHA256(SL_MUSHROOMS);
                     await refreshVolatileStateHashes(payload);
+
+                    if (!guardGeneratedAutosavePayload(payload, "Single harvest")) {
+                        return;
+                    }
 
                     log(`ğŸ“¦ [Single] Sending harvest...`);
 
                     try {
                         let stringifiedPayload = JSON.stringify(payload);
+                        let botHeaders = await makeBotHeaders(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), stringifiedPayload);
+                        if (!botHeaders) {
+                            return;
+                        }
                         let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                             method: 'POST',
-                            headers: makeBotHeaders(),
+                            headers: botHeaders,
                             body: stringifiedPayload
                         });
 
@@ -11515,8 +12544,10 @@
                             log(`âœ… Ä°ÅŸlem BaÅŸarÄ±lÄ±!`);
                             await applyAutosaveSnapshotFromResponse(res, 'single harvest');
                             masterPayload.stateHash = payload.stateHash;
-                            await sendReadyMushroomPackage("single harvest");
                         } else {
+                            if (await handleRecoverableServerReject("Single harvest rejected by server", res.status)) {
+                                return;
+                            }
                             triggerKillSwitch("Sunucu tekli hasadÄ± reddetti.", res.status);
                             return;
                         }
@@ -11536,18 +12567,28 @@
             if (isHarvestBatch) {
                 if (payload.actions.length > 0) {
                     if (!stopRequested && !killSwitchActivated) {
+                        appendReadyMushroomsToPayload(payload, "batch harvest", Date.now() + randInt(650, 1400));
                         payload.stateHash.inventory = await computeSHA256(SL_INVENTORY);
                         payload.stateHash.farmActivity = await computeSHA256(SL_FARM_ACTIVITY);
                         payload.stateHash.crops = await computeSHA256(SL_CROPS);
+                        payload.stateHash.mushrooms = await computeSHA256(SL_MUSHROOMS);
                         await refreshVolatileStateHashes(payload);
+
+                        if (!guardGeneratedAutosavePayload(payload, "Batch harvest")) {
+                            return;
+                        }
 
                         log(`ğŸ“¦ [Toplu Paket] Hasat sepeti fÄ±rlatÄ±lÄ±yor... (${payload.actions.length} eylem)`);
 
                         try {
                             let stringifiedPayload = JSON.stringify(payload);
+                            let botHeaders = await makeBotHeaders(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), stringifiedPayload);
+                            if (!botHeaders) {
+                                return;
+                            }
                             let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                                 method: 'POST',
-                                headers: makeBotHeaders(),
+                                headers: botHeaders,
                                 body: stringifiedPayload
                             });
 
@@ -11555,7 +12596,6 @@
                                 log(`âœ… Ä°ÅŸlem BaÅŸarÄ±lÄ±!`);
                                 await applyAutosaveSnapshotFromResponse(res, 'batch harvest');
                                 masterPayload.stateHash = payload.stateHash;
-                                await sendReadyMushroomPackage("batch harvest");
                             } else {
                                 if (await handleRecoverableServerReject("Batch harvest rejected by server", res.status)) {
                                     return;
@@ -11648,6 +12688,12 @@
             }
 
             if (activeSells.length > 0) {
+                const saleSyncOk = await forceRadarRefresh('sale ledger sync', true);
+                if (!saleSyncOk) {
+                    log(`<span style="color:#facc15;font-weight:900;">SALE WAITING</span> Fresh farm data could not be synced, sale package was not sent.`);
+                    return;
+                }
+
                 let salePayloadsSent = 0;
 
                 for (let i = 0; i < activeSells.length; i++) {
@@ -11675,18 +12721,23 @@
                         }
 
                         let dateIso = new Date().toISOString();
+                        let saleAmount = amt.toString();
 
                         let sellAction = {
                             type: "crop.sold",
                             crop: crop,
-                            amount: amt.toString(),
+                            amount: saleAmount,
                             createdAt: dateIso
                         };
+
+                        if (!ensureAutosaveActionSamples([sellAction], "Sale")) {
+                            return;
+                        }
 
                         let basePrice = CROP_SELL_PRICES[crop] || defaultSellPrices[crop] || 0.02;
                         let priceInfo = calculateClientSellPrice(crop, basePrice, dateIso);
                         let cropPrice = priceInfo.price;
-                        let kazanc = amt * cropPrice;
+                        let kazanc = addGameNumber(0, amt * cropPrice);
                         let sellBoostsUsed = [];
 
                         if (priceInfo.boosts.length > 0) {
@@ -11700,9 +12751,10 @@
                         let sellPredictedAction = {
                             type: "crop.sold",
                             crop: crop,
-                            amount: amt.toString()
+                            amount: saleAmount
                         };
 
+                        const sellSnapshot = snapshotMarketState();
                         modifyInventory(crop, -amt);
                         let actName = crop + " Sold";
                         modifyActivity(actName, amt);
@@ -11710,12 +12762,13 @@
 
                         actionPerformed = true;
                         log(`Sale preparing: ${amt}x ${crop}`);
+                        log(`Sale ledger: price=${cropPrice}, earned=${kazanc}, boosts=${sellBoostsUsed.length ? sellBoostsUsed.join(", ") : "none"}`);
 
                         let stringifiedMaster = JSON.stringify(masterPayload);
                         let payload = JSON.parse(stringifiedMaster);
                         payload.actions = [sellAction];
 
-                        SL_COINS += kazanc;
+                        SL_COINS = addGameNumber(SL_COINS, kazanc);
                         lastBotMarketPrediction = {
                             type: "sell",
                             actions: [sellPredictedAction],
@@ -11725,18 +12778,32 @@
 
                         payload.stateHash.inventory = await computeSHA256(SL_INVENTORY);
                         payload.stateHash.farmActivity = await computeSHA256(SL_FARM_ACTIVITY);
+                        markSaleBoostsUsed(sellBoostsUsed, dateIso);
                         if (payload.stateHash.coins) {
                             payload.stateHash.coins = await computeSHA256(SL_COINS);
                         }
+                        if (payload.stateHash.boostsUsedAt) {
+                            payload.stateHash.boostsUsedAt = await computeSHA256(SL_BOOSTS_USED_AT);
+                        }
                         await refreshVolatileStateHashes(payload);
+
+                        if (!guardGeneratedAutosavePayload(payload, "Sale")) {
+                            restoreMarketState(sellSnapshot);
+                            return;
+                        }
 
                         log(`Sending sale payload... (${amt}x ${crop})`);
 
                         try {
                             let stringifiedPayload = JSON.stringify(payload);
+                            const botHeaders = await makeBotHeaders(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), stringifiedPayload);
+                            if (!botHeaders) {
+                                restoreMarketState(sellSnapshot);
+                                return;
+                            }
                             let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                                 method: 'POST',
-                                headers: makeBotHeaders(),
+                                headers: botHeaders,
                                 body: stringifiedPayload
                             });
 
@@ -11747,10 +12814,22 @@
                                 lastCompletedPhase = 'sell';
                                 salePayloadsSent++;
                             } else {
+                                let responseDetail = "";
+                                try {
+                                    responseDetail = await res.clone().text();
+                                } catch(e) {}
+                                if (responseDetail) {
+                                    log(`<span style="color:#fb923c;font-weight:900;">SERVER RESPONSE</span> ${responseDetail.slice(0, 500)}`);
+                                }
+                                restoreMarketState(sellSnapshot);
+                                if (await handleSoftMarketServerReject("Sale rejected by server", res.status, responseDetail)) {
+                                    return;
+                                }
                                 triggerKillSwitch("Sunucu satÃ„Â±Ã…Å¸Ã„Â± reddetti.", res.status);
                                 return;
                             }
                         } catch(e) {
+                            restoreMarketState(sellSnapshot);
                             triggerKillSwitch("AÃ„Å¸ baÃ„Å¸lantÃ„Â±sÃ„Â± koptu (SatÃ„Â±Ã…Å¸).", "NETWORK");
                             return;
                         }
@@ -11791,9 +12870,13 @@
 
                     try {
                         let stringifiedPayload = JSON.stringify(payload);
+                        let botHeaders = await makeBotHeaders(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), stringifiedPayload);
+                        if (!botHeaders) {
+                            return;
+                        }
                         let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                             method: 'POST',
-                            headers: makeBotHeaders(),
+                            headers: botHeaders,
                             body: stringifiedPayload
                         });
 
@@ -12011,13 +13094,39 @@
                         }
                         await refreshVolatileStateHashes(payload);
 
+                        if (!guardGeneratedAutosavePayload(payload, "Seed buy")) {
+                            SL_INVENTORY = beforeBuyInventory;
+                            SL_FARM_ACTIVITY = beforeBuyActivity;
+                            SL_STOCK = beforeBuyStock;
+                            SL_COINS = beforeBuyCoins;
+                            localStorage.setItem('sl_inventory_cache', JSON.stringify(SL_INVENTORY));
+                            localStorage.setItem('sl_activity_cache', JSON.stringify(SL_FARM_ACTIVITY));
+                            localStorage.setItem('sl_stock_cache', JSON.stringify(SL_STOCK));
+                            localStorage.setItem('sl_coins_cache', String(SL_COINS));
+                            lastBotMarketPrediction = null;
+                            return;
+                        }
+
                         log(`ğŸ“¦ AlÄ±m paketi fÄ±rlatÄ±lÄ±yor... (${buyActions.length} eylem)`);
 
                         try {
                             let stringifiedPayload = JSON.stringify(payload);
+                            const botHeaders = await makeBotHeaders(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), stringifiedPayload);
+                            if (!botHeaders) {
+                                SL_INVENTORY = beforeBuyInventory;
+                                SL_FARM_ACTIVITY = beforeBuyActivity;
+                                SL_STOCK = beforeBuyStock;
+                                SL_COINS = beforeBuyCoins;
+                                localStorage.setItem('sl_inventory_cache', JSON.stringify(SL_INVENTORY));
+                                localStorage.setItem('sl_activity_cache', JSON.stringify(SL_FARM_ACTIVITY));
+                                localStorage.setItem('sl_stock_cache', JSON.stringify(SL_STOCK));
+                                localStorage.setItem('sl_coins_cache', String(SL_COINS));
+                                lastBotMarketPrediction = null;
+                                return;
+                            }
                             let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                                 method: 'POST',
-                                headers: makeBotHeaders(),
+                                headers: botHeaders,
                                 body: stringifiedPayload
                             });
 
@@ -12245,13 +13354,21 @@
                                 }
                                 await refreshVolatileStateHashes(payload);
 
+                                if (!guardGeneratedAutosavePayload(payload, "Single plant")) {
+                                    return;
+                                }
+
                                 log(`ğŸ“¦ [Single] Sending plant...`);
 
                                 try {
                                     let stringifiedPayload = JSON.stringify(payload);
+                                    let botHeaders = await makeBotHeaders(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), stringifiedPayload);
+                                    if (!botHeaders) {
+                                        return;
+                                    }
                                     let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                                         method: 'POST',
-                                        headers: makeBotHeaders(),
+                                        headers: botHeaders,
                                         body: stringifiedPayload
                                     });
 
@@ -12294,13 +13411,21 @@
                             }
                             await refreshVolatileStateHashes(payload);
 
+                            if (!guardGeneratedAutosavePayload(payload, "Batch plant")) {
+                                return;
+                            }
+
                             log(`ğŸ“¦ [Toplu Paket] Ekim sepeti fÄ±rlatÄ±lÄ±yor... (${plantCount} tohum)`);
 
                             try {
                                 let stringifiedPayload = JSON.stringify(payload);
+                                let botHeaders = await makeBotHeaders(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), stringifiedPayload);
+                                if (!botHeaders) {
+                                    return;
+                                }
                                 let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                                     method: 'POST',
-                                    headers: makeBotHeaders(),
+                                    headers: botHeaders,
                                     body: stringifiedPayload
                                 });
 
@@ -12443,9 +13568,13 @@
 
                             try {
                                 let stringifiedPayload = JSON.stringify(payload);
+                                let botHeaders = await makeBotHeaders(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), stringifiedPayload);
+                                if (!botHeaders) {
+                                    return;
+                                }
                                 let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                                     method: 'POST',
-                                    headers: makeBotHeaders(),
+                                    headers: botHeaders,
                                     body: stringifiedPayload
                                 });
 
@@ -12494,9 +13623,13 @@
 
                             try {
                                 let stringifiedPayload = JSON.stringify(payload);
+                                let botHeaders = await makeBotHeaders(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), stringifiedPayload);
+                                if (!botHeaders) {
+                                    return;
+                                }
                                 let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                                     method: 'POST',
-                                    headers: makeBotHeaders(),
+                                    headers: botHeaders,
                                     body: stringifiedPayload
                                 });
 
@@ -12568,9 +13701,13 @@
 
                                 try {
                                     let stringifiedPayload = JSON.stringify(payload);
+                                    let botHeaders = await makeBotHeaders(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), stringifiedPayload);
+                                    if (!botHeaders) {
+                                        return;
+                                    }
                                     let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                                         method: 'POST',
-                                        headers: makeBotHeaders(),
+                                        headers: botHeaders,
                                         body: stringifiedPayload
                                     });
 
@@ -12619,9 +13756,13 @@
 
                             try {
                                 let stringifiedPayload = JSON.stringify(payload);
+                                let botHeaders = await makeBotHeaders(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), stringifiedPayload);
+                                if (!botHeaders) {
+                                    return;
+                                }
                                 let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                                     method: 'POST',
-                                    headers: makeBotHeaders(),
+                                    headers: botHeaders,
                                     body: stringifiedPayload
                                 });
 
@@ -12704,9 +13845,13 @@
 
                                 try {
                                     let stringifiedPayload = JSON.stringify(payload);
+                                    let botHeaders = await makeBotHeaders(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), stringifiedPayload);
+                                    if (!botHeaders) {
+                                        return;
+                                    }
                                     let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                                         method: 'POST',
-                                        headers: makeBotHeaders(),
+                                        headers: botHeaders,
                                         body: stringifiedPayload
                                     });
 
@@ -12756,9 +13901,13 @@
 
                             try {
                                 let stringifiedPayload = JSON.stringify(payload);
+                                let botHeaders = await makeBotHeaders(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), stringifiedPayload);
+                                if (!botHeaders) {
+                                    return;
+                                }
                                 let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                                     method: 'POST',
-                                    headers: makeBotHeaders(),
+                                    headers: botHeaders,
                                     body: stringifiedPayload
                                 });
 
@@ -12841,9 +13990,13 @@
 
                                 try {
                                     let stringifiedPayload = JSON.stringify(payload);
+                                    let botHeaders = await makeBotHeaders(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), stringifiedPayload);
+                                    if (!botHeaders) {
+                                        return;
+                                    }
                                     let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                                         method: 'POST',
-                                        headers: makeBotHeaders(),
+                                        headers: botHeaders,
                                         body: stringifiedPayload
                                     });
 
@@ -12893,9 +14046,13 @@
 
                             try {
                                 let stringifiedPayload = JSON.stringify(payload);
+                                let botHeaders = await makeBotHeaders(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), stringifiedPayload);
+                                if (!botHeaders) {
+                                    return;
+                                }
                                 let res = await _window.fetch(makeSunflowerApiUrl(`/autosave/${SL_FARM_ID}`), {
                                     method: 'POST',
-                                    headers: makeBotHeaders(),
+                                    headers: botHeaders,
                                     body: stringifiedPayload
                                 });
 

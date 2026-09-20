@@ -716,6 +716,23 @@ def decrypt_license_for_server(token: str):
         return None
 
 
+def recover_license_payload_from_store(encrypted_license: str):
+    token = str(encrypted_license or '').strip()
+    if not token:
+        return None
+    for license_id, row in load_licenses().items():
+        stored = str((row or {}).get('encrypted_license') or '').strip()
+        if not stored or not hmac.compare_digest(stored, token):
+            continue
+        return {
+            'license_id': str(license_id or '').strip(),
+            'client_name': str((row or {}).get('client_name') or 'Kullanici').strip(),
+            'client_id': str((row or {}).get('client_id') or '').strip(),
+            'script_hash': str((row or {}).get('script_hash') or '').strip()
+        }
+    return None
+
+
 def build_session_token(license_id, uid):
     raw = f"{license_id}|{uid}|{datetime.now().isoformat()}|{secrets.token_hex(16)}"
     return hashlib.sha256(raw.encode('utf-8')).hexdigest()
@@ -1244,6 +1261,8 @@ def api_auth():
         return jsonify({'success': False, 'error': 'Script gecersiz Hata kodu (4003)'}), 403
 
     payload = decrypt_license_for_server(encrypted_license)
+    if not payload:
+        payload = recover_license_payload_from_store(encrypted_license)
     if not payload:
         return jsonify({'success': False, 'error': 'Gecersiz lisans'}), 403
 

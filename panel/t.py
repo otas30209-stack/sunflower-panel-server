@@ -114,11 +114,13 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
         if (SERVER_URLS.includes(url)) saveLocal(ACTIVE_SERVER_KEY, url);
     }
 
-    function shouldTryNextServer(res) {
+    function shouldTryNextServer(res, path = '') {
         if (!res) return true;
         const status = parseInt(res.__status || 0, 10);
         if ([429, 500, 502, 503, 504].includes(status)) return true;
         if (res.__network_error || res.__parse_error) return true;
+        const errorText = String(res.error || '').trim().toLowerCase();
+        if (String(path || '').startsWith('/api/auth') && status === 403 && ['gecersiz lisans', 'lisans bozuk'].includes(errorText)) return true;
         return false;
     }
 
@@ -160,7 +162,7 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
             const base = ordered[i];
             const resp = await requestOnce(method, base + path, body);
             last = resp;
-            if (!shouldTryNextServer(resp)) {
+            if (!shouldTryNextServer(resp, path)) {
                 saveActiveServerUrl(base);
                 return resp;
             }
