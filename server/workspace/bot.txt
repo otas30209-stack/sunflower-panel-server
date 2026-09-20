@@ -1227,6 +1227,17 @@
                 found[marker] = false;
             });
 
+            const runtimePayload = masterPayload && typeof masterPayload === "object" ? masterPayload : {};
+            const runtimeHeaders = masterHeaders && typeof masterHeaders === "object" ? masterHeaders : {};
+            const runtimeHeaderNames = Object.keys(runtimeHeaders).map(function(name) { return String(name).toLowerCase(); });
+            found["/autosave/"] = !!(SL_FARM_ID && runtimePayload.sessionId);
+            found["x-amz-ttl"] = runtimeHeaderNames.includes("x-amz-ttl") || !!(_window && _window["x-amz-ttl"]);
+            found.cachedKey = !!(runtimePayload.cachedKey || getLiveAutosaveCachedKey());
+            found.deviceTrackerId = !!(runtimePayload.deviceTrackerId || SL_DEVICE_TRACKER_ID);
+            found.stateHash = !!(runtimePayload.stateHash && typeof runtimePayload.stateHash === "object");
+            found.sessionId = !!(runtimePayload.sessionId || SL_SESSION_ID);
+            found.clientVersion = !!(runtimePayload.clientVersion || SL_SESSION_BODY_CACHE.clientVersion);
+
             for (let i = 0; i < urls.length; i++) {
                 try {
                     const text = await _window.fetch(urls[i]).then(function(r) { return r.text(); });
@@ -4456,7 +4467,7 @@
         let mainMenuHTML = `
             <div id="sl-main-menu" class="sl-window" style="${mainMenuHidden ? 'display:none;' : ''}">
                 <div class="win-header">
-                    <span>NEXUS SUNFLOWER BOT 1.1.2</span>
+                    <span>NEXUS SUNFLOWER BOT 1.1.3</span>
                     <div style="display:flex; align-items:center; gap:8px;">
                         <span id="top-coin-info" style="display:none; color:#fde047; font-size:12px; font-weight:900; background:rgba(0,0,0,0.4); padding:3px 8px; border-radius:8px; border:1px solid rgba(253,224,71,0.3);">
                             ${SL_COINS.toFixed(4)}
