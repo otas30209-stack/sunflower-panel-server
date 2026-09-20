@@ -924,9 +924,7 @@
             for (let i = 0; i < sortedEntries.length; i++) {
                 const plotId = sortedEntries[i][0];
                 const plot = sortedEntries[i][1] || {};
-                const unsupportedAccounting = getPlotAccountingRisk(plot);
-
-                if (i < limit && !unsupportedAccounting) {
+                if (i < limit) {
                     safe.push(plotId);
                 } else {
                     quarantined.push(plotId);
@@ -1331,6 +1329,7 @@
             calculateSellPrice: calculateSellPrice,
             getCookingTime: getCookingTime,
             getUnsupportedAccountingReason: getUnsupportedAccountingReason,
+            getPlotAccountingRisk: getPlotAccountingRisk,
             isWearableActive: isWearableActive,
             isCollectibleBuilt: isCollectibleBuilt,
             getCurrentBumpkinLevel: getCurrentBumpkinLevel,
@@ -4457,7 +4456,7 @@
         let mainMenuHTML = `
             <div id="sl-main-menu" class="sl-window" style="${mainMenuHidden ? 'display:none;' : ''}">
                 <div class="win-header">
-                    <span>NEXUS SUNFLOWER BOT 1.1.1</span>
+                    <span>NEXUS SUNFLOWER BOT 1.1.2</span>
                     <div style="display:flex; align-items:center; gap:8px;">
                         <span id="top-coin-info" style="display:none; color:#fde047; font-size:12px; font-weight:900; background:rgba(0,0,0,0.4); padding:3px 8px; border-radius:8px; border:1px solid rgba(253,224,71,0.3);">
                             ${SL_COINS.toFixed(4)}
@@ -12410,7 +12409,7 @@
         for (let i = 0; i < cropEntries.length; i++) {
             let id = cropEntries[i][0];
             let p = cropEntries[i][1];
-            if (safePlots.includes(id) && getCropStatus(p) === "READY") {
+            if (safePlots.includes(id) && getCropStatus(p) === "READY" && !GameRules.getPlotAccountingRisk(p)) {
                 readyPlots.push(id);
             }
         }
@@ -12458,7 +12457,7 @@
                 for (let i = 0; i < cropEntries.length; i++) {
                     let id = cropEntries[i][0];
                     let p = cropEntries[i][1];
-                    if (safePlots.includes(id) && getCropStatus(p) === "READY") {
+                    if (safePlots.includes(id) && getCropStatus(p) === "READY" && !GameRules.getPlotAccountingRisk(p)) {
                         readyPlots.push(id);
                     }
                 }
