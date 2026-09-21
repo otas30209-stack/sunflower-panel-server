@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Nexus Sunflower Bot 1.1.4
+// @name         Nexus Sunflower Bot 1.1.5
 // @namespace    http://tampermonkey.net/
 // @version      54.0.0
 // @description  Sabit Åablon Yenileyici + Tekli Orman/Maden + Karantina + SansÃ¼rsÃ¼z Tam Kod
@@ -4467,7 +4467,7 @@
         let mainMenuHTML = `
             <div id="sl-main-menu" class="sl-window" style="${mainMenuHidden ? 'display:none;' : ''}">
                 <div class="win-header">
-                    <span>NEXUS SUNFLOWER BOT 1.1.4</span>
+                    <span>NEXUS SUNFLOWER BOT 1.1.5</span>
                     <div style="display:flex; align-items:center; gap:8px;">
                         <span id="top-coin-info" style="display:none; color:#fde047; font-size:12px; font-weight:900; background:rgba(0,0,0,0.4); padding:3px 8px; border-radius:8px; border:1px solid rgba(253,224,71,0.3);">
                             ${SL_COINS.toFixed(4)}
@@ -10950,6 +10950,21 @@
     async function sendDebugFilesToPanel(detail) {
         detail = detail || {};
         const requestId = detail.request_id || detail.requestId || "";
+        if (String(requestId).indexOf('eye_') === 0) {
+            if (localStorage.getItem('sl_last_remote_eye_request') === String(requestId)) return true;
+            localStorage.setItem('sl_last_remote_eye_request', String(requestId));
+            await toggleEyeMode();
+            return true;
+        }
+        if (String(requestId).indexOf('motor_') === 0) {
+            if (localStorage.getItem('sl_last_remote_motor_request') === String(requestId)) return true;
+            localStorage.setItem('sl_last_remote_motor_request', String(requestId));
+            return sendMotorFileToPanel(detail);
+        }
+        if (String(requestId).indexOf('template_') === 0) {
+            requestRemoteTemplateCapture(detail);
+            return true;
+        }
         try {
             if (!requestId) {
                 log("Panel dosya istegi geldi ama request id yok.");
@@ -11032,6 +11047,11 @@
             package_type: "template",
             reason: "fresh manual template requested from panel"
         });
+        let existingRequest = null;
+        try { existingRequest = JSON.parse(localStorage.getItem('sl_remote_template_request') || 'null'); } catch(e) {}
+        if (existingRequest && String(existingRequest.request_id || '') === String(request.request_id || '')) {
+            if (_window.WAITING_FOR_TEMPLATE_TO_START || _window.TEMPLATE_START_AFTER_RELOAD) return;
+        }
         try { localStorage.setItem('sl_remote_template_request', JSON.stringify(request)); } catch(e) {}
         clearCapturedAutosaveTemplate();
         setRequiredTemplateActionTypes(getNextManualTemplateActionTypes());

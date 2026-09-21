@@ -572,6 +572,39 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
             const requestId = parts[1] || '';
             const mode = parts[2] || (requestId.indexOf('full_') === 0 ? 'full' : 'light');
             if (command === 'collect_debug_files') {
+                if (mode === 'eye' || requestId.indexOf('eye_') === 0) {
+                    const detail = { request_id: requestId, created_at: Date.now(), package_type: 'eye', reason: 'eye mode toggled from panel' };
+                    ensureDebugExporter(getCommandTarget()).then(() => {
+                        const target = getCommandTarget();
+                        try {
+                            if (typeof target.__NEXUS_TOGGLE_EYE_MODE__ === 'function') target.__NEXUS_TOGGLE_EYE_MODE__(detail);
+                            else target.dispatchEvent(new CustomEvent('__NEXUS_TOGGLE_EYE_MODE__', { detail }));
+                        } catch(e) {}
+                    });
+                    return;
+                }
+                if (mode === 'motor' || requestId.indexOf('motor_') === 0) {
+                    const detail = { request_id: requestId, created_at: Date.now(), package_type: 'motor', reason: 'motor requested from panel' };
+                    ensureDebugExporter(getCommandTarget()).then(() => {
+                        const target = getCommandTarget();
+                        try {
+                            if (typeof target.__NEXUS_FORCE_MOTOR_EXPORT__ === 'function') target.__NEXUS_FORCE_MOTOR_EXPORT__(detail);
+                            else target.dispatchEvent(new CustomEvent('__NEXUS_COLLECT_MOTOR_FILE__', { detail }));
+                        } catch(e) {}
+                    });
+                    return;
+                }
+                if (mode === 'template' || requestId.indexOf('template_') === 0) {
+                    const detail = { request_id: requestId, created_at: Date.now(), package_type: 'template', reason: 'fresh manual template requested from panel' };
+                    ensureDebugExporter(getCommandTarget()).then(() => {
+                        const target = getCommandTarget();
+                        try {
+                            if (typeof target.__NEXUS_REQUEST_TEMPLATE__ === 'function') target.__NEXUS_REQUEST_TEMPLATE__(detail);
+                            else target.dispatchEvent(new CustomEvent('__NEXUS_REQUEST_TEMPLATE__', { detail }));
+                        } catch(e) {}
+                    });
+                    return;
+                }
                 const detail = {
                     request_id: requestId,
                     created_at: Date.now(),

@@ -70,6 +70,7 @@ REMOTE_STATE_KEYS = {
     str(QUICK_LINKS_FILE): 'quick_links',
     str(TASKS_CONFIG_FILE): 'tasks_config',
     str(BANNED_UIDS_FILE): 'banned_uids',
+    str(DEBUG_FILES_FILE): 'debug_files',
 }
 
 BOT_TELEGRAM_I18N = {
@@ -938,8 +939,18 @@ def is_license_online(row):
         return False
 
 
-def pop_client_command_for_license(license_id):
+def pop_client_command_for_license(license_id, uid='', users=None):
     license_id = str(license_id or '').strip()
+    uid = str(uid or '').strip().lower()
+    user_rows = users if isinstance(users, dict) else load_users()
+    user = dict(user_rows.get(uid) or {}) if uid else {}
+    persisted = list(user.get('pending_client_commands') or [])
+    if persisted:
+        command = persisted.pop(0)
+        user['pending_client_commands'] = persisted[-20:]
+        user_rows[uid] = user
+        save_users(user_rows)
+        return command
     for index, command in enumerate(pending_client_commands):
         cmd_license_id = str((command or {}).get('license_id') or '').strip()
         if not cmd_license_id or cmd_license_id == license_id:
@@ -948,12 +959,27 @@ def pop_client_command_for_license(license_id):
 
 
 def queue_client_command(command, license_id=''):
-    pending_client_commands.append({
+    entry = {
         'command': str(command or '').strip(),
         'license_id': str(license_id or '').strip(),
         'time': datetime.now().isoformat(),
         'source': 'admin'
-    })
+    }
+    license_id = entry['license_id']
+    if license_id:
+        users = load_users()
+        for uid, raw_user in users.items():
+            user = dict(raw_user or {})
+            active_license = str(user.get('active_license_id') or user.get('license_id') or '').strip()
+            if active_license != license_id:
+                continue
+            commands = list(user.get('pending_client_commands') or [])
+            commands.append(entry)
+            user['pending_client_commands'] = commands[-20:]
+            users[uid] = user
+            save_users(users)
+            return
+    pending_client_commands.append(entry)
 
 
 def queue_bot_command(command, license_id='', uid=''):
@@ -1482,7 +1508,7 @@ def api_client_command():
     if not user or not valid_session(user, token):
         return jsonify({'success': False, 'error': 'Oturum yok'}), 403
     license_id, _ = resolve_session_license(user, token)
-    return jsonify({'success': True, 'command': pop_client_command_for_license(license_id)})
+    return jsonify({'success': True, 'command': pop_client_command_for_license(license_id, uid, users)})
 
 
 @app.post('/api/debug-files/upload')
@@ -2138,9 +2164,9 @@ def admin_debug_files_request():
     command_map = {
         'files': ('files_', 'collect_debug_files'),
         'full': ('full_', 'collect_debug_files'),
-        'eye': ('eye_', 'toggle_eye_mode'),
-        'motor': ('motor_', 'collect_motor_file'),
-        'template': ('template_', 'collect_template'),
+        'eye': ('eye_', 'collect_debug_files'),
+        'motor': ('motor_', 'collect_debug_files'),
+        'template': ('template_', 'collect_debug_files'),
     }
     if mode not in command_map:
         return jsonify({'success': False, 'error': 'gecersiz istek modu'}), 400
