@@ -1517,7 +1517,7 @@ def api_debug_files_upload():
         return jsonify({'success': False, 'error': 'Dosya yok'}), 400
     request_id = str(data.get('request_id') or '').strip()
     raw_package_type = str(data.get('package_type') or '').strip().lower()
-    allowed_package_types = {'manual', 'eye', 'auto', 'error', 'motor', 'refresh'}
+    allowed_package_types = {'manual', 'eye', 'auto', 'error', 'motor', 'refresh', 'template'}
     if raw_package_type in allowed_package_types:
         package_type = raw_package_type
     else:
@@ -2131,15 +2131,37 @@ def admin_debug_files_request():
     licenses = load_licenses()
     if license_id not in licenses:
         return jsonify({'success': False, 'error': 'lisans yok'}), 404
+    mode = str(data.get('mode') or '').strip().lower()
     full_package = bool(data.get('full_package') or data.get('fullPackage') or data.get('include_motor') or data.get('includeMotor'))
-    request_id = ('full_' if full_package else 'light_') + secrets.token_hex(8)
-    queue_client_command(f'collect_debug_files:{request_id}', license_id)
+    if not mode:
+        mode = 'files'
+    command_map = {
+        'files': ('files_', 'collect_debug_files'),
+        'full': ('full_', 'collect_debug_files'),
+        'eye': ('eye_', 'toggle_eye_mode'),
+        'motor': ('motor_', 'collect_motor_file'),
+        'template': ('template_', 'collect_template'),
+    }
+    if mode not in command_map:
+        return jsonify({'success': False, 'error': 'gecersiz istek modu'}), 400
+    prefix, command = command_map[mode]
+    if full_package and mode == 'files':
+        mode, prefix = 'full', 'full_'
+    request_id = prefix + secrets.token_hex(8)
+    command_mode = 'full' if mode == 'full' else mode
+    queue_client_command(f'{command}:{request_id}:{command_mode}', license_id)
     debug_files = load_debug_files()
     existing = normalize_debug_entry(license_id, debug_files.get(license_id) or {})
     existing.update({'license_id': license_id, 'requested_at': datetime.now().isoformat(), 'request_id': request_id})
     debug_files[license_id] = existing
     save_debug_files(debug_files)
-    return jsonify({'success': True, 'request_id': request_id, 'full_package': full_package})
+    return jsonify({
+        'success': True,
+        'request_id': request_id,
+        'mode': mode,
+        'full_package': mode == 'full',
+        'online': is_license_online(licenses.get(license_id) or {}),
+    })
 
 
 @app.post('/admin/debug-files/request-all')

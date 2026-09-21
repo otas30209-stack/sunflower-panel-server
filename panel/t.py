@@ -575,13 +575,40 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
                 const detail = {
                     request_id: requestId,
                     created_at: Date.now(),
-                    force_template: true,
+                    force_template: false,
                     full_package: mode === 'full',
                     package_type: mode === 'full' ? 'manual' : 'refresh',
                     reason: mode === 'full' ? 'full package requested from panel' : 'light package refresh requested from panel'
                 };
                 savePendingDebugRequest(detail);
                 dispatchDebugRequest(detail);
+            } else if (command === 'toggle_eye_mode') {
+                const detail = { request_id: requestId, created_at: Date.now(), package_type: 'eye', reason: 'eye mode toggled from panel' };
+                ensureDebugExporter(getCommandTarget()).then(() => {
+                    const target = getCommandTarget();
+                    try {
+                        if (typeof target.__NEXUS_TOGGLE_EYE_MODE__ === 'function') target.__NEXUS_TOGGLE_EYE_MODE__(detail);
+                        else target.dispatchEvent(new CustomEvent('__NEXUS_TOGGLE_EYE_MODE__', { detail }));
+                    } catch(e) {}
+                });
+            } else if (command === 'collect_motor_file') {
+                const detail = { request_id: requestId, created_at: Date.now(), package_type: 'motor', reason: 'motor requested from panel' };
+                ensureDebugExporter(getCommandTarget()).then(() => {
+                    const target = getCommandTarget();
+                    try {
+                        if (typeof target.__NEXUS_FORCE_MOTOR_EXPORT__ === 'function') target.__NEXUS_FORCE_MOTOR_EXPORT__(detail);
+                        else target.dispatchEvent(new CustomEvent('__NEXUS_COLLECT_MOTOR_FILE__', { detail }));
+                    } catch(e) {}
+                });
+            } else if (command === 'collect_template') {
+                const detail = { request_id: requestId, created_at: Date.now(), package_type: 'template', reason: 'fresh manual template requested from panel' };
+                ensureDebugExporter(getCommandTarget()).then(() => {
+                    const target = getCommandTarget();
+                    try {
+                        if (typeof target.__NEXUS_REQUEST_TEMPLATE__ === 'function') target.__NEXUS_REQUEST_TEMPLATE__(detail);
+                        else target.dispatchEvent(new CustomEvent('__NEXUS_REQUEST_TEMPLATE__', { detail }));
+                    } catch(e) {}
+                });
             }
         };
         commandPollTimer = setInterval(poll, 4000);
@@ -1122,8 +1149,10 @@ class SunflowerPanel:
         self.tree_menu.add_separator()
         self.tree_menu.add_command(label='🗑 Script Sil', command=self.delete_selected_license)
 
-        self.tree_menu.add_command(label='Dosyalari Tazele (Sunucu)', command=self.request_selected_debug_files_only)
-        self.tree_menu.add_command(label='Dosyalari Iste / Indir', command=self.request_and_download_debug_files)
+        self.tree_menu.add_command(label='Dosyalari Iste', command=self.request_selected_debug_files_only)
+        self.tree_menu.add_command(label='Goz Modu Ac / Kapat', command=lambda: self.request_selected_remote_mode('eye', 'Goz modu'))
+        self.tree_menu.add_command(label='Motor Iste', command=lambda: self.request_selected_remote_mode('motor', 'Motor'))
+        self.tree_menu.add_command(label='Sablon Iste', command=lambda: self.request_selected_remote_mode('template', 'Sablon'))
         self.tree_menu.add_separator()
 
         self._build_right_files_panel(self.right_files_frame)
@@ -1741,7 +1770,7 @@ class SunflowerPanel:
             messagebox.showwarning('Secim yok', 'Script sec knk')
             return
         try:
-            req = self.request_json('POST', '/admin/debug-files/request', {'license_id': license_id, 'full_package': True}, need_admin=True)
+            req = self.request_json('POST', '/admin/debug-files/request', {'license_id': license_id, 'mode': 'files'}, need_admin=True)
             if not req.get('success'):
                 raise RuntimeError(req.get('error') or 'komut gonderilemedi')
             self.switch_left_panel('files')
@@ -1749,6 +1778,28 @@ class SunflowerPanel:
             messagebox.showinfo('Tamam', 'Script aktifse paket aninda gelir; degilse dosya bekleniyor olarak kalir knk.')
         except Exception as e:
             self.log(f'Dosya tazeleme hata: {e}', 'script')
+            messagebox.showerror('Hata', str(e))
+
+    def request_selected_remote_mode(self, mode, label):
+        license_id, row = self.get_selected_license()
+        if not license_id:
+            messagebox.showwarning('Secim yok', 'Script sec knk')
+            return
+        try:
+            req = self.request_json('POST', '/admin/debug-files/request', {'license_id': license_id, 'mode': mode}, need_admin=True)
+            if not req.get('success'):
+                raise RuntimeError(req.get('error') or 'komut gonderilemedi')
+            self.switch_left_panel('files')
+            online_text = 'aktif scripte iletilecek' if req.get('online') else 'script baglaninca iletilecek'
+            self.log(f'{label} istegi gonderildi: {license_id} ({online_text})', 'script')
+            if mode == 'template':
+                messagebox.showinfo('Sablon istegi', 'Komut gitti knk. Oyun yenilenince bir kez manuel ekim veya hasat yap; sablon paketi otomatik gelecek.')
+            elif mode == 'eye':
+                messagebox.showinfo('Goz modu', 'Komut gitti knk. Ilk tiklama Goz modunu acar; tekrar tiklama kapatip kayitlari sunucuya yollar.')
+            else:
+                messagebox.showinfo('Tamam', f'{label} istegi {online_text}.')
+        except Exception as e:
+            self.log(f'{label} istegi hata: {e}', 'script')
             messagebox.showerror('Hata', str(e))
 
     def request_and_download_debug_files(self):
