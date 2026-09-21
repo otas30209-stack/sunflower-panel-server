@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Nexus Sunflower Bot 1.1.5
+// @name         Nexus Sunflower Bot 1.1.6
 // @namespace    http://tampermonkey.net/
 // @version      54.0.0
 // @description  Sabit Åablon Yenileyici + Tekli Orman/Maden + Karantina + SansÃ¼rsÃ¼z Tam Kod
@@ -14,7 +14,7 @@
     'use strict';
 
     const _window = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
-    const NEXUS_BOT_BUILD = "2026-09-20.1-fertiliser-plot-quarantine";
+    const NEXUS_BOT_BUILD = "2026-09-21.1-weather-quarantine";
 
     // ==========================================
     // ğŸ““ BÃœYÃœK MUHASEBE DEFTERÄ° (THE GRAND LEDGER)
@@ -924,7 +924,7 @@
             for (let i = 0; i < sortedEntries.length; i++) {
                 const plotId = sortedEntries[i][0];
                 const plot = sortedEntries[i][1] || {};
-                if (i < limit) {
+                if (i < limit && !getPlotWeatherRisk(plotId)) {
                     safe.push(plotId);
                 } else {
                     quarantined.push(plotId);
@@ -1154,19 +1154,47 @@
             return !!(value && typeof value === "object" && Object.keys(value).length > 0);
         }
 
-        function hasActiveWeatherRisk() {
+        function getActiveCalendarEventName(nowMs = Date.now()) {
             if (!SL_CALENDAR || typeof SL_CALENDAR !== "object") {
-                return false;
+                return "";
             }
-
-            const weatherKeys = ["tornado", "tsunami", "greatFreeze"];
-            for (let i = 0; i < weatherKeys.length; i++) {
-                const item = SL_CALENDAR[weatherKeys[i]];
-                if (item && item.triggeredAt && !item.protected) {
-                    return true;
+            const eventKeys = ["tornado", "tsunami", "greatFreeze", "doubleDelivery", "bountifulHarvest", "insectPlague", "sunshower", "fullMoon", "fishFrenzy"];
+            for (let i = 0; i < eventKeys.length; i++) {
+                const eventName = eventKeys[i];
+                const item = SL_CALENDAR[eventName];
+                const startedAt = parseTimeValue(item && item.startedAt);
+                if (startedAt && startedAt > nowMs - (24 * 60 * 60 * 1000)) {
+                    return eventName;
                 }
             }
-            return false;
+            return "";
+        }
+
+        function isWeatherDestroyedPlot(plotId) {
+            const ordered = Object.keys(SL_CROPS || {}).sort(function(a, b) {
+                return Number((SL_CROPS[a] || {}).createdAt || 0) > Number((SL_CROPS[b] || {}).createdAt || 0) ? 1 : -1;
+            });
+            return ordered.slice(0, Math.floor(ordered.length / 2)).includes(String(plotId));
+        }
+
+        function getPlotWeatherRisk(plotId) {
+            const calendar = SL_CALENDAR || {};
+            const activeEvent = getActiveCalendarEventName();
+            let destructiveEvent = "";
+            if (activeEvent === "tornado" && calendar.tornado && !calendar.tornado.protected) {
+                destructiveEvent = "tornado";
+            } else if (calendar.tsunami && calendar.tsunami.triggeredAt && !calendar.tsunami.protected) {
+                destructiveEvent = "tsunami";
+            } else if (calendar.greatFreeze && calendar.greatFreeze.triggeredAt && !calendar.greatFreeze.protected) {
+                destructiveEvent = "greatFreeze";
+            }
+            if (destructiveEvent && isWeatherDestroyedPlot(plotId)) {
+                return destructiveEvent;
+            }
+            if (["insectPlague", "bountifulHarvest", "sunshower"].includes(activeEvent)) {
+                return activeEvent;
+            }
+            return "";
         }
 
         function getPlotAccountingRisk(plot) {
@@ -1184,10 +1212,6 @@
         }
 
         function getUnsupportedAccountingReason() {
-            if (hasActiveWeatherRisk()) {
-                return "Aktif hava olayi tespit edildi. Client weather muhasebesi birebir port edilmeden bot durduruldu.";
-            }
-
             return null;
         }
 
@@ -1340,6 +1364,8 @@
             calculateSellPrice: calculateSellPrice,
             getCookingTime: getCookingTime,
             getUnsupportedAccountingReason: getUnsupportedAccountingReason,
+            getActiveCalendarEventName: getActiveCalendarEventName,
+            getPlotWeatherRisk: getPlotWeatherRisk,
             getPlotAccountingRisk: getPlotAccountingRisk,
             isWearableActive: isWearableActive,
             isCollectibleBuilt: isCollectibleBuilt,
@@ -3240,6 +3266,7 @@
         SL_LAVA_PITS = {};
         SL_ASCENSION_CRYSTALS = {};
         SL_MUSHROOMS = { mushrooms: {} };
+        SL_CALENDAR = {};
 
         [
             'sl_inventory_cache',
@@ -3257,6 +3284,7 @@
             'sl_lava_pits_cache',
             'sl_ascension_crystals_cache',
             'sl_mushrooms_cache',
+            'sl_calendar_cache',
             'sl_last_session_refresh_at'
         ].forEach(function(key) {
             localStorage.removeItem(key);
@@ -4467,7 +4495,7 @@
         let mainMenuHTML = `
             <div id="sl-main-menu" class="sl-window" style="${mainMenuHidden ? 'display:none;' : ''}">
                 <div class="win-header">
-                    <span>NEXUS SUNFLOWER BOT 1.1.5</span>
+                    <span>NEXUS SUNFLOWER BOT 1.1.6</span>
                     <div style="display:flex; align-items:center; gap:8px;">
                         <span id="top-coin-info" style="display:none; color:#fde047; font-size:12px; font-weight:900; background:rgba(0,0,0,0.4); padding:3px 8px; border-radius:8px; border:1px solid rgba(253,224,71,0.3);">
                             ${SL_COINS.toFixed(4)}
