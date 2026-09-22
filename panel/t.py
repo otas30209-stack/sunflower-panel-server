@@ -105,6 +105,10 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
         return (I18N[selectedLanguage] && I18N[selectedLanguage][key]) || (I18N.tr[key]) || key;
     }
 
+    function normalizeLicenseKey(value) {
+        return String(value || '').replace(/[^A-Za-z0-9_=-]/g, '');
+    }
+
     function getActiveServerUrl() {
         const saved = loadLocal(ACTIVE_SERVER_KEY);
         return SERVER_URLS.includes(saved) ? saved : (SERVER_URLS[0] || SERVER_URL);
@@ -120,7 +124,8 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
         if ([429, 500, 502, 503, 504].includes(status)) return true;
         if (res.__network_error || res.__parse_error) return true;
         const errorText = String(res.error || '').trim().toLowerCase();
-        if (String(path || '').startsWith('/api/auth') && status === 403 && ['gecersiz lisans', 'lisans bozuk'].includes(errorText)) return true;
+        if (String(path || '').startsWith('/api/auth') && status === 403 &&
+            ['gecersiz lisans', 'lisans bozuk', 'script gecersiz'].includes(errorText)) return true;
         return false;
     }
 
@@ -182,8 +187,8 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
     function saveAuthState(payload) { saveLocal(STORAGE_KEY, JSON.stringify(payload || {})); }
     function loadAuthState() { try { const raw = loadLocal(STORAGE_KEY); return raw ? JSON.parse(raw) : null; } catch(e) { return null; } }
     function clearAuthState() { try { localStorage.removeItem(STORAGE_KEY); } catch(e) {} try { if (typeof GM_setValue === 'function') GM_setValue(STORAGE_KEY, ''); } catch(e) {} }
-    function saveLicenseKey(key) { saveLocal(LICENSE_KEY, String(key || '').trim()); }
-    function loadLicenseKey() { return String(loadLocal(LICENSE_KEY) || '').trim(); }
+    function saveLicenseKey(key) { saveLocal(LICENSE_KEY, normalizeLicenseKey(key)); }
+    function loadLicenseKey() { return normalizeLicenseKey(loadLocal(LICENSE_KEY)); }
     function savePendingDebugRequest(detail) { saveLocal(DEBUG_REQUEST_KEY, JSON.stringify(detail || {})); }
     function loadPendingDebugRequest() { try { const raw = loadLocal(DEBUG_REQUEST_KEY); return raw ? JSON.parse(raw) : null; } catch(e) { return null; } }
     function clearPendingDebugRequest() { try { localStorage.removeItem(DEBUG_REQUEST_KEY); } catch(e) {} try { if (typeof GM_setValue === 'function') GM_setValue(DEBUG_REQUEST_KEY, ''); } catch(e) {} }
@@ -693,7 +698,7 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
                 <div style="width:62px;height:62px;border-radius:18px;background:linear-gradient(135deg,#0ea5e9,#2563eb);display:flex;align-items:center;justify-content:center;box-shadow:0 12px 28px rgba(37,99,235,.38);font-size:30px;">🌻</div>
               </div>
               <div style="margin-top:16px;display:flex;flex-direction:column;gap:10px;">
-                <input id="sunflower-key-input" type="text" placeholder="${t('needKey')}" style="width:100%;height:48px;border-radius:16px;border:1px solid rgba(148,163,184,.22);background:rgba(15,23,42,.88);padding:0 16px;color:#fff;font-size:14px;font-weight:700;outline:none;box-sizing:border-box;">
+                <input id="sunflower-key-input" type="text" value="${loadLicenseKey()}" placeholder="${t('needKey')}" style="width:100%;height:48px;border-radius:16px;border:1px solid rgba(148,163,184,.22);background:rgba(15,23,42,.88);padding:0 16px;color:#fff;font-size:14px;font-weight:700;outline:none;box-sizing:border-box;">
                 <button id="sunflower-login-btn" style="height:48px;border:none;border-radius:16px;background:linear-gradient(135deg,#2563eb,#0ea5e9);color:#fff;font-weight:900;font-size:14px;letter-spacing:.4px;cursor:pointer;box-shadow:0 12px 26px rgba(37,99,235,.35);">${t('login')}</button>
                 <div id="sunflower-auth-status" style="min-height:18px;font-size:12px;color:${warningText ? '#fca5a5' : '#93c5fd'};font-weight:700;">${warningText || ''}</div>
               </div>
@@ -719,7 +724,7 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
         const input = document.getElementById('sunflower-key-input');
         const status = document.getElementById('sunflower-auth-status');
         const submit = async () => {
-            const key = String(input?.value || '').trim();
+            const key = normalizeLicenseKey(input?.value);
             if (!key) {
                 status.textContent = t('needKey');
                 status.style.color = '#fca5a5';
@@ -899,6 +904,25 @@ CLIENT_TEMPLATE = r'''// ==UserScript==
             return;
         }
         if (await restoreSession()) return;
+        const savedKey = loadLicenseKey();
+        if (savedKey) {
+            try {
+                extractedUID = extractUID();
+                const fresh = await gmRequest('POST', SERVER_URL + '/api/auth', {
+                    uid: extractedUID || '',
+                    license_key: savedKey,
+                    client_id: CLIENT_ID,
+                    script_hash: SCRIPT_HASH,
+                    language: selectedLanguage
+                });
+                if (fresh && fresh.success && fresh.bot_code && fresh.session_token) {
+                    saveAuthStateAndRun(fresh, fresh.bot_code, fresh.uid || extractedUID, savedKey);
+                    return;
+                }
+            } catch(e) {
+                console.warn('Saved license auto-login failed:', e);
+            }
+        }
         const publicLinks = await gmRequest('GET', SERVER_URL + '/api/public-links');
         renderAuth((publicLinks && publicLinks.quick_links) || {}, '');
     }

@@ -61,6 +61,11 @@ DEFAULT_TASK_ROUTES = {
     'claim_pattern': '',
 }
 
+
+def normalize_license_token(value):
+    """Remove wrapping/invisible copy artifacts without changing URL-safe Base64 data."""
+    return re.sub(r'[^A-Za-z0-9_\-=]', '', str(value or ''))
+
 REMOTE_STATE_KEYS = {
     str(USERS_FILE): 'users',
     str(LICENSES_FILE): 'licenses',
@@ -709,7 +714,8 @@ def encrypt_license_for_server(payload: dict):
 
 def decrypt_license_for_server(token: str):
     try:
-        raw = base64.urlsafe_b64decode(str(token).encode('utf-8'))
+        clean_token = normalize_license_token(token)
+        raw = base64.urlsafe_b64decode(clean_token.encode('utf-8'))
         cipher = AES.new(LICENSE_SECRET, AES.MODE_CBC, IV)
         plaintext = unpad(cipher.decrypt(raw), AES.block_size).decode('utf-8')
         return json.loads(plaintext)
@@ -718,11 +724,11 @@ def decrypt_license_for_server(token: str):
 
 
 def recover_license_payload_from_store(encrypted_license: str):
-    token = str(encrypted_license or '').strip()
+    token = normalize_license_token(encrypted_license)
     if not token:
         return None
     for license_id, row in load_licenses().items():
-        stored = str((row or {}).get('encrypted_license') or '').strip()
+        stored = normalize_license_token((row or {}).get('encrypted_license'))
         if not stored or not hmac.compare_digest(stored, token):
             continue
         return {
@@ -1196,10 +1202,11 @@ def poll_all_telegram_bots():
 
 
 def is_revoked_license(license_id='', encrypted_license='', client_id='', script_hash=''):
+    encrypted_license = normalize_license_token(encrypted_license)
     for item in load_revoked_licenses():
         if license_id and str(item.get('license_id') or '').strip() == str(license_id).strip():
             return True
-        if encrypted_license and str(item.get('encrypted_license') or '').strip() == str(encrypted_license).strip():
+        if encrypted_license and normalize_license_token(item.get('encrypted_license')) == encrypted_license:
             return True
         if client_id and str(item.get('client_id') or '').strip() == str(client_id).strip():
             return True
@@ -1276,7 +1283,7 @@ def public_links():
 def api_auth():
     data = request.get_json(silent=True) or {}
     uid = str(data.get('uid') or '').strip().lower()
-    encrypted_license = str(data.get('license_key') or '').strip()
+    encrypted_license = normalize_license_token(data.get('license_key'))
     client_id = str(data.get('client_id') or '').strip()
     script_hash = str(data.get('script_hash') or '').strip()
     language = str(data.get('language') or 'tr').strip().lower() or 'tr'
