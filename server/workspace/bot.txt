@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Nexus Sunflower Bot 1.1.7
+// @name         Nexus Sunflower Bot 1.1.8
 // @namespace    http://tampermonkey.net/
 // @version      54.0.0
 // @description  Sabit Åablon Yenileyici + Tekli Orman/Maden + Karantina + SansÃ¼rsÃ¼z Tam Kod
@@ -14,7 +14,7 @@
     'use strict';
 
     const _window = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
-    const NEXUS_BOT_BUILD = "2026-09-22.1-weather-accounting";
+    const NEXUS_BOT_BUILD = "2026-09-22.2-sequence-plan";
 
     // ==========================================
     // ğŸ““ BÃœYÃœK MUHASEBE DEFTERÄ° (THE GRAND LEDGER)
@@ -1579,7 +1579,34 @@
     function saveCropPlanSettings() {
         localStorage.setItem('sl_crop_plan_settings', JSON.stringify(CROP_PLAN_SETTINGS));
     }
+    function normalizeSequencePlanSettings(raw) {
+        const base = { active: false, autoBuy: false, autoSell: false, items: {} };
+        if (!raw || typeof raw !== 'object') {
+            return base;
+        }
+        base.active = !!raw.active;
+        base.autoBuy = !!raw.autoBuy;
+        base.autoSell = !!raw.autoSell;
+        const items = raw.items && typeof raw.items === 'object' ? raw.items : {};
+        Object.entries(items).forEach(function([seed, cfg]) {
+            const order = Math.max(0, parseInt(cfg && cfg.order, 10) || 0);
+            const target = Math.max(0, parseInt(cfg && cfg.target, 10) || 0);
+            if (order > 0 && target > 0 && ALL_KNOWN_SEEDS.includes(seed)) {
+                base.items[seed] = { order: order, target: target };
+            }
+        });
+        return base;
+    }
+    let SEQUENCE_PLAN_SETTINGS = normalizeSequencePlanSettings(JSON.parse(localStorage.getItem('sl_sequence_plan_settings') || 'null'));
+    if (SEQUENCE_PLAN_SETTINGS.active && CROP_PLAN_SETTINGS.active) {
+        CROP_PLAN_SETTINGS.active = false;
+        localStorage.setItem('sl_crop_plan_settings', JSON.stringify(CROP_PLAN_SETTINGS));
+    }
+    function saveSequencePlanSettings() {
+        localStorage.setItem('sl_sequence_plan_settings', JSON.stringify(SEQUENCE_PLAN_SETTINGS));
+    }
     let CROP_PLAN_MENU_OPEN = localStorage.getItem('sl_crop_plan_menu_open') === 'true';
+    let SEQUENCE_PLAN_MENU_OPEN = localStorage.getItem('sl_sequence_plan_menu_open') === 'true';
     let CROP_PLAN_INTERACTION_UNTIL = 0;
     function markCropPlanInteraction(ms) {
         CROP_PLAN_INTERACTION_UNTIL = Date.now() + (ms || 2500);
@@ -4509,7 +4536,7 @@
         let mainMenuHTML = `
             <div id="sl-main-menu" class="sl-window" style="${mainMenuHidden ? 'display:none;' : ''}">
                 <div class="win-header">
-                    <span>NEXUS SUNFLOWER BOT 1.1.7</span>
+                    <span>NEXUS SUNFLOWER BOT 1.1.8</span>
                     <div style="display:flex; align-items:center; gap:8px;">
                         <span id="top-coin-info" style="display:none; color:#fde047; font-size:12px; font-weight:900; background:rgba(0,0,0,0.4); padding:3px 8px; border-radius:8px; border:1px solid rgba(253,224,71,0.3);">
                             ${SL_COINS.toFixed(4)}
@@ -4601,8 +4628,9 @@
                         <div class="panel-kicker" style="color:#86efac;">Field Matrix & Quarantine</div>
                         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
                             <div class="panel-title" style="margin-bottom:0;">Smart Field Assignment</div>
-                            <div style="display:flex;align-items:center;gap:7px;">
+                            <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end;">
                                 <button id="btn-crop-plan" class="mini-switch-wrapper" title="Open automatic crop plan" style="margin:0;border-color:rgba(250,204,21,0.45);background:rgba(113,63,18,0.32);cursor:pointer;color:#fde68a;">Auto Plant</button>
+                                <button id="btn-sequence-plan" class="mini-switch-wrapper" title="Open ordered seed sequence plan" style="margin:0;border-color:rgba(96,165,250,0.45);background:rgba(30,64,175,0.30);cursor:pointer;color:#bfdbfe;">Sequence Plan</button>
                                 <div class="mini-switch-wrapper" title="Enable crop harvest and planting automation" style="margin:0;border-color:rgba(134,239,172,0.35);background:rgba(6,78,59,0.28);">
                                     <span class="mini-label" style="color:#bbf7d0;">Auto Fields</span>
                                     <label class="switch">
@@ -4881,6 +4909,18 @@
             </div>
         `;
 
+        let sequencePlanMenuHTML = `
+            <div id="sl-sequence-plan-menu" class="sl-window" style="display:${SEQUENCE_PLAN_MENU_OPEN ? 'block' : 'none'}; left:790px; top:92px; width:390px;">
+                <div class="win-header" style="background:linear-gradient(90deg, rgba(30,64,175,0.96), rgba(14,165,233,0.9)); color:white;">
+                    <span>NEXUS SEQUENCE PLAN</span>
+                    <button id="btn-close-sequence-plan" class="close-btn">X</button>
+                </div>
+                <div class="win-content">
+                    <div id="sequence-plan-body"></div>
+                </div>
+            </div>
+        `;
+
         let numberModalHTML = `
             <div id="nexus-number-modal">
                 <div class="nexus-number-box">
@@ -5032,6 +5072,7 @@
         document.body.insertAdjacentHTML('beforeend', plotMenuHTML);
         document.body.insertAdjacentHTML('beforeend', seedModalHTML);
         document.body.insertAdjacentHTML('beforeend', cropPlanMenuHTML);
+        document.body.insertAdjacentHTML('beforeend', sequencePlanMenuHTML);
         document.body.insertAdjacentHTML('beforeend', numberModalHTML);
         document.body.insertAdjacentHTML('beforeend', settingsMenuHTML);
         document.body.insertAdjacentHTML('beforeend', marketMenuHTML);
@@ -5063,6 +5104,8 @@
         makeDraggable('sl-settings-menu');
         makeDraggable('sl-cooking-menu');
         makeDraggable('sl-character-menu');
+        makeDraggable('sl-crop-plan-menu');
+        makeDraggable('sl-sequence-plan-menu');
 
         document.getElementById('tab-tarla-btn').onclick = async function() {
             document.getElementById('tab-tarla').classList.add('active');
@@ -5229,8 +5272,16 @@
             toggleCropPlanMenu();
         };
 
+        document.getElementById('btn-sequence-plan').onclick = function() {
+            toggleSequencePlanMenu();
+        };
+
         document.getElementById('btn-close-crop-plan').onclick = function() {
             closeCropPlanMenu();
+        };
+
+        document.getElementById('btn-close-sequence-plan').onclick = function() {
+            closeSequencePlanMenu();
         };
 
         document.getElementById('toggle-auto-fields').onchange = function(e) {
@@ -7195,6 +7246,14 @@
         return !!(CROP_PLAN_SETTINGS && CROP_PLAN_SETTINGS.active);
     }
 
+    function isSequencePlanActive() {
+        return !!(SEQUENCE_PLAN_SETTINGS && SEQUENCE_PLAN_SETTINGS.active);
+    }
+
+    function isAnyPlantPlanActive() {
+        return isSequencePlanActive() || isCropPlanActive();
+    }
+
     function getCropPlanEntries() {
         const visibleSeeds = GameRules.getVisibleMarketSeeds();
         return Object.entries(CROP_PLAN_SETTINGS.items || {}).filter(function(entry) {
@@ -7251,6 +7310,67 @@
         return shuffleArray(queue);
     }
 
+    function getSequencePlanEntries() {
+        const visibleSeeds = GameRules.getVisibleMarketSeeds();
+        return Object.entries(SEQUENCE_PLAN_SETTINGS.items || {}).filter(function(entry) {
+            const seed = entry[0];
+            const cfg = entry[1] || {};
+            return visibleSeeds.includes(seed) && (parseInt(cfg.order, 10) || 0) > 0 &&
+                (parseInt(cfg.target, 10) || 0) > 0 && GameRules.isSeedInCurrentSeason(seed) && GameRules.canBuySeed(seed);
+        }).map(function(entry) {
+            return {
+                seed: entry[0],
+                order: Math.max(1, parseInt(entry[1].order, 10) || 1),
+                target: Math.max(1, parseInt(entry[1].target, 10) || 1)
+            };
+        }).sort(function(a, b) {
+            return a.order - b.order || a.seed.localeCompare(b.seed);
+        });
+    }
+
+    function buildSequencePlanPlantQueue(emptyCount) {
+        if (!isSequencePlanActive()) {
+            return [];
+        }
+        const maxFields = Math.max(0, parseInt(emptyCount || 0, 10) || 0);
+        const queue = [];
+        const virtualInventory = {};
+        getSequencePlanEntries().forEach(function(entry) {
+            if (queue.length >= maxFields) return;
+            const available = virtualInventory[entry.seed] === undefined
+                ? Math.floor(getInventoryAmount(entry.seed))
+                : virtualInventory[entry.seed];
+            const count = Math.max(0, Math.min(entry.target, available, maxFields - queue.length));
+            for (let i = 0; i < count; i++) {
+                queue.push(entry.seed);
+            }
+            virtualInventory[entry.seed] = Math.max(0, available - count);
+        });
+        return queue;
+    }
+
+    function buildActivePlantQueue(emptyCount) {
+        return isSequencePlanActive()
+            ? buildSequencePlanPlantQueue(emptyCount)
+            : buildCropPlanPlantQueue(emptyCount);
+    }
+
+    function getActivePlantPlanEntries() {
+        return isSequencePlanActive() ? getSequencePlanEntries() : getCropPlanEntries();
+    }
+
+    function getSequencePlanBuyTargets() {
+        if (!isSequencePlanActive() || !SEQUENCE_PLAN_SETTINGS.autoBuy) {
+            return [];
+        }
+        return getSequencePlanEntries().map(function(entry) {
+            const current = Math.floor(getInventoryAmount(entry.seed));
+            const shortage = Math.max(0, entry.target - current);
+            if (shortage <= 0) return null;
+            return { seed: entry.seed, target: entry.target };
+        }).filter(Boolean);
+    }
+
     function getCropPlanBuyTargets() {
         if (!isCropPlanActive()) {
             return [];
@@ -7268,17 +7388,20 @@
     }
 
     function mergeCropPlanBuyTargets(entries) {
-        if (!isCropPlanActive() || !CROP_PLAN_SETTINGS.autoBuy) {
+        if ((!isCropPlanActive() || !CROP_PLAN_SETTINGS.autoBuy) && (!isSequencePlanActive() || !SEQUENCE_PLAN_SETTINGS.autoBuy)) {
             return entries;
         }
         const map = {};
         (entries || []).forEach(function(entry) {
             map[entry[0]] = { ...(entry[1] || {}) };
         });
-        getCropPlanBuyTargets().forEach(function(item) {
+        const planTargets = isSequencePlanActive() ? getSequencePlanBuyTargets() : getCropPlanBuyTargets();
+        planTargets.forEach(function(item) {
             const existing = map[item.seed] || { active: false, min: 1, max: item.target, ignoreStockLimit: false, autoShipmentRestock: false };
             const min = Math.max(1, item.target);
-            const max = Math.max(item.target, parseInt(existing.max || item.target) || item.target);
+            const max = isSequencePlanActive()
+                ? min
+                : Math.max(item.target, parseInt(existing.max || item.target) || item.target);
             map[item.seed] = {
                 active: true,
                 min: min,
@@ -7291,14 +7414,14 @@
     }
 
     function mergeCropPlanSellTargets(entries) {
-        if (!isCropPlanActive() || !CROP_PLAN_SETTINGS.autoSell) {
+        if ((!isCropPlanActive() || !CROP_PLAN_SETTINGS.autoSell) && (!isSequencePlanActive() || !SEQUENCE_PLAN_SETTINGS.autoSell)) {
             return entries;
         }
         const map = {};
         (entries || []).forEach(function(entry) {
             map[entry[0]] = { ...(entry[1] || {}) };
         });
-        getCropPlanEntries().forEach(function(entry) {
+        getActivePlantPlanEntries().forEach(function(entry) {
             const crop = entry.seed.replace(" Seed", "");
             const existing = map[crop] || { active: false, minEnabled: false, min: 1 };
             map[crop] = {
@@ -7405,6 +7528,11 @@
         if (activeToggle) {
             activeToggle.onchange = function(e) {
                 CROP_PLAN_SETTINGS.active = !!e.target.checked;
+                if (CROP_PLAN_SETTINGS.active) {
+                    SEQUENCE_PLAN_SETTINGS.active = false;
+                    saveSequencePlanSettings();
+                    renderSequencePlanMenu();
+                }
                 saveCropPlanSettings();
                 renderCropPlanMenu(true);
                 renderPlotGrid();
@@ -7496,6 +7624,117 @@
         }
     };
 
+    function renderSequencePlanMenu() {
+        const body = document.getElementById('sequence-plan-body');
+        if (!body) return;
+        const usableCount = getUsableFieldIds().length;
+        const configured = SEQUENCE_PLAN_SETTINGS.items || {};
+        const visibleSeeds = GameRules.getVisibleMarketSeeds().filter(function(seed) {
+            return getInventoryAmount(seed) > 0 || !!configured[seed];
+        });
+        warmNexusIconsFromClientAssets(visibleSeeds);
+
+        const orderedSeeds = visibleSeeds.slice().sort(function(a, b) {
+            const aCfg = configured[a] || {};
+            const bCfg = configured[b] || {};
+            const aOrder = parseInt(aCfg.order, 10) || 9999;
+            const bOrder = parseInt(bCfg.order, 10) || 9999;
+            return aOrder - bOrder || a.localeCompare(b);
+        });
+        const rows = orderedSeeds.map(function(seed) {
+            const cfg = configured[seed] || {};
+            const order = Math.max(0, parseInt(cfg.order, 10) || 0);
+            const target = Math.max(0, parseInt(cfg.target, 10) || 0);
+            const selected = order > 0 && target > 0;
+            return `
+                <div style="display:grid;grid-template-columns:minmax(0,1fr) 58px 68px;gap:7px;align-items:center;padding:7px 8px;border:1px solid ${selected ? 'rgba(56,189,248,0.48)' : 'rgba(148,163,184,0.16)'};border-radius:8px;background:${selected ? 'rgba(12,74,110,0.34)' : 'rgba(15,23,42,0.78)'};">
+                    <div style="min-width:0;display:flex;align-items:center;gap:7px;color:#e5e7eb;font-size:11px;font-weight:900;">
+                        ${getItemIconHtml(seed, 22)}
+                        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${seed}</span>
+                        <span style="margin-left:auto;color:#93c5fd;font-size:10px;white-space:nowrap;">bag ${Math.floor(getInventoryAmount(seed))}</span>
+                    </div>
+                    <input class="sequence-plan-order" data-seed="${seed}" type="number" min="0" max="99" value="${order || ''}" placeholder="#" title="Sequence order; 0 removes it" style="width:100%;box-sizing:border-box;background:#020617;border:1px solid rgba(96,165,250,0.38);border-radius:7px;color:#f8fafc;padding:7px 4px;font-weight:900;text-align:center;">
+                    <input class="sequence-plan-target" data-seed="${seed}" type="number" min="0" max="${usableCount}" value="${target || ''}" placeholder="Fields" title="Fields assigned to this seed" style="width:100%;box-sizing:border-box;background:#020617;border:1px solid rgba(250,204,21,0.34);border-radius:7px;color:#f8fafc;padding:7px 4px;font-weight:900;text-align:center;">
+                </div>`;
+        }).join('');
+
+        body.innerHTML = `
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:10px;">
+                <div class="mini-switch-wrapper" style="justify-content:space-between;padding:8px;background:rgba(12,74,110,0.30);border-color:rgba(56,189,248,0.4);">
+                    <span class="mini-label" style="color:#bae6fd;">Plan Active</span>
+                    <label class="switch"><input type="checkbox" id="toggle-sequence-plan-active" ${SEQUENCE_PLAN_SETTINGS.active ? 'checked' : ''}><span class="slider"></span></label>
+                </div>
+                <div class="mini-switch-wrapper" style="justify-content:space-between;padding:8px;background:rgba(30,64,175,0.24);border-color:rgba(96,165,250,0.35);">
+                    <span class="mini-label" style="color:#bfdbfe;">Auto Buy</span>
+                    <label class="switch"><input type="checkbox" id="toggle-sequence-plan-buy" ${SEQUENCE_PLAN_SETTINGS.autoBuy ? 'checked' : ''}><span class="slider"></span></label>
+                </div>
+                <div class="mini-switch-wrapper" style="justify-content:space-between;padding:8px;background:rgba(127,29,29,0.24);border-color:rgba(248,113,113,0.35);">
+                    <span class="mini-label" style="color:#fecaca;">Auto Sell</span>
+                    <label class="switch"><input type="checkbox" id="toggle-sequence-plan-sell" ${SEQUENCE_PLAN_SETTINGS.autoSell ? 'checked' : ''}><span class="slider"></span></label>
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 58px 68px;gap:7px;color:#94a3b8;font-size:9px;font-weight:900;text-transform:uppercase;margin:0 8px 5px;">
+                <span>Bag Seeds</span><span style="text-align:center;">Order</span><span style="text-align:center;">Fields</span>
+            </div>
+            <div style="font-size:10px;color:#94a3b8;line-height:1.4;margin-bottom:8px;">Seeds run from the lowest order to the highest. If one runs out, the next order fills the remaining empty fields.</div>
+            <div id="sequence-plan-seed-list" style="display:grid;gap:6px;max-height:430px;overflow-y:auto;padding-right:3px;">${rows || '<div class="panel-sub">No crop seeds found in the bag.</div>'}</div>
+        `;
+
+        const saveRow = function(seed) {
+            const orderInput = body.querySelector(`.sequence-plan-order[data-seed="${seed}"]`);
+            const targetInput = body.querySelector(`.sequence-plan-target[data-seed="${seed}"]`);
+            const order = Math.max(0, parseInt(orderInput && orderInput.value, 10) || 0);
+            const target = Math.max(0, Math.min(usableCount, parseInt(targetInput && targetInput.value, 10) || 0));
+            if (order > 0 && target > 0) {
+                SEQUENCE_PLAN_SETTINGS.items[seed] = { order: order, target: target };
+            } else {
+                delete SEQUENCE_PLAN_SETTINGS.items[seed];
+            }
+            saveSequencePlanSettings();
+        };
+        body.querySelectorAll('.sequence-plan-order, .sequence-plan-target').forEach(function(input) {
+            input.onchange = function(e) {
+                saveRow(e.target.dataset.seed);
+                renderSequencePlanMenu();
+                renderPlotGrid();
+            };
+        });
+        body.querySelector('#toggle-sequence-plan-active').onchange = function(e) {
+            SEQUENCE_PLAN_SETTINGS.active = !!e.target.checked;
+            if (SEQUENCE_PLAN_SETTINGS.active) {
+                CROP_PLAN_SETTINGS.active = false;
+                saveCropPlanSettings();
+                renderCropPlanMenu(true);
+            }
+            saveSequencePlanSettings();
+            renderSequencePlanMenu();
+            renderPlotGrid();
+        };
+        body.querySelector('#toggle-sequence-plan-buy').onchange = function(e) {
+            SEQUENCE_PLAN_SETTINGS.autoBuy = !!e.target.checked;
+            saveSequencePlanSettings();
+        };
+        body.querySelector('#toggle-sequence-plan-sell').onchange = function(e) {
+            SEQUENCE_PLAN_SETTINGS.autoSell = !!e.target.checked;
+            saveSequencePlanSettings();
+        };
+    }
+
+    _window.toggleSequencePlanMenu = function() {
+        SEQUENCE_PLAN_MENU_OPEN = !SEQUENCE_PLAN_MENU_OPEN;
+        localStorage.setItem('sl_sequence_plan_menu_open', SEQUENCE_PLAN_MENU_OPEN ? 'true' : 'false');
+        const menu = document.getElementById('sl-sequence-plan-menu');
+        if (menu) menu.style.display = SEQUENCE_PLAN_MENU_OPEN ? 'block' : 'none';
+        if (SEQUENCE_PLAN_MENU_OPEN) renderSequencePlanMenu();
+    };
+
+    _window.closeSequencePlanMenu = function() {
+        SEQUENCE_PLAN_MENU_OPEN = false;
+        localStorage.setItem('sl_sequence_plan_menu_open', 'false');
+        const menu = document.getElementById('sl-sequence-plan-menu');
+        if (menu) menu.style.display = 'none';
+    };
+
     function renderPlotGrid() {
         const grid = document.getElementById('plot-grid');
         if(!grid) return;
@@ -7504,6 +7743,12 @@
         renderMushroomPanel();
         if (CROP_PLAN_MENU_OPEN && !isCropPlanMenuBusy()) {
             renderCropPlanMenu();
+        }
+        if (SEQUENCE_PLAN_MENU_OPEN) {
+            const sequenceBody = document.getElementById('sequence-plan-body');
+            if (sequenceBody && !sequenceBody.children.length) {
+                renderSequencePlanMenu();
+            }
         }
         grid.innerHTML = "";
         const entries = Object.entries(SL_CROPS || {});
@@ -7530,7 +7775,7 @@
 
         entries.forEach(function([id, plot]) {
             const manualTask = PLOT_TASKS[id];
-            const task = isCropPlanActive() ? null : manualTask;
+            const task = isAnyPlantPlanActive() ? null : manualTask;
             const isQuarantined = quarantinedPlots.includes(id);
             const div = document.createElement('div');
 
@@ -7557,10 +7802,10 @@
             else if (status === "EMPTY") {
                 statusText = "EMPTY";
                 statusColor = "#a1a1aa";
-                hintText = isCropPlanActive() ? "Auto plan ready" : "Choose a seed";
+                hintText = isAnyPlantPlanActive() ? (isSequencePlanActive() ? "Sequence plan ready" : "Auto plan ready") : "Choose a seed";
                 if (task) {
                     icon = getItemEmoji(task.replace(" Seed", ""));
-                } else if (isCropPlanActive()) {
+                } else if (isAnyPlantPlanActive()) {
                     icon = "\u{1F331}";
                 } else {
                     icon = "\u{1F7EB}";
@@ -7618,7 +7863,7 @@
                 taskText = "Limit Locked";
             } else if (task) {
                 taskText = task.replace(" Seed", "");
-            } else if (isCropPlanActive() && status === "EMPTY") {
+            } else if (isAnyPlantPlanActive() && status === "EMPTY") {
                 taskText = "Auto Plan";
             } else {
                 taskText = 'Empty';
@@ -11398,7 +11643,7 @@
         lastAutomationDiagnosticAt = now;
 
         const safe = Array.isArray(safePlots) ? safePlots : [];
-        const cropEntries = (BOT_SETTINGS.autoFields || isCropPlanActive()) ? safe.map(function(id) {
+        const cropEntries = (BOT_SETTINGS.autoFields || isAnyPlantPlanActive()) ? safe.map(function(id) {
             return [id, (SL_CROPS || {})[id]];
         }) : [];
         let emptyCount = 0;
@@ -11420,7 +11665,7 @@
         const matchingManualTasks = Object.keys(PLOT_TASKS || {}).filter(function(id) {
             return Object.prototype.hasOwnProperty.call(SL_CROPS || {}, id);
         }).length;
-        const cropPlanCount = getCropPlanEntries().length;
+        const cropPlanCount = getActivePlantPlanEntries().length;
         const readyTrees = BOT_SETTINGS.autoTree ? getReadyResourceTargets("trees", SL_TREES, TREE_RECOVERY_MS, "wood").length : 0;
         const readyFruits = BOT_SETTINGS.autoFruit ? getReadyFruitTargets().length : 0;
         const readyStones = BOT_SETTINGS.autoMineStone ? getReadyResourceTargets("stones", SL_STONES, STONE_RECOVERY_MS, "stone").length : 0;
@@ -11429,7 +11674,7 @@
 
         log(
             `Idle check (${reason}): Auto Fields ${BOT_SETTINGS.autoFields ? "ON" : "OFF"}, ` +
-            `Auto Plant ${isCropPlanActive() ? "ON" : "OFF"}, safe ${safe.length}, ready ${readyCount}, ` +
+            `Plant Plan ${isSequencePlanActive() ? "SEQUENCE" : (isCropPlanActive() ? "AUTO" : "OFF")}, safe ${safe.length}, ready ${readyCount}, ` +
             `empty ${emptyCount}, growing ${growingCount}, manual tasks ${manualTaskCount}/${matchingManualTasks} matched, plan items ${cropPlanCount}, ` +
             `resources ready T/F/S/I/G ${readyTrees}/${readyFruits}/${readyStones}/${readyIron}/${readyGold}.`
         );
@@ -12498,7 +12743,7 @@
         let actionPerformed = false;
         let lastCompletedPhase = null;
         let plotTaskKeys = Object.keys(PLOT_TASKS || {});
-        let hasCropPlanTasks = isCropPlanActive() && getCropPlanEntries().length > 0;
+        let hasCropPlanTasks = isAnyPlantPlanActive() && getActivePlantPlanEntries().length > 0;
         let hasPlotTasks = (BOT_SETTINGS.autoFields && plotTaskKeys.length > 0) || hasCropPlanTasks;
 
         if (!stopRequested && !killSwitchActivated && BOT_SETTINGS.autoFishing && hasPendingFishingReel()) {
@@ -13335,7 +13580,7 @@
                 }
             }
             emptyPlots = shuffleArray(emptyPlots);
-            const cropPlanPlantQueue = buildCropPlanPlantQueue(emptyPlots.length);
+            const cropPlanPlantQueue = buildActivePlantQueue(emptyPlots.length);
             let plantableNow = 0;
             let plantNoStock = 0;
             let plantBadSeason = 0;
@@ -13343,7 +13588,7 @@
             let plantNoTask = 0;
             for (let i = 0; i < emptyPlots.length; i++) {
                 const scanPlotId = emptyPlots[i];
-                const scanSeed = isCropPlanActive() ? cropPlanPlantQueue[i] : PLOT_TASKS[scanPlotId];
+                const scanSeed = isAnyPlantPlanActive() ? cropPlanPlantQueue[i] : PLOT_TASKS[scanPlotId];
                 if (!scanSeed) {
                     plantNoTask++;
                 } else if (!GameRules.isSeedInCurrentSeason(scanSeed)) {
@@ -13377,7 +13622,7 @@
                     }
 
                     let plotId = emptyPlots[i];
-                    let targetSeed = isCropPlanActive() ? cropPlanPlantWorkQueue.shift() : PLOT_TASKS[plotId];
+                    let targetSeed = isAnyPlantPlanActive() ? cropPlanPlantWorkQueue.shift() : PLOT_TASKS[plotId];
 
                     if (targetSeed) {
                         if (!GameRules.isSeedInCurrentSeason(targetSeed)) {
@@ -14215,10 +14460,10 @@
                 let hasSellWaiting = false;
                 let blockedSeeds = [];
 
-                let cropEntries = (BOT_SETTINGS.autoFields || isCropPlanActive()) ? safePlots.map(function(id) {
+                let cropEntries = (BOT_SETTINGS.autoFields || isAnyPlantPlanActive()) ? safePlots.map(function(id) {
                     return [id, (SL_CROPS || {})[id]];
                 }) : [];
-                const idleCropPlanQueue = isCropPlanActive() ? buildCropPlanPlantQueue(cropEntries.length) : [];
+                const idleCropPlanQueue = isAnyPlantPlanActive() ? buildActivePlantQueue(cropEntries.length) : [];
                 let idleCropPlanIndex = 0;
 
                 for (let i = 0; i < cropEntries.length; i++) {
@@ -14234,7 +14479,7 @@
                     if (status === "READY") {
                         hasReadyHarvest = true;
                     } else if (status === "EMPTY") {
-                        let assignedSeed = isCropPlanActive() ? idleCropPlanQueue[idleCropPlanIndex++] : PLOT_TASKS[id];
+                        let assignedSeed = isAnyPlantPlanActive() ? idleCropPlanQueue[idleCropPlanIndex++] : PLOT_TASKS[id];
                         if (assignedSeed) {
                             let currentStock = getInventoryAmount(assignedSeed);
                             if (currentStock > 0) {
