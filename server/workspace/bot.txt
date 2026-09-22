@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Nexus Sunflower Bot 1.1.6
+// @name         Nexus Sunflower Bot 1.1.7
 // @namespace    http://tampermonkey.net/
 // @version      54.0.0
 // @description  Sabit Åablon Yenileyici + Tekli Orman/Maden + Karantina + SansÃ¼rsÃ¼z Tam Kod
@@ -14,7 +14,7 @@
     'use strict';
 
     const _window = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
-    const NEXUS_BOT_BUILD = "2026-09-21.1-weather-quarantine";
+    const NEXUS_BOT_BUILD = "2026-09-22.1-weather-accounting";
 
     // ==========================================
     // ğŸ““ BÃœYÃœK MUHASEBE DEFTERÄ° (THE GRAND LEDGER)
@@ -973,6 +973,11 @@
                 boosts.push("Harvest Hourglass x0.75");
             }
 
+            if (getActiveCalendarEventName(nowMs) === "sunshower") {
+                multiplier *= 0.5;
+                boosts.push("Sunshower x0.5");
+            }
+
             if (hasSkill("Strong Roots") && ADVANCED_CROPS.has(cropName)) {
                 multiplier *= 0.9;
                 boosts.push("Strong Roots x0.9");
@@ -1191,10 +1196,18 @@
             if (destructiveEvent && isWeatherDestroyedPlot(plotId)) {
                 return destructiveEvent;
             }
-            if (["insectPlague", "bountifulHarvest", "sunshower"].includes(activeEvent)) {
-                return activeEvent;
-            }
             return "";
+        }
+
+        function getWeatherAdjustedCropYield(baseAmount = 1) {
+            let amount = Number(baseAmount || 0);
+            const activeEvent = getActiveCalendarEventName();
+            if (activeEvent === "insectPlague" && !(SL_CALENDAR.insectPlague && SL_CALENDAR.insectPlague.protected)) {
+                amount *= 0.5;
+            } else if (activeEvent === "bountifulHarvest") {
+                amount += 1;
+            }
+            return amount;
         }
 
         function getPlotAccountingRisk(plot) {
@@ -1366,6 +1379,7 @@
             getUnsupportedAccountingReason: getUnsupportedAccountingReason,
             getActiveCalendarEventName: getActiveCalendarEventName,
             getPlotWeatherRisk: getPlotWeatherRisk,
+            getWeatherAdjustedCropYield: getWeatherAdjustedCropYield,
             getPlotAccountingRisk: getPlotAccountingRisk,
             isWearableActive: isWearableActive,
             isCollectibleBuilt: isCollectibleBuilt,
@@ -4495,7 +4509,7 @@
         let mainMenuHTML = `
             <div id="sl-main-menu" class="sl-window" style="${mainMenuHidden ? 'display:none;' : ''}">
                 <div class="win-header">
-                    <span>NEXUS SUNFLOWER BOT 1.1.6</span>
+                    <span>NEXUS SUNFLOWER BOT 1.1.7</span>
                     <div style="display:flex; align-items:center; gap:8px;">
                         <span id="top-coin-info" style="display:none; color:#fde047; font-size:12px; font-weight:900; background:rgba(0,0,0,0.4); padding:3px 8px; border-radius:8px; border:1px solid rgba(253,224,71,0.3);">
                             ${SL_COINS.toFixed(4)}
@@ -12605,7 +12619,7 @@
                 });
 
                 if (cropName) {
-                    modifyInventory(cropName, 1);
+                    modifyInventory(cropName, GameRules.getWeatherAdjustedCropYield(1));
                     let actName = cropName + " Harvested";
                     modifyActivity(actName, 1);
                 }
