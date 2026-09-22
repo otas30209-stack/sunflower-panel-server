@@ -1037,6 +1037,28 @@ class SunflowerPanel:
                 self.log(f'Sunucu cevap vermedi, siradaki deneniyor ({candidate}): {e}', 'script')
         raise RuntimeError('Tum sunucular cevap vermedi knk\n' + '\n'.join(errors))
 
+    def request_json_all(self, method, path, payload, need_admin=True):
+        successes = []
+        errors = []
+        for candidate in self.get_server_urls():
+            try:
+                res = self._request_json_single(method, path, payload, need_admin, candidate)
+                if not res.get('success'):
+                    raise RuntimeError(res.get('error') or 'islem basarisiz')
+                successes.append(res)
+            except Exception as e:
+                errors.append(f'{candidate}: {e}')
+        if not successes:
+            raise RuntimeError('Tum sunucular cevap vermedi knk\n' + '\n'.join(errors))
+        for error in errors:
+            self.log(f'Lisans diger sunucuda guncellenemedi: {error}', 'script')
+        return successes[0]
+
+    def sync_license_to_servers(self, license_id, row):
+        if not license_id or not isinstance(row, dict):
+            raise RuntimeError('Lisans kaydi eksik, sunucular eslenemedi')
+        self.request_json_all('POST', '/admin/sync-all', {'licenses': {license_id: row}})
+
     def log(self, text, channel='script'):
         line = f'[{datetime.now().strftime("%H:%M:%S")}] {text}'
         self.log_lines.append(line)
@@ -1454,6 +1476,7 @@ class SunflowerPanel:
             license_key = str(res.get('encrypted_license') or '').strip()
             if not license_key:
                 raise RuntimeError('key donmedi knk')
+            self.sync_license_to_servers(str(res.get('license_id') or ''), res.get('license'))
             script_content = self.build_client_script(name, client_id, script_hash, license_key, payload['language'])
             out_path = GENERATED_DIR / filename
             out_path.write_text(script_content, encoding='utf-8')
@@ -1662,7 +1685,7 @@ class SunflowerPanel:
             messagebox.showwarning('Secim yok', 'Script sec knk')
             return
         try:
-            res = self.request_json('POST', '/admin/license/state', {'license_id': license_id, 'active': bool(active)}, need_admin=True)
+            res = self.request_json_all('POST', '/admin/license/state', {'license_id': license_id, 'active': bool(active)})
             if not res.get('success'):
                 raise RuntimeError(res.get('error') or 'durum degismedi')
             self.log(f'Lisans durum degisti: {license_id} -> {"on" if active else "off"}', 'script')
@@ -1677,7 +1700,7 @@ class SunflowerPanel:
             messagebox.showwarning('Secim yok', 'Script sec knk')
             return
         try:
-            res = self.request_json('POST', '/admin/license/uid-mode', {'license_id': license_id, 'uid_mode': uid_mode}, need_admin=True)
+            res = self.request_json_all('POST', '/admin/license/uid-mode', {'license_id': license_id, 'uid_mode': uid_mode})
             if not res.get('success'):
                 raise RuntimeError(res.get('error') or 'mod degismedi')
             self.log(f'Kullanici modu degisti: {license_id} -> {uid_mode}', 'script')
@@ -1913,7 +1936,7 @@ class SunflowerPanel:
             return
         try:
             if not str(row.get('local_only') or '').lower() == 'true' and not license_id.startswith('local:'):
-                res = self.request_json('POST', '/admin/license/delete', {'license_id': license_id}, need_admin=True)
+                res = self.request_json_all('POST', '/admin/license/delete', {'license_id': license_id})
                 if not res.get('success'):
                     raise RuntimeError(res.get('error') or 'silinemedi')
             script_file = str(row.get('script_file') or '').strip()
@@ -1946,7 +1969,7 @@ class SunflowerPanel:
             if str((row or {}).get('local_only') or '').lower() == 'true' or license_id.startswith('local:'):
                 continue
             try:
-                res = self.request_json('POST', '/admin/license/delete', {'license_id': license_id}, need_admin=True)
+                res = self.request_json_all('POST', '/admin/license/delete', {'license_id': license_id})
                 if not res.get('success'):
                     errors.append(f'{license_id}: {res.get("error") or "silinemedi"}')
             except Exception as e:
