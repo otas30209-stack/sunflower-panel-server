@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Nexus Sunflower Bot 1.1.9
+// @name         Nexus Sunflower Bot 1.1.10
 // @namespace    http://tampermonkey.net/
 // @version      54.0.0
 // @description  Sabit Åablon Yenileyici + Tekli Orman/Maden + Karantina + SansÃ¼rsÃ¼z Tam Kod
@@ -14,7 +14,7 @@
     'use strict';
 
     const _window = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
-    const NEXUS_BOT_BUILD = "2026-09-22.3-sequence-loop";
+    const NEXUS_BOT_BUILD = "2026-09-22.4-sequence-menu";
 
     // ==========================================
     // ğŸ““ BÃœYÃœK MUHASEBE DEFTERÄ° (THE GRAND LEDGER)
@@ -1641,6 +1641,7 @@
     }
     let CROP_PLAN_MENU_OPEN = localStorage.getItem('sl_crop_plan_menu_open') === 'true';
     let SEQUENCE_PLAN_MENU_OPEN = localStorage.getItem('sl_sequence_plan_menu_open') === 'true';
+    const SEQUENCE_PLAN_DRAFTS = {};
     let CROP_PLAN_INTERACTION_UNTIL = 0;
     function markCropPlanInteraction(ms) {
         CROP_PLAN_INTERACTION_UNTIL = Date.now() + (ms || 2500);
@@ -3915,6 +3916,47 @@
         }
         #sl-plot-menu .win-content::-webkit-scrollbar { width: 10px; }
         #sl-plot-menu .win-content::-webkit-scrollbar-thumb { background: rgba(16,185,129,0.45); border-radius: 999px; }
+        .field-plan-header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 4px 10px;
+            margin-bottom: 10px;
+        }
+        .field-plan-controls {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 7px;
+            margin-bottom: 8px;
+        }
+        .field-plan-controls > button,
+        .field-plan-controls > .mini-switch-wrapper {
+            min-width: 0;
+            min-height: 36px;
+            margin: 0;
+            box-sizing: border-box;
+            justify-content: center;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+        .field-plan-controls > button {
+            cursor: pointer;
+        }
+        .field-plan-controls .mini-label {
+            font-size: 10px;
+            white-space: nowrap;
+        }
+        @media (max-width: 520px) {
+            .field-plan-controls {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .field-plan-controls > .mini-switch-wrapper {
+                grid-column: 1 / -1;
+            }
+        }
         .tabs {
             display: flex;
             border-bottom: 1px solid rgba(255,255,255,0.1);
@@ -4570,7 +4612,7 @@
         let mainMenuHTML = `
             <div id="sl-main-menu" class="sl-window" style="${mainMenuHidden ? 'display:none;' : ''}">
                 <div class="win-header">
-                    <span>NEXUS SUNFLOWER BOT 1.1.9</span>
+                    <span>NEXUS SUNFLOWER BOT 1.1.10</span>
                     <div style="display:flex; align-items:center; gap:8px;">
                         <span id="top-coin-info" style="display:none; color:#fde047; font-size:12px; font-weight:900; background:rgba(0,0,0,0.4); padding:3px 8px; border-radius:8px; border:1px solid rgba(253,224,71,0.3);">
                             ${SL_COINS.toFixed(4)}
@@ -4659,19 +4701,19 @@
 
                 <div class="win-content">
                     <div id="tab-tarla" class="tab-content active">
-                        <div class="panel-kicker" style="color:#86efac;">Field Matrix & Quarantine</div>
-                        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-                            <div class="panel-title" style="margin-bottom:0;">Smart Field Assignment</div>
-                            <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end;">
-                                <button id="btn-crop-plan" class="mini-switch-wrapper" title="Open automatic crop plan" style="margin:0;border-color:rgba(250,204,21,0.45);background:rgba(113,63,18,0.32);cursor:pointer;color:#fde68a;">Auto Plant</button>
-                                <button id="btn-sequence-plan" class="mini-switch-wrapper" title="Open ordered seed sequence plan" style="margin:0;border-color:rgba(96,165,250,0.45);background:rgba(30,64,175,0.30);cursor:pointer;color:#bfdbfe;">Sequence Plan</button>
-                                <div class="mini-switch-wrapper" title="Enable crop harvest and planting automation" style="margin:0;border-color:rgba(134,239,172,0.35);background:rgba(6,78,59,0.28);">
-                                    <span class="mini-label" style="color:#bbf7d0;">Auto Fields</span>
-                                    <label class="switch">
-                                        <input type="checkbox" id="toggle-auto-fields" ${BOT_SETTINGS.autoFields ? 'checked' : ''}>
-                                        <span class="slider"></span>
-                                    </label>
-                                </div>
+                        <div class="field-plan-header">
+                            <div class="panel-kicker" style="color:#86efac;margin:0;">Field Matrix & Quarantine</div>
+                            <div class="panel-title" style="margin:0;">Smart Field Assignment</div>
+                        </div>
+                        <div class="field-plan-controls">
+                            <button id="btn-crop-plan" class="mini-switch-wrapper" title="Open automatic crop plan" style="border-color:rgba(250,204,21,0.45);background:rgba(113,63,18,0.32);color:#fde68a;">Auto Plant</button>
+                            <button id="btn-sequence-plan" class="mini-switch-wrapper" title="Open ordered seed sequence plan" style="border-color:rgba(96,165,250,0.45);background:rgba(30,64,175,0.30);color:#bfdbfe;">Sequence Plan</button>
+                            <div class="mini-switch-wrapper" title="Enable crop harvest and planting automation" style="border-color:rgba(134,239,172,0.35);background:rgba(6,78,59,0.28);">
+                                <span class="mini-label" style="color:#bbf7d0;">Auto Fields</span>
+                                <label class="switch">
+                                    <input type="checkbox" id="toggle-auto-fields" ${BOT_SETTINGS.autoFields ? 'checked' : ''}>
+                                    <span class="slider"></span>
+                                </label>
                             </div>
                         </div>
                         <div class="panel-sub">Fields beyond water capacity stay locked for safety.</div>
@@ -7810,19 +7852,20 @@
         });
         const rows = orderedSeeds.map(function(seed) {
             const cfg = configured[seed] || {};
-            const order = Math.max(0, parseInt(cfg.order, 10) || 0);
-            const target = Math.max(0, parseInt(cfg.target, 10) || 0);
+            const draft = SEQUENCE_PLAN_DRAFTS[seed];
+            const order = draft ? draft.order : String(Math.max(0, parseInt(cfg.order, 10) || 0) || '');
+            const target = draft ? draft.target : String(Math.max(0, parseInt(cfg.target, 10) || 0) || '');
             const progress = Math.max(0, parseInt(SEQUENCE_PLAN_SETTINGS.progress[seed], 10) || 0);
-            const selected = order > 0 && target > 0;
+            const selected = (parseInt(order, 10) || 0) > 0 && (parseInt(target, 10) || 0) > 0;
             return `
                 <div style="display:grid;grid-template-columns:minmax(0,1fr) 58px 68px;gap:7px;align-items:center;padding:7px 8px;border:1px solid ${selected ? 'rgba(56,189,248,0.48)' : 'rgba(148,163,184,0.16)'};border-radius:8px;background:${selected ? 'rgba(12,74,110,0.34)' : 'rgba(15,23,42,0.78)'};">
-                    <div style="min-width:0;display:flex;align-items:center;gap:7px;color:#e5e7eb;font-size:11px;font-weight:900;">
-                        ${getItemIconHtml(seed, 22)}
-                        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${seed}</span>
-                        <span style="margin-left:auto;color:#93c5fd;font-size:10px;white-space:nowrap;">bag ${Math.floor(getInventoryAmount(seed))} | ${progress}/${target || 0}</span>
+                    <div style="min-width:0;display:grid;grid-template-columns:22px minmax(0,1fr);gap:2px 7px;align-items:center;color:#e5e7eb;font-size:11px;font-weight:900;">
+                        <span style="grid-row:1 / 3;">${getItemIconHtml(seed, 22)}</span>
+                        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${seed}">${seed}</span>
+                        <span style="color:#93c5fd;font-size:10px;white-space:nowrap;">Bag ${Math.floor(getInventoryAmount(seed))} · ${progress}/${target || 0} planted</span>
                     </div>
-                    <input class="sequence-plan-order" data-seed="${seed}" type="number" min="0" max="99" value="${order || ''}" placeholder="#" title="Sequence order; 0 removes it" style="width:100%;box-sizing:border-box;background:#020617;border:1px solid rgba(96,165,250,0.38);border-radius:7px;color:#f8fafc;padding:7px 4px;font-weight:900;text-align:center;">
-                    <input class="sequence-plan-target" data-seed="${seed}" type="number" min="0" max="${usableCount}" value="${target || ''}" placeholder="Fields" title="Fields assigned to this seed" style="width:100%;box-sizing:border-box;background:#020617;border:1px solid rgba(250,204,21,0.34);border-radius:7px;color:#f8fafc;padding:7px 4px;font-weight:900;text-align:center;">
+                    <input class="sequence-plan-order" data-seed="${seed}" type="number" min="0" max="99" value="${order}" placeholder="#" title="Sequence order; clear to remove it" style="width:100%;box-sizing:border-box;background:#020617;border:1px solid rgba(96,165,250,0.38);border-radius:7px;color:#f8fafc;padding:7px 4px;font-weight:900;text-align:center;">
+                    <input class="sequence-plan-target" data-seed="${seed}" type="number" min="0" max="${usableCount}" value="${target}" placeholder="Fields" title="Fields assigned to this seed" style="width:100%;box-sizing:border-box;background:#020617;border:1px solid rgba(250,204,21,0.34);border-radius:7px;color:#f8fafc;padding:7px 4px;font-weight:900;text-align:center;">
                 </div>`;
         }).join('');
 
@@ -7859,15 +7902,22 @@
         const saveRow = function(seed) {
             const orderInput = body.querySelector(`.sequence-plan-order[data-seed="${seed}"]`);
             const targetInput = body.querySelector(`.sequence-plan-target[data-seed="${seed}"]`);
-            const order = Math.max(0, parseInt(orderInput && orderInput.value, 10) || 0);
-            const target = Math.max(0, Math.min(usableCount, parseInt(targetInput && targetInput.value, 10) || 0));
+            if (!orderInput || !targetInput) return;
+            const orderText = String(orderInput.value || '').replace(/\D/g, '').slice(0, 2);
+            const targetText = String(targetInput.value || '').replace(/\D/g, '').slice(0, 4);
+            SEQUENCE_PLAN_DRAFTS[seed] = { order: orderText, target: targetText };
+            const order = Math.max(0, Math.min(99, parseInt(orderText, 10) || 0));
+            const target = Math.max(0, Math.min(usableCount, parseInt(targetText, 10) || 0));
             const previous = SEQUENCE_PLAN_SETTINGS.items[seed];
             if (order > 0 && target > 0) {
                 SEQUENCE_PLAN_SETTINGS.items[seed] = { order: order, target: target };
                 if (!previous || previous.order !== order || previous.target !== target) {
                     SEQUENCE_PLAN_SETTINGS.progress[seed] = 0;
                 }
-            } else {
+                orderInput.value = order;
+                targetInput.value = target;
+                delete SEQUENCE_PLAN_DRAFTS[seed];
+            } else if (order === 0 || target === 0) {
                 delete SEQUENCE_PLAN_SETTINGS.items[seed];
                 delete SEQUENCE_PLAN_SETTINGS.progress[seed];
             }
@@ -7876,7 +7926,6 @@
         body.querySelectorAll('.sequence-plan-order, .sequence-plan-target').forEach(function(input) {
             input.onchange = function(e) {
                 saveRow(e.target.dataset.seed);
-                renderSequencePlanMenu();
                 renderPlotGrid();
             };
         });
