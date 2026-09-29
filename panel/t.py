@@ -22,14 +22,14 @@ GENERATED_DIR = BASE_DIR / 'generated_scripts'
 GENERATED_DIR.mkdir(exist_ok=True)
 
 DEFAULT_SETTINGS = {
-    'server_url': 'https://sunflower-panel-server-ufpg.onrender.com',
-    'backup_server_url': 'https://sunflower-panel-server-ub6m.onrender.com',
+    'server_url': 'https://sunflower-panel-server-production.up.railway.app',
+    'backup_server_url': 'https://sunflower-panel-server-production.up.railway.app',
     'selected_bot_path': 'C:/Users/User/Desktop/Yeni klasör (7)/bot.txt',
     'selected_bot_name': 'bot.txt'
 }
 
 DEFAULT_SECRETS = {
-    'admin_token': 'sunflower_admin_2026_super_secure_91x'
+    'admin_token': ''
 }
 
 CLIENT_TEMPLATE = r'''// ==UserScript==
